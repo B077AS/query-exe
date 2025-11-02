@@ -1,0 +1,63 @@
+.styled-text-area {
+    -fx-font-size: 18px;
+}
+
+.styled-text-area .selection {
+    -fx-fill: #68637c;
+    /*-fx-scale-y: 0.85;*/
+}
+
+.paragraph-box .text {
+    -fx-fill: white;
+}
+
+.paragraph-box .text.string {
+    -fx-fill: #f8a027;
+}
+
+.paragraph-box .text.comment {
+    -fx-fill: #808080;
+    -fx-font-style: italic;
+}
+
+.paragraph-box .text.number {
+    -fx-fill: #6fa8dc;
+}
+
+.paragraph-box .text.keyword {
+    -fx-fill: #ac80ea;
+    -fx-font-weight: bold;
+}
+
+.caret {
+    -fx-stroke: white;
+    -fx-scale-y: 0.85;
+}
+
+.lineno {
+    -fx-opacity: 1;
+    -fx-background-color: #3d3f4a;
+    -fx-font-size: 17px;
+}
+
+.autocomplete-list {
+    -fx-background-color: -color-bg-default;
+    -fx-border-color: -color-border-default;
+    -fx-border-width: 1px;
+}
+
+.autocomplete-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-default;
+    -fx-padding: 3px 8px;
+    -fx-font-size: 14px;
+}
+
+.autocomplete-list .list-cell:hover {
+    -fx-background-color: -color-accent-subtle;
+}
+
+.autocomplete-list .list-cell:selected {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-text-fill: -color-fg-emphasis;
+}
