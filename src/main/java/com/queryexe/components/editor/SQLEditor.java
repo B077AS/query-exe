@@ -118,6 +118,8 @@ public class SQLEditor extends CodeArea {
                 handleCtrlF(event);
             } else if (event.isControlDown() && event.getCode() == KeyCode.D) {
                 handleCtrlD(event);
+            } else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.ENTER) {
+                handleCtrlShiftEnter(event);
             } else if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
                 handleCtrlEnter(event);
             } else if (autocompletePopup.isShowing()) {
@@ -179,6 +181,11 @@ public class SQLEditor extends CodeArea {
     }
 
     private void handleCtrlEnter(KeyEvent event) {
+        event.consume();
+        QueryService.getInstance().runStatement();
+    }
+
+    private void handleCtrlShiftEnter(KeyEvent event){
         event.consume();
         QueryService.getInstance().runQuery();
     }

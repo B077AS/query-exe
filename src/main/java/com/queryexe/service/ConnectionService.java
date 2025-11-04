@@ -1,4 +1,4 @@
-package  com.queryexe.service;
+package com.queryexe.service;
 
 import com.google.gson.*;
 import javafx.application.Platform;
@@ -10,6 +10,7 @@ import com.queryexe.components.modals.InsertPasswordModal;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionObjectDeserializer;
 import com.queryexe.queryexe.App;
+import com.queryexe.queryexe.Launcher;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,7 +18,6 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +31,7 @@ public class ConnectionService {
     private final Gson gson;
 
     private ConnectionService() {
-        this.connectionsPath = Paths.get("./data/connections.json");
+        this.connectionsPath = Launcher.getDataDirectory().resolve("connections.json");
         this.gson = new GsonBuilder().setPrettyPrinting().create();
     }
 
@@ -49,7 +49,6 @@ public class ConnectionService {
     public void connect(ConnectionObject connection, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError) {
 
         if (connection.getPassword() == null) {
-            // Ask for password - this is a user-inserted password
             InsertPasswordModal insertPasswordModal = new InsertPasswordModal(
                     connection,
                     () -> attemptConnection(connection, onConnectionStart, onConnectionEnd, onSuccess, onError, true)
@@ -60,7 +59,6 @@ public class ConnectionService {
             });
             return;
         }
-        // Password exists (saved password), attempt connection
         attemptConnection(connection, onConnectionStart, onConnectionEnd, onSuccess, onError, false);
     }
 

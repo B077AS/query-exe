@@ -5,6 +5,7 @@ import java.sql.DriverManager;
 import java.io.*;
 import java.util.*;
 
+import com.queryexe.queryexe.Launcher;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -673,7 +674,7 @@ public class AddConnectionModal extends VBox {
                         setText(null);
                         setGraphic(null);
                     } else {
-                        File driverFile = new File("./jdbc-drivers/" + item.getFileName());
+                        File driverFile = Launcher.getJdbcDriversDirectory().resolve(item.getFileName()).toFile();
                         boolean isDownloaded = driverFile.exists();
                         String status = isDownloaded ? " ✓" : "";
                         setText(item.getVersion() + status);
@@ -708,7 +709,7 @@ public class AddConnectionModal extends VBox {
                     if (empty || item == null) {
                         setText(null);
                     } else {
-                        File driverFile = new File("./jdbc-drivers/" + item.getFileName());
+                        File driverFile = Launcher.getJdbcDriversDirectory().resolve(item.getFileName()).toFile();
                         boolean isDownloaded = driverFile.exists();
                         String status = isDownloaded ? " ✓" : "";
                         setText(item.getVersion() + status);
@@ -771,7 +772,7 @@ public class AddConnectionModal extends VBox {
 
             driverInfoComboBox.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null) {
-                    File driverFile = new File("./jdbc-drivers/" + newVal.getFileName());
+                    File driverFile = Launcher.getJdbcDriversDirectory().resolve(newVal.getFileName()).toFile();
                     boolean isDownloaded = driverFile.exists();
 
                     downloadButton.setDisable(isDownloaded);
@@ -793,7 +794,7 @@ public class AddConnectionModal extends VBox {
             downloadButton.setOnAction(e -> {
                 DriverInfo selectedDriver = driverInfoComboBox.getSelectionModel().getSelectedItem();
                 if (selectedDriver != null) {
-                    File driverFile = new File("./jdbc-drivers/" + selectedDriver.getFileName());
+                    File driverFile = Launcher.getJdbcDriversDirectory().resolve(selectedDriver.getFileName()).toFile();
 
                     downloadButton.setDisable(true);
                     statusLabel.setText("Downloading " + selectedDriver.getVersion() + "...");

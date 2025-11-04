@@ -1,6 +1,8 @@
 package com.queryexe.model.drivers;
 
 import com.queryexe.model.connections.ConnectionTypes;
+import com.queryexe.queryexe.Launcher;
+
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -49,7 +51,7 @@ public class DynamicDriverLoader {
 
     public boolean loadCustomDriver(DriverInfo driverInfo, ConnectionTypes connectionType) {
         try {
-            File jarFile = new File("./jdbc-drivers/" + driverInfo.getFileName());
+            File jarFile = Launcher.getJdbcDriversDirectory().resolve(driverInfo.getFileName()).toFile();
 
             if (!jarFile.exists()) {
                 System.err.println("Driver JAR file not found: " + jarFile.getAbsolutePath());

@@ -1,4 +1,4 @@
-# Query-exe
+# QueryExe
 
 <div align="center">
 
@@ -131,14 +131,11 @@ java -jar queryexe-1.0.0.jar
 ### Clone the Repository
 ```bash
 git clone https://github.com/B077AS/query-exe
-cd queryexe
+cd query-exe
 ```
 
 ### Build with Maven
 ```bash
-# Standard build
-mvn clean package
-
 # Build with platform-specific JavaFX dependencies
 mvn clean package -Ppackage
 ```
@@ -220,6 +217,6 @@ This project is licensed under the MIT License
 
 **Made with Java**
 
-If you find Query-exe useful, consider giving it a ⭐!
+If you find QueryExe useful, consider giving it a ⭐!
 
 </div>

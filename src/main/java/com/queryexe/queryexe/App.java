@@ -98,7 +98,7 @@ public class App extends Application {
 
         scene = new Scene(mainStackPane, 1100, 500);
         Application.setUserAgentStylesheet(App.class.getClassLoader().getResource("dracula.css").toExternalForm());
-        stage.setTitle("Query-exe");
+        stage.setTitle("QueryExe");
         stage.setScene(scene);
         stage.setMinWidth(1100);
         stage.setMinHeight(640);
@@ -108,7 +108,6 @@ public class App extends Application {
 
         stage.setOnCloseRequest(event -> {
             try {
-                //DatabaseConnection.getInstance().getConnection().close();
                 DatabaseConnection.getInstance().shutdown();
                 System.out.println("Connection Closed");
             } catch (Exception e) {
@@ -236,7 +235,6 @@ public class App extends Application {
             toolbar.setDisable(false);
             stackPane.getChildren().clear();
             stackPane.getChildren().add(splitpane);
-            codeArea.replaceText("select * from users");
             codeArea.layout();
         });
     }

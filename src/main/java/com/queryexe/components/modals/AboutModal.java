@@ -25,7 +25,7 @@ import java.io.InputStream;
 
 public class AboutModal extends VBox {
 
-    private static final String APP_NAME = "Query-exe";
+    private static final String APP_NAME = "QueryExe";
     private static final String VERSION = "1.0.0";
     private static final String TAGLINE = "Universal Database Management Tool";
 
@@ -83,7 +83,7 @@ public class AboutModal extends VBox {
         VBox linksBox = createLinksSection();
         Region separator3 = createSeparator();
 
-        Label copyrightLabel = new Label("© 2025 Query-exe");
+        Label copyrightLabel = new Label("© 2025 QueryExe");
         copyrightLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
         copyrightLabel.setTextAlignment(TextAlignment.CENTER);
         copyrightLabel.setPadding(new Insets(0, 0, 10, 0));
