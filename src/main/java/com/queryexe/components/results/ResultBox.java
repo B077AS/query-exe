@@ -360,7 +360,6 @@ public class ResultBox extends VBox {
             connection.setAutoCommit(false);
 
             for (QueryData queryInfo : updateQueries) {
-
                 try (PreparedStatement stmt = connection.prepareStatement(queryInfo.getQuery())) {
                     for (int i = 0; i < queryInfo.getParameters().size(); i++) {
                         Object param = queryInfo.getParameters().get(i);
@@ -375,10 +374,23 @@ public class ResultBox extends VBox {
             }
 
             connection.commit();
+            connection.setAutoCommit(true); // ADD THIS LINE
+
+            applyButton.setDisable(true);
+            revertButton.setDisable(true);
+
+            // Use the new method instead of just clearing updateQueries
+            ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).clearUpdateTracking();
+
+            App.closeModal();
+            CustomNotification customNotification = new CustomNotification("Changes saved", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
+            customNotification.showNotification();
+
         } catch (SQLException e) {
             try {
                 if (connection != null) {
                     connection.rollback();
+                    connection.setAutoCommit(true); // ADD THIS LINE
                 }
             } catch (SQLException e1) {
                 e1.printStackTrace();
@@ -387,17 +399,7 @@ public class ResultBox extends VBox {
 
             CustomNotification customNotification = new CustomNotification("Error Saving Changes " + e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
             customNotification.showNotification();
-
-            return;
         }
-
-        applyButton.setDisable(true);
-        revertButton.setDisable(true);
-
-        ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getUpdateQueries().clear();
-        App.closeModal();
-        CustomNotification customNotification = new CustomNotification("Changes saved", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
-        customNotification.showNotification();
     }
 
     public void revertChanges(TabPane tabPane) {
