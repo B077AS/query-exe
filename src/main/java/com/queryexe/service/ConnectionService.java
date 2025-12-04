@@ -11,6 +11,10 @@ import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionObjectDeserializer;
 import com.queryexe.queryexe.App;
 import com.queryexe.queryexe.Launcher;
+import com.microsoft.credentialstorage.SecretStore;
+import com.microsoft.credentialstorage.StorageProvider;
+import com.microsoft.credentialstorage.StorageProvider.SecureOption;
+import com.microsoft.credentialstorage.model.StoredCredential;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -29,10 +33,22 @@ public class ConnectionService {
     private static volatile ConnectionService instance;
     private final Path connectionsPath;
     private final Gson gson;
+    private final SecretStore<StoredCredential> credentialStore;
+    private static final String CREDENTIAL_KEY_PREFIX = "QueryExe_Connection_";
 
     private ConnectionService() {
         this.connectionsPath = Launcher.getDataDirectory().resolve("connections.json");
         this.gson = new GsonBuilder().setPrettyPrinting().create();
+
+        this.credentialStore = StorageProvider.getCredentialStorage(true, SecureOption.REQUIRED);
+
+        if (credentialStore == null) {
+            System.err.println("WARNING: No secure credential storage available!");
+        } else {
+            System.out.println("Secure credential storage initialized successfully");
+        }
+
+        migratePasswordsIfNeeded();
     }
 
     public static ConnectionService getInstance() {
@@ -44,6 +60,118 @@ public class ConnectionService {
             }
         }
         return instance;
+    }
+
+    private void migratePasswordsIfNeeded() {
+        if (credentialStore == null || !Files.exists(connectionsPath)) {
+            return;
+        }
+
+        try {
+            JsonObject connections = readConnections();
+            boolean needsMigration = false;
+
+            for (Map.Entry<String, JsonElement> entry : connections.entrySet()) {
+                JsonObject conn = entry.getValue().getAsJsonObject();
+                if (conn.has("password") && !conn.get("password").isJsonNull()) {
+                    needsMigration = true;
+                    break;
+                }
+            }
+
+            if (needsMigration) {
+                System.out.println("Migrating passwords to secure storage...");
+                migratePasswordsToSecureStorage();
+            }
+        } catch (Exception e) {
+            System.err.println("Error checking for password migration: " + e.getMessage());
+        }
+    }
+
+    private void migratePasswordsToSecureStorage() {
+        if (credentialStore == null) {
+            System.err.println("Cannot migrate passwords: credential store not available");
+            return;
+        }
+
+        JsonObject connections = readConnections();
+        boolean modified = false;
+
+        for (Map.Entry<String, JsonElement> entry : connections.entrySet()) {
+            String connectionId = entry.getKey();
+            JsonObject conn = entry.getValue().getAsJsonObject();
+
+            if (conn.has("password") && !conn.get("password").isJsonNull()) {
+                String password = conn.get("password").getAsString();
+                String username = conn.has("username") ? conn.get("username").getAsString() : "";
+
+                if (password != null && !password.isEmpty()) {
+                    storePassword(connectionId, username, password);
+
+                    conn.remove("password");
+                    modified = true;
+
+                    System.out.println("Migrated password for connection: " + connectionId);
+                }
+            }
+        }
+
+        if (modified) {
+            try {
+                writeConnections(connections);
+                System.out.println("Password migration completed successfully");
+            } catch (IOException e) {
+                System.err.println("Error saving connections after migration: " + e.getMessage());
+            }
+        }
+    }
+
+    private void storePassword(String connectionId, String username, String password) {
+        if (credentialStore == null || password == null || password.isEmpty()) {
+            return;
+        }
+
+        try {
+            StoredCredential credential = new StoredCredential(username, password.toCharArray());
+            credentialStore.add(getCredentialKey(connectionId), credential);
+        } catch (Exception e) {
+            System.err.println("Error storing password for connection " + connectionId + ": " + e.getMessage());
+        }
+    }
+
+    private String retrievePassword(String connectionId, String username) {
+        if (credentialStore == null) {
+            return null;
+        }
+
+        try {
+            StoredCredential credential = credentialStore.get(getCredentialKey(connectionId));
+            if (credential != null) {
+                char[] passwordChars = credential.getPassword();
+                return passwordChars != null ? new String(passwordChars) : null;
+            }
+        } catch (Exception e) {
+            System.err.println("Error retrieving password for connection " + connectionId + ": " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    private void deletePassword(String connectionId) {
+        if (credentialStore == null) {
+            return;
+        }
+
+        try {
+            credentialStore.delete(getCredentialKey(connectionId));
+        } catch (Exception e) {
+            System.err.println("Error deleting password for connection " + connectionId + ": " + e.getMessage());
+        }
+    }
+
+
+    private String getCredentialKey(String connectionId) {
+        return CREDENTIAL_KEY_PREFIX + connectionId;
     }
 
     public void connect(ConnectionObject connection, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError) {
@@ -94,7 +222,7 @@ public class ConnectionService {
 
         Platform.runLater(() -> {
 
-            InsertPasswordModal insertPasswordModal=null;
+            InsertPasswordModal insertPasswordModal = null;
             if (isUserInserted) {
                 connection.setPassword(null);
                 insertPasswordModal = new InsertPasswordModal(
@@ -111,9 +239,9 @@ public class ConnectionService {
 
             CustomNotification customNotification = new CustomNotification("Connection failed!\n" + e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
 
-            if(insertPasswordModal!=null){
+            if (insertPasswordModal != null) {
                 customNotification.showNotificationOnCustomPane((StackPane) insertPasswordModal.getParent());
-            }else{
+            } else {
                 customNotification.showNotification();
             }
         });
@@ -167,8 +295,16 @@ public class ConnectionService {
             JsonObject connectionsJson = JsonParser.parseReader(reader).getAsJsonObject();
 
             for (Map.Entry<String, JsonElement> entry : connectionsJson.entrySet()) {
+                String connectionId = entry.getKey();
                 JsonObject element = entry.getValue().getAsJsonObject();
-                element.addProperty("id", entry.getKey());
+                element.addProperty("id", connectionId);
+
+                String username = element.has("username") ? element.get("username").getAsString() : "";
+                String password = retrievePassword(connectionId, username);
+
+                if (password != null) {
+                    element.addProperty("password", password);
+                }
 
                 ConnectionObject connection = gsonWithDeserializer.fromJson(element, ConnectionObject.class);
                 connections.add(connection);
@@ -181,17 +317,51 @@ public class ConnectionService {
     }
 
     public void saveConnection(String connectionId, JsonObject connectionData) {
+        String password = null;
+        if (connectionData.has("password") && !connectionData.get("password").isJsonNull()) {
+            password = connectionData.get("password").getAsString();
+            connectionData.remove("password");
+        }
+
+        String username = connectionData.has("username") ? connectionData.get("username").getAsString() : "";
+
         modifyConnections(connections -> {
             connections.add(connectionId, connectionData);
         });
+
+        if (password != null && !password.isEmpty()) {
+            storePassword(connectionId, username, password);
+        }
     }
 
     public JsonObject getConnection(String connectionId) {
         JsonObject connections = readConnections();
-        return connections.has(connectionId) ? connections.getAsJsonObject(connectionId) : null;
+        if (connections.has(connectionId)) {
+            JsonObject connection = connections.getAsJsonObject(connectionId).deepCopy();
+
+            String username = connection.has("username") ? connection.get("username").getAsString() : "";
+            String password = retrievePassword(connectionId, username);
+
+            if (password != null) {
+                connection.addProperty("password", password);
+            }
+
+            return connection;
+        }
+        return null;
     }
 
     public void updateConnectionProperty(String connectionId, String property, String value) {
+        if ("password".equals(property)) {
+            JsonObject connections = readConnections();
+            JsonObject connection = connections.getAsJsonObject(connectionId);
+            if (connection != null) {
+                String username = connection.has("username") ? connection.get("username").getAsString() : "";
+                storePassword(connectionId, username, value);
+            }
+            return;
+        }
+
         modifyConnections(connections -> {
             JsonObject connection = connections.getAsJsonObject(connectionId);
             if (connection != null) {
@@ -203,20 +373,35 @@ public class ConnectionService {
     public String cloneConnection(String connectionId, String newName) {
         String newId = UUID.randomUUID().toString();
 
-        modifyConnections(connections -> {
-            JsonObject existingConnection = connections.getAsJsonObject(connectionId);
-            if (existingConnection != null) {
-                JsonObject newConnection = existingConnection.deepCopy();
+        JsonObject originalConnection = getConnection(connectionId);
+
+        if (originalConnection != null) {
+            String password = null;
+            if (originalConnection.has("password") && !originalConnection.get("password").isJsonNull()) {
+                password = originalConnection.get("password").getAsString();
+                originalConnection.remove("password");
+            }
+
+            modifyConnections(connections -> {
+                JsonObject newConnection = originalConnection.deepCopy();
                 newConnection.addProperty("connectionName", newName);
                 connections.add(newId, newConnection);
+            });
+
+            if (password != null && !password.isEmpty()) {
+                String username = originalConnection.has("username") ?
+                        originalConnection.get("username").getAsString() : "";
+                storePassword(newId, username, password);
             }
-        });
+        }
 
         return newId;
     }
 
     public boolean deleteConnection(String connectionId) {
         try {
+            deletePassword(connectionId);
+
             JsonObject connections = readConnections();
 
             if (connections.has(connectionId)) {
@@ -231,5 +416,9 @@ public class ConnectionService {
             System.err.println("Error deleting connection: " + e.getMessage());
             return false;
         }
+    }
+
+    public void forceMigration() {
+        migratePasswordsToSecureStorage();
     }
 }
