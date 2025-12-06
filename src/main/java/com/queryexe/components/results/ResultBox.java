@@ -374,12 +374,11 @@ public class ResultBox extends VBox {
             }
 
             connection.commit();
-            connection.setAutoCommit(true); // ADD THIS LINE
+            connection.setAutoCommit(true);
 
             applyButton.setDisable(true);
             revertButton.setDisable(true);
 
-            // Use the new method instead of just clearing updateQueries
             ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).clearUpdateTracking();
 
             App.closeModal();
@@ -390,7 +389,7 @@ public class ResultBox extends VBox {
             try {
                 if (connection != null) {
                     connection.rollback();
-                    connection.setAutoCommit(true); // ADD THIS LINE
+                    connection.setAutoCommit(true);
                 }
             } catch (SQLException e1) {
                 e1.printStackTrace();
