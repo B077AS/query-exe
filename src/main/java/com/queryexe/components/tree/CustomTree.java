@@ -7,6 +7,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
@@ -24,6 +28,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
@@ -33,6 +38,7 @@ import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -56,6 +62,12 @@ public class CustomTree extends VBox {
     private VBox usersView;
     private boolean isUsersViewActive = false;
     private DatabaseStructureCache structureCache;
+
+    private ExecutorService searchExecutor;
+    private AtomicReference<Future<?>> currentSearchTask = new AtomicReference<>(null);
+    private ProgressIndicator searchProgress;
+    private Button closeSearchButton;
+    private StackPane searchControlStack;
 
     public static class DatabaseStructureCache {
         private Map<String, LinkedHashMap<String, ArrayList<ColumnData>>> postgresSchemas = new LinkedHashMap<>();
@@ -261,55 +273,130 @@ public class CustomTree extends VBox {
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                 if (newValue != null && !newValue.trim().isEmpty()) {
                     if (isUsersViewActive) {
-                        filterUsersTree(newValue.trim());
+                        performAsyncSearch(newValue.trim(), true);
                     } else {
-                        filterTree(newValue.trim());
+                        performAsyncSearch(newValue.trim(), false);
                     }
                 } else {
+                    cancelCurrentSearch();
                     clearFilter();
                 }
             }
         });
 
         searchField.setOnKeyPressed(event -> {
-            if (event.getCode() == KeyCode.ENTER) {
-                String searchText = searchField.getText().trim();
-                if (!searchText.isEmpty()) {
-                    if (isUsersViewActive) {
-                        filterUsersTree(searchText);
-                    } else {
-                        filterTree(searchText);
-                    }
-                }
-            } else if (event.getCode() == KeyCode.ESCAPE) {
+            if (event.getCode() == KeyCode.ESCAPE) {
                 hideSearchField();
             }
         });
     }
 
+    private void performAsyncSearch(String searchText, boolean isUsers) {
+        cancelCurrentSearch();
+
+        Platform.runLater(() -> {
+            searchProgress.setVisible(true);
+            closeSearchButton.setVisible(false);
+        });
+
+        if (searchExecutor == null || searchExecutor.isShutdown()) {
+            searchExecutor = Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r);
+                t.setDaemon(true);
+                t.setName("TreeSearchThread");
+                return t;
+            });
+        }
+
+        Future<?> task = searchExecutor.submit(() -> {
+            try {
+
+                TreeItem<String> filteredRoot;
+                if (isUsers) {
+                    filteredRoot = createFilteredUsersTree(originalUsersRootItem, searchText.toLowerCase());
+                } else {
+                    filteredRoot = createFilteredTree(originalRootItem, searchText.toLowerCase());
+                }
+
+                Platform.runLater(() -> {
+                    if (!Thread.currentThread().isInterrupted()) {
+                        if (filteredRoot != null) {
+                            if (isUsers) {
+                                usersTree.setRoot(filteredRoot);
+                            } else {
+                                databaseTree.setRoot(filteredRoot);
+                            }
+                            expandFilteredTree(filteredRoot);
+                        } else {
+                            clearFilter();
+                        }
+
+                        searchProgress.setVisible(false);
+                        closeSearchButton.setVisible(true);
+                    }
+                });
+
+            } catch (Exception e) {
+                if (!Thread.currentThread().isInterrupted()) {
+                    Platform.runLater(() -> {
+                        searchProgress.setVisible(false);
+                        closeSearchButton.setVisible(true);
+                    });
+                }
+            }
+        });
+
+        currentSearchTask.set(task);
+    }
+
+    private void cancelCurrentSearch() {
+        Future<?> task = currentSearchTask.getAndSet(null);
+        if (task != null && !task.isDone()) {
+            task.cancel(true);
+        }
+    }
+
+    private void shutdownSearchExecutor() {
+        cancelCurrentSearch();
+        if (searchExecutor != null && !searchExecutor.isShutdown()) {
+            searchExecutor.shutdownNow();
+            searchExecutor = null;
+        }
+    }
+
     private HBox createSearchHeaderBox() {
         HBox searchHeaderBox = new HBox();
-        searchHeaderBox.setSpacing(3);
+        searchHeaderBox.setSpacing(5);
         searchHeaderBox.setPadding(new Insets(5, 5, 5, 5));
         searchHeaderBox.setStyle("-fx-border-width: 0px 0px 2px 0px; -fx-border-color: -color-border-default;");
         searchHeaderBox.setAlignment(Pos.CENTER_LEFT);
 
-        FontIcon cancelIcon = new FontIcon(MaterialDesignC.CLOSE);
-        cancelIcon.getStyleClass().add("custom-icon-25px");
-        Button cancelButton = new Button(null, cancelIcon);
-        cancelButton.getStyleClass().addAll(Styles.FLAT);
-        cancelButton.setPadding(new Insets(5, 5, 5, 5));
-        cancelButton.setOnAction(event -> hideSearchField());
+        searchControlStack = new StackPane();
+        searchControlStack.setAlignment(Pos.CENTER);
+
+        searchProgress = new ProgressIndicator();
+        searchProgress.setMinSize(20, 20);
+        searchProgress.setMaxSize(20, 20);
+        searchProgress.setVisible(false);
+
+        closeSearchButton = new Button();
+        closeSearchButton.setGraphic(new FontIcon(MaterialDesignC.CLOSE));
+        closeSearchButton.getStyleClass().addAll(Styles.FLAT);
+        closeSearchButton.setPadding(new Insets(5, 5, 5, 5));
+        closeSearchButton.setOnAction(event -> hideSearchField());
+        closeSearchButton.setVisible(true);
+
+        searchControlStack.getChildren().addAll(searchProgress, closeSearchButton);
 
         HBox.setHgrow(searchField, Priority.ALWAYS);
 
-        searchHeaderBox.getChildren().addAll(searchField, cancelButton);
+        searchHeaderBox.getChildren().addAll(searchField, searchControlStack);
         return searchHeaderBox;
     }
 
     private HBox createNormalHeaderBox() {
         HBox normalHeaderBox = new HBox();
-        normalHeaderBox.setSpacing(3);
+        normalHeaderBox.setSpacing(5);
         normalHeaderBox.setAlignment(Pos.CENTER_LEFT);
 
         FontIcon databaseViewIcon = new FontIcon(MaterialDesignD.DATABASE);
@@ -341,6 +428,7 @@ public class CustomTree extends VBox {
         refresh.getStyleClass().addAll(Styles.FLAT);
         refresh.setPadding(new Insets(5, 5, 5, 5));
         refresh.setOnAction(event -> {
+            shutdownSearchExecutor();
             this.initialize();
         });
 
@@ -437,46 +525,14 @@ public class CustomTree extends VBox {
     private void hideSearchField() {
         if (isSearchMode) {
             searchField.clear();
+            cancelCurrentSearch();
+            shutdownSearchExecutor();
             clearFilter();
 
             headerBox.getChildren().clear();
             headerBox.getChildren().addAll(createNormalHeaderBox().getChildren());
 
             isSearchMode = false;
-        }
-    }
-
-    private void filterTree(String searchText) {
-        if (searchText == null || searchText.trim().isEmpty()) {
-            clearFilter();
-            return;
-        }
-
-        String searchLower = searchText.toLowerCase();
-        TreeItem<String> filteredRoot = createFilteredTree(originalRootItem, searchLower);
-
-        if (filteredRoot != null) {
-            databaseTree.setRoot(filteredRoot);
-            expandFilteredTree(filteredRoot);
-        } else {
-            clearFilter();
-        }
-    }
-
-    private void filterUsersTree(String searchText) {
-        if (searchText == null || searchText.trim().isEmpty()) {
-            clearFilter();
-            return;
-        }
-
-        String searchLower = searchText.toLowerCase();
-        TreeItem<String> filteredRoot = createFilteredUsersTree(originalUsersRootItem, searchLower);
-
-        if (filteredRoot != null) {
-            usersTree.setRoot(filteredRoot);
-            expandFilteredTree(filteredRoot);
-        } else {
-            clearFilter();
         }
     }
 
@@ -616,7 +672,7 @@ public class CustomTree extends VBox {
 
     public HBox createHeaderBox() {
         headerBox = new HBox();
-        headerBox.setSpacing(3);
+        headerBox.setSpacing(5);
         headerBox.setPadding(new Insets(5, 5, 5, 5));
         headerBox.setStyle("-fx-border-width: 0px 0px 2px 0px; -fx-border-color: -color-border-default;");
         headerBox.setAlignment(Pos.CENTER_LEFT);

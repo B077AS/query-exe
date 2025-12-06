@@ -654,6 +654,11 @@ public class ResultTable extends TableView<TableRowData> {
         Clipboard.getSystemClipboard().setContent(clipboardContent);
     }
 
+    public void clearUpdateTracking() {
+        this.updateQueries.clear();
+        this.rowUpdateQueryIndex.clear();
+    }
+
     public String getTableName() {
         return tableName;
     }

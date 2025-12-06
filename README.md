@@ -68,12 +68,12 @@ Connect to and manage multiple database systems simultaneously:
 
 | Database | Pre-installed Driver Version |
 |----------|------------------------------|
-| MySQL | 8.0.33 |
-| MariaDB | 3.1.4 |
-| PostgreSQL | 42.6.0 |
-| SQL Server | 12.2.0 |
-| H2 | 2.2.220 |
-| SQLite | 3.42.0.0 |
+| MySQL | 9.5.0 |
+| MariaDB | 3.5.6 |
+| PostgreSQL | 42.7.8 |
+| SQL Server | 13.2.1.jre11 |
+| H2 | 2.4.240 |
+| SQLite | 3.51.1.0 |
 
 *All JDBC drivers can be customized by the user to support different versions or configurations.*
 
