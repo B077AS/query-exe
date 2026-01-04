@@ -63,14 +63,6 @@ public class ResultTable extends TableView<TableRowData> {
 
         this.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
-        this.setRowFactory(tv -> {
-            TableRow<TableRowData> row = new TableRow<>();
-            row.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
-                event.consume();
-            });
-            return row;
-        });
-
         boolean hasPrimaryKey = false;
 
         ResultSet resultSet = preparedStatement.getResultSet();
@@ -187,39 +179,48 @@ public class ResultTable extends TableView<TableRowData> {
                     }
                 };
 
-                cell.setOnMouseClicked(event -> {
-                    if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 1 && !event.isControlDown()) {
-                        if (this.getEditingCell() != null) {
-                            this.edit(-1, null);
-                        }
-                        if (!cell.getTableRow().isSelected()) {
-                            this.getSelectionModel().clearSelection();
-                            this.getSelectionModel().select(cell.getTableRow().getIndex());
-                        } else {
-                            this.getSelectionModel().clearSelection(cell.getTableRow().getIndex());
+                cell.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+                    if (event.getButton() == MouseButton.PRIMARY) {
+                        if (cell.isEditing()) {
+                            return;
                         }
 
-                    } else if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 2) {
-                        if (this.getEditingCell() != null) {
-                            this.edit(-1, null);
-                        }
-                        cell.startEdit();
-                        this.getSelectionModel().clearSelection();
-                        this.getSelectionModel().select(cell.getTableRow().getIndex());
-                        event.consume();
-                        return;
-                    } else if (event.getButton() == MouseButton.PRIMARY && event.getClickCount() == 1 && event.isControlDown()) {
-                        if (this.getEditingCell() != null) {
-                            this.edit(-1, null);
-                        }
-                        if (!cell.getTableRow().isSelected()) {
-                            this.getSelectionModel().select(cell.getTableRow().getIndex());
-                        } else {
-                            this.getSelectionModel().clearSelection(cell.getTableRow().getIndex());
+                        boolean wasSelected = cell.getTableRow().isSelected();
+                        int selectedCount = this.getSelectionModel().getSelectedItems().size();
+                        int clickedRowIndex = cell.getTableRow().getIndex();
+
+                        if (event.getClickCount() == 2) {
+                            event.consume();
+                            Platform.runLater(() -> {
+                                if (this.getEditingCell() != null) {
+                                    this.edit(-1, null);
+                                }
+                                cell.startEdit();
+                                this.getSelectionModel().clearSelection();
+                                this.getSelectionModel().select(clickedRowIndex);
+                            });
+                        } else if (event.getClickCount() == 1 && !event.isControlDown()) {
+                            if (wasSelected && selectedCount == 1) {
+                                event.consume();
+                                Platform.runLater(() -> {
+                                    if (this.getEditingCell() != null) {
+                                        this.edit(-1, null);
+                                    }
+                                    this.getSelectionModel().clearSelection();
+                                });
+                            } else if (selectedCount > 1) {
+                                event.consume();
+                                Platform.runLater(() -> {
+                                    if (this.getEditingCell() != null) {
+                                        this.edit(-1, null);
+                                    }
+                                    this.getSelectionModel().clearSelection();
+                                    this.getSelectionModel().select(clickedRowIndex);
+                                });
+                            }
                         }
                     }
                     this.requestFocus();
-                    event.consume();
                 });
 
                 return cell;
@@ -382,13 +383,15 @@ public class ResultTable extends TableView<TableRowData> {
 
     public void updateDatabaseRow(TableRowData rowData, int updatedColumnIndex, String oldValue, String newValue) {
         try {
+            Object typedValue = convertToOriginalType(rowData, updatedColumnIndex, newValue);
+
             rowData.getStringData().set(updatedColumnIndex, newValue);
-            rowData.getOriginalData().set(updatedColumnIndex, newValue);
+            rowData.getOriginalData().set(updatedColumnIndex, typedValue);
 
             if (rowData.isNewRow()) {
                 int queryIndex = rowData.getQueryIndex();
                 QueryData insertQuery = updateQueries.get(queryIndex);
-                insertQuery.getParameters().set(updatedColumnIndex, newValue.isEmpty() ? null : newValue);
+                insertQuery.getParameters().set(updatedColumnIndex, newValue.isEmpty() ? null : typedValue);
             } else {
                 String rowIdentifier = getRowIdentifier(rowData);
 
@@ -411,14 +414,14 @@ public class ResultTable extends TableView<TableRowData> {
 
                         List<Object> params = existingQuery.getParameters();
                         int whereParamIndex = params.size() - primaryKeyColumns.size();
-                        params.add(whereParamIndex, newValue);
+                        params.add(whereParamIndex, typedValue);
                     } else {
                         String[] setColumns = setClause.split(",");
                         int paramIndex = 0;
                         for (String setColumn : setColumns) {
                             String colName = setColumn.trim().split(" = ")[0];
                             if (colName.equals(columnName)) {
-                                existingQuery.getParameters().set(paramIndex, newValue);
+                                existingQuery.getParameters().set(paramIndex, typedValue);
                                 break;
                             }
                             paramIndex++;
@@ -429,9 +432,10 @@ public class ResultTable extends TableView<TableRowData> {
                     for (String primaryKeyColumn : primaryKeyColumns) {
                         int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
                         if (pkIndex == updatedColumnIndex) {
-                            primaryKeyValues.put(primaryKeyColumn, oldValue);
+                            Object oldTypedValue = convertToOriginalType(rowData, pkIndex, oldValue);
+                            primaryKeyValues.put(primaryKeyColumn, oldTypedValue);
                         } else {
-                            primaryKeyValues.put(primaryKeyColumn, rowData.getStringData().get(pkIndex));
+                            primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
                         }
                     }
 
@@ -441,7 +445,7 @@ public class ResultTable extends TableView<TableRowData> {
                         StringBuilder whereClause = new StringBuilder();
                         List<Object> parameters = new ArrayList<>();
 
-                        parameters.add(newValue);
+                        parameters.add(typedValue);
 
                         boolean isFirst = true;
                         for (String primaryKeyColumn : primaryKeyColumns) {
@@ -474,6 +478,56 @@ public class ResultTable extends TableView<TableRowData> {
             rowData.getStringData().set(updatedColumnIndex, oldValue);
             this.refresh();
         }
+    }
+
+    private Object convertToOriginalType(TableRowData rowData, int columnIndex, String stringValue) {
+        if (stringValue == null || stringValue.isEmpty()) {
+            return null;
+        }
+
+        if (columnIndex < backupData.get(0).getOriginalData().size()) {
+            Object originalValue = null;
+
+            int rowIndex = this.getItems().indexOf(rowData);
+            if (rowIndex >= 0 && rowIndex < backupData.size()) {
+                originalValue = backupData.get(rowIndex).getOriginalData().get(columnIndex);
+            }
+
+            if (originalValue == null && rowData.getOriginalData().get(columnIndex) != null) {
+                originalValue = rowData.getOriginalData().get(columnIndex);
+            }
+
+            if (originalValue != null) {
+                try {
+                    if (originalValue instanceof Integer) {
+                        return Integer.parseInt(stringValue);
+                    } else if (originalValue instanceof Long) {
+                        return Long.parseLong(stringValue);
+                    } else if (originalValue instanceof Double) {
+                        return Double.parseDouble(stringValue);
+                    } else if (originalValue instanceof Float) {
+                        return Float.parseFloat(stringValue);
+                    } else if (originalValue instanceof Short) {
+                        return Short.parseShort(stringValue);
+                    } else if (originalValue instanceof Byte) {
+                        return Byte.parseByte(stringValue);
+                    } else if (originalValue instanceof Boolean) {
+                        return Boolean.parseBoolean(stringValue) || stringValue.equals("1");
+                    } else if (originalValue instanceof java.sql.Date) {
+                        return java.sql.Date.valueOf(stringValue);
+                    } else if (originalValue instanceof java.sql.Time) {
+                        return java.sql.Time.valueOf(stringValue);
+                    } else if (originalValue instanceof java.sql.Timestamp) {
+                        return java.sql.Timestamp.valueOf(stringValue);
+                    } else if (originalValue instanceof java.math.BigDecimal) {
+                        return new java.math.BigDecimal(stringValue);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Failed to convert value to original type: " + e.getMessage());
+                }
+            }
+        }
+        return stringValue;
     }
 
 
