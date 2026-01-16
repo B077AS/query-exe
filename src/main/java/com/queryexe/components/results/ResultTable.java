@@ -18,7 +18,6 @@ import javafx.geometry.Orientation;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.input.Clipboard;
@@ -259,7 +258,32 @@ public class ResultTable extends TableView<TableRowData> {
                     case java.sql.Types.BINARY:
                         byte[] binaryData = resultSet.getBytes(columnIndex);
                         originalValue = binaryData;
-                        stringValue = (binaryData != null) ? String.format("[Data: %d bytes]", binaryData.length) : null;
+
+                        // Try to convert to UUID string if possible
+                        if (binaryData != null && (binaryData.length == 16 || binaryData.length == 36)) {
+                            try {
+
+                                if (binaryData.length == 16) {
+                                    UUID uuid = bytesToUUID(binaryData);
+                                    stringValue = uuid.toString();
+                                    originalValue = uuid;
+                                }
+
+                                else {
+                                    String possibleUUID = new String(binaryData, java.nio.charset.StandardCharsets.UTF_8);
+                                    if (possibleUUID.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                                        stringValue = possibleUUID;
+                                        originalValue = UUID.fromString(possibleUUID);
+                                    } else {
+                                        stringValue = String.format("[Data: %d bytes]", binaryData.length);
+                                    }
+                                }
+                            } catch (Exception e) {
+                                stringValue = String.format("[Data: %d bytes]", binaryData.length);
+                            }
+                        } else {
+                            stringValue = (binaryData != null) ? String.format("[Data: %d bytes]", binaryData.length) : null;
+                        }
                         break;
                     case java.sql.Types.BOOLEAN:
                         boolean boolValue = resultSet.getBoolean(columnIndex);
@@ -303,6 +327,25 @@ public class ResultTable extends TableView<TableRowData> {
 
         addTableResizeListener();
     }
+
+    private UUID bytesToUUID(byte[] bytes) {
+        if (bytes.length != 16) {
+            throw new IllegalArgumentException("UUID must be 16 bytes");
+        }
+
+        long mostSigBits = 0;
+        long leastSigBits = 0;
+
+        for (int i = 0; i < 8; i++) {
+            mostSigBits = (mostSigBits << 8) | (bytes[i] & 0xff);
+        }
+        for (int i = 8; i < 16; i++) {
+            leastSigBits = (leastSigBits << 8) | (bytes[i] & 0xff);
+        }
+
+        return new UUID(mostSigBits, leastSigBits);
+    }
+
 
     private void addTableResizeListener() {
         this.widthProperty().addListener((obs, oldWidth, newWidth) -> {
@@ -499,7 +542,9 @@ public class ResultTable extends TableView<TableRowData> {
 
             if (originalValue != null) {
                 try {
-                    if (originalValue instanceof Integer) {
+                    if (originalValue instanceof UUID) {
+                        return UUID.fromString(stringValue);
+                    } else if (originalValue instanceof Integer) {
                         return Integer.parseInt(stringValue);
                     } else if (originalValue instanceof Long) {
                         return Long.parseLong(stringValue);
@@ -529,7 +574,6 @@ public class ResultTable extends TableView<TableRowData> {
         }
         return stringValue;
     }
-
 
     public void addDatabaseRow() {
         List<Object> newOriginalData = new ArrayList<>();

@@ -168,16 +168,19 @@ public class DatabaseConnection {
             throw new SQLException("No connection object available for reconnection: " + connectionId);
         }
 
-        // Close existing connection if open
         Connection connection = connections.get(connectionId);
-        if (connection != null && !connection.isClosed()) {
-            connection.close();
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+            }
+            connections.remove(connectionId);
         }
 
-        // Reinitialize with current connection object
         String previousConnectionId = currentConnectionId;
+
         initialize(connectionObject, true);
-        // Restore the previous current connection if it was different
+
         if (previousConnectionId != null && !previousConnectionId.equals(connectionId)) {
             currentConnectionId = previousConnectionId;
         }
