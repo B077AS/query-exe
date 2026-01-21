@@ -376,6 +376,8 @@ public class ResultBox extends VBox {
             connection.commit();
             connection.setAutoCommit(true);
 
+            ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).updateBackupData();
+
             applyButton.setDisable(true);
             revertButton.setDisable(true);
 

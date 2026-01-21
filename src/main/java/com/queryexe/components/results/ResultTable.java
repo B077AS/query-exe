@@ -726,6 +726,19 @@ public class ResultTable extends TableView<TableRowData> {
         });
     }
 
+    public void updateBackupData() {
+        Platform.runLater(() -> {
+            backupData.clear();
+
+            for (TableRowData currentRow : this.getItems()) {
+                ObservableList<Object> originalDataCopy = FXCollections.observableArrayList(currentRow.getOriginalData());
+                ObservableList<String> stringDataCopy = FXCollections.observableArrayList(currentRow.getStringData());
+                TableRowData backupRowCopy = new TableRowData(originalDataCopy, stringDataCopy);
+                backupData.add(backupRowCopy);
+            }
+        });
+    }
+
     public void copySelectedRows() {
         StringBuilder formattedData = new StringBuilder();
 
