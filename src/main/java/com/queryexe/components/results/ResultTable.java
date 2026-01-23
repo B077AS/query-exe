@@ -85,7 +85,10 @@ public class ResultTable extends TableView<TableRowData> {
 
             if (columnType == java.sql.Types.BLOB || columnType == java.sql.Types.LONGVARBINARY ||
                     columnType == java.sql.Types.VARBINARY || columnType == java.sql.Types.BINARY) {
-                tableColumn.setEditable(false);
+                String columnClassName = metaData.getColumnClassName(columnIndex);
+                String columnTypeName = metaData.getColumnTypeName(columnIndex);
+
+                tableColumn.setEditable("java.util.UUID".equals(columnClassName) || columnTypeName.toUpperCase().contains("UUID"));
             } else {
                 tableColumn.setEditable(true);
             }
