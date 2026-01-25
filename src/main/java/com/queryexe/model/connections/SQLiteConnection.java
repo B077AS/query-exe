@@ -23,6 +23,7 @@ import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
+import javafx.scene.control.TableColumn;
 
 public class SQLiteConnection extends ConnectionObject {
 
@@ -767,17 +768,27 @@ public class SQLiteConnection extends ConnectionObject {
             String tableName = table.getTableName();
             StringBuilder insertScript = new StringBuilder();
 
+            ObservableList<TableColumn<TableRowData, ?>> tableColumns = table.getColumns();
+
+            List<String> columnNames = new ArrayList<>();
+            List<String> columnTypes = new ArrayList<>();
+
             // Get column info using PRAGMA
             String columnQuery = "PRAGMA table_info(" + tableName + ")";
             PreparedStatement columnStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
             ResultSet columns = columnStmt.executeQuery();
 
-            List<String> columnNames = new ArrayList<>();
-            List<String> columnTypes = new ArrayList<>();
-
+            Map<String, String> columnTypeMap = new HashMap<>();
             while (columns.next()) {
-                columnNames.add(columns.getString("name"));
-                columnTypes.add(columns.getString("type"));
+                columnTypeMap.put(columns.getString("name"), columns.getString("type"));
+            }
+            columns.close();
+            columnStmt.close();
+
+            for (TableColumn<TableRowData, ?> col : tableColumns) {
+                String colName = col.getText();
+                columnNames.add(colName);
+                columnTypes.add(columnTypeMap.getOrDefault(colName, "TEXT"));
             }
 
             insertScript.append("INSERT INTO ").append(tableName)
@@ -790,32 +801,28 @@ public class SQLiteConnection extends ConnectionObject {
                     insertScript.append(", ");
                 }
 
-                String value = row.get(i);
+                String value = (i < row.size()) ? row.get(i) : null;
 
-                if (value == null || value.equals("NULL")) {
+                if (value == null || value.equals("NULL") || value.equals("null")) {
                     insertScript.append("NULL");
                 } else {
                     String columnType = columnTypes.get(i).toUpperCase();
 
                     if (columnType.contains("INT") || columnType.contains("REAL") ||
                             columnType.contains("NUMERIC") || columnType.contains("DECIMAL")) {
-                        // Numeric types
                         insertScript.append(value.isEmpty() ? "NULL" : value);
                     } else {
-                        // Text and other types
                         insertScript.append("'").append(value.replace("'", "''")).append("'");
                     }
                 }
             }
 
             insertScript.append(");");
-            columnStmt.close();
-            columns.close();
 
             return insertScript.toString();
         } catch (Exception e) {
             e.printStackTrace();
-            return "-- ERROR: "+e.getMessage();
+            return "-- ERROR: " + e.getMessage();
         }
     }
 
