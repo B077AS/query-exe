@@ -531,7 +531,7 @@ public class ResultTable extends TableView<TableRowData> {
             return null;
         }
 
-        if (columnIndex < backupData.get(0).getOriginalData().size()) {
+        if (!backupData.isEmpty() && columnIndex < backupData.get(0).getOriginalData().size()) {
             Object originalValue = null;
 
             int rowIndex = this.getItems().indexOf(rowData);
