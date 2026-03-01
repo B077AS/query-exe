@@ -5,6 +5,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Pagination;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
@@ -55,6 +56,19 @@ public class ConnectionsPane extends VBox {
         VBox.setVgrow(pagination, Priority.ALWAYS);
         pagination.setMaxWidth(Double.MAX_VALUE);
         pagination.setMaxHeight(Double.MAX_VALUE);
+
+        pagination.addEventFilter(ScrollEvent.SCROLL, event -> {
+            if (event.getDeltaY() < 0) {
+                if (pagination.getCurrentPageIndex() < pagination.getPageCount() - 1) {
+                    pagination.setCurrentPageIndex(pagination.getCurrentPageIndex() + 1);
+                }
+            } else if (event.getDeltaY() > 0) {
+                if (pagination.getCurrentPageIndex() > 0) {
+                    pagination.setCurrentPageIndex(pagination.getCurrentPageIndex() - 1);
+                }
+            }
+            event.consume();
+        });
 
         this.getChildren().add(pagination);
 

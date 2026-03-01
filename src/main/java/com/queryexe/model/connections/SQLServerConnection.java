@@ -23,6 +23,8 @@ import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
 
+import javafx.scene.control.TableColumn;
+
 public class SQLServerConnection extends ConnectionObject {
 
     private String[] KEYWORDS = new String[]{
@@ -822,28 +824,32 @@ public class SQLServerConnection extends ConnectionObject {
         try {
             ResultTable table = (ResultTable) cell.getTableView();
             String tableName = table.getTableName();
-            
-            // Parse schema and table from tableName
+
             String[] parts = parseSchemaAndTable(tableName);
             String schema = parts[0];
             String tableOnly = parts[1];
-            
+
             StringBuilder insertScript = new StringBuilder();
 
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-            ResultSet columns = metaData.getColumns(
-                    DatabaseConnection.getInstance().getConnection().getCatalog(),
-                    schema,
-                    tableOnly,
-                    null
-            );
+            ObservableList<TableColumn<TableRowData, ?>> tableColumns = table.getColumns();
 
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
-            while (columns.next()) {
-                columnNames.add("[" + columns.getString("COLUMN_NAME") + "]");
-                columnTypes.add(columns.getInt("DATA_TYPE"));
+            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
+            String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
+
+            for (TableColumn<TableRowData, ?> col : tableColumns) {
+                String colName = col.getText();
+                columnNames.add("[" + colName + "]");
+
+                ResultSet columns = metaData.getColumns(catalog, schema, tableOnly, colName);
+                if (columns.next()) {
+                    columnTypes.add(columns.getInt("DATA_TYPE"));
+                } else {
+                    columnTypes.add(Types.VARCHAR);
+                }
+                columns.close();
             }
 
             insertScript.append("INSERT INTO [").append(schema).append("].[").append(tableOnly).append("]")
@@ -856,13 +862,13 @@ public class SQLServerConnection extends ConnectionObject {
                     insertScript.append(", ");
                 }
 
-                String value = row.get(i);
+                String value = (i < row.size()) ? row.get(i) : null;
 
-                if (value == null || value.equals("NULL")) {
+                if (value == null || value.equals("NULL") || value.equals("null")) {
                     insertScript.append("NULL");
                 } else {
                     switch (columnTypes.get(i)) {
-                        case Types.BOOLEAN -> {
+                        case Types.BOOLEAN, Types.BIT -> {
                             insertScript.append(Boolean.parseBoolean(value) ? "1" : "0");
                         }
                         case Types.TIMESTAMP -> {
@@ -890,7 +896,6 @@ public class SQLServerConnection extends ConnectionObject {
             e.printStackTrace();
             return "-- ERROR: " + e.getMessage();
         }
-
     }
 
     @Override

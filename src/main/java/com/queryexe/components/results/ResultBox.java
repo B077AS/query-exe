@@ -365,6 +365,12 @@ public class ResultBox extends VBox {
                         Object param = queryInfo.getParameters().get(i);
                         if (param == null) {
                             stmt.setNull(i + 1, Types.NULL);
+                        } else if (isUuidParameter(param)) {
+                            if (param instanceof String) {
+                                stmt.setObject(i + 1, java.util.UUID.fromString((String) param));
+                            } else {
+                                stmt.setObject(i + 1, param);
+                            }
                         } else {
                             stmt.setObject(i + 1, param);
                         }
@@ -375,6 +381,8 @@ public class ResultBox extends VBox {
 
             connection.commit();
             connection.setAutoCommit(true);
+
+            ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).updateBackupData();
 
             applyButton.setDisable(true);
             revertButton.setDisable(true);
@@ -399,6 +407,23 @@ public class ResultBox extends VBox {
             CustomNotification customNotification = new CustomNotification("Error Saving Changes " + e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
             customNotification.showNotification();
         }
+    }
+
+    private boolean isUuidParameter(Object param) {
+        if (param == null) {
+            return false;
+        }
+
+        if (param instanceof java.util.UUID) {
+            return true;
+        }
+
+        if (param instanceof String) {
+            String str = (String) param;
+            return str.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+        }
+
+        return false;
     }
 
     public void revertChanges(TabPane tabPane) {

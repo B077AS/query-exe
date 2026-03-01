@@ -592,8 +592,9 @@ public class AddConnectionModal extends VBox {
             showFileBasedFields();
             this.jdbcUrlField.setText(connection.getFullUrl());
             this.usernameField.setText(connection.getUsername());
-            if (!connection.getPassword().isEmpty()) {
-                this.passwordField.setText(connection.getPassword());
+            String password = connection.getPassword();
+            if (password != null && !password.isEmpty()) {
+                this.passwordField.setText(password);
                 this.savePasswordCheckBox.setSelected(true);
             }
         } else {
@@ -611,8 +612,9 @@ public class AddConnectionModal extends VBox {
 
             this.usernameField.setText(connection.getUsername());
 
-            if (!connection.getPassword().isEmpty()) {
-                this.passwordField.setText(connection.getPassword());
+            String password = connection.getPassword();
+            if (password != null && !password.isEmpty()) {
+                this.passwordField.setText(password);
                 this.savePasswordCheckBox.setSelected(true);
             }
         }

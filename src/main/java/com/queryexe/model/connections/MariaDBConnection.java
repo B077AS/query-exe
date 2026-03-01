@@ -19,6 +19,7 @@ import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
+import javafx.scene.control.TableColumn;
 
 public class MariaDBConnection extends ConnectionObject {
 
@@ -730,20 +731,25 @@ public class MariaDBConnection extends ConnectionObject {
             String tableName = table.getTableName();
             StringBuilder insertScript = new StringBuilder();
 
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-            ResultSet columns = metaData.getColumns(
-                    DatabaseConnection.getInstance().getConnection().getCatalog(),
-                    null,
-                    tableName,
-                    null
-            );
+            ObservableList<TableColumn<TableRowData, ?>> tableColumns = table.getColumns();
 
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
-            while (columns.next()) {
-                columnNames.add("`" + columns.getString("COLUMN_NAME") + "`");
-                columnTypes.add(columns.getInt("DATA_TYPE"));
+            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
+            String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
+
+            for (TableColumn<TableRowData, ?> col : tableColumns) {
+                String colName = col.getText();
+                columnNames.add("`" + colName + "`");
+
+                ResultSet columns = metaData.getColumns(catalog, null, tableName, colName);
+                if (columns.next()) {
+                    columnTypes.add(columns.getInt("DATA_TYPE"));
+                } else {
+                    columnTypes.add(Types.VARCHAR);
+                }
+                columns.close();
             }
 
             insertScript.append("INSERT INTO `").append(tableName).append("`")
@@ -756,9 +762,9 @@ public class MariaDBConnection extends ConnectionObject {
                     insertScript.append(", ");
                 }
 
-                String value = row.get(i);
+                String value = (i < row.size()) ? row.get(i) : null;
 
-                if (value == null || value.equals("NULL")) {
+                if (value == null || value.equals("NULL") || value.equals("null")) {
                     insertScript.append("NULL");
                 } else {
                     switch (columnTypes.get(i)) {
