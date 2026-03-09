@@ -30,7 +30,7 @@ public class SQLEditorModal extends VBox {
     private VirtualizedScrollPane<CodeArea> scroll;
 
     public SQLEditorModal(String initialQuery, Runnable onConfirmAction) {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(600, 500);
         this.setMinSize(600, 500);
         this.setPrefSize(600, 500);

@@ -35,7 +35,7 @@ public class InsertPasswordModal extends VBox {
     }
 
     private void initialize() {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(525, 275);
         this.setMinSize(525, 275);
         this.setPrefSize(525, 275);

@@ -723,7 +723,7 @@ public class AddConnectionModal extends VBox {
             buttonBox.setAlignment(Pos.CENTER_LEFT);
             buttonBox.setMaxWidth(Double.MAX_VALUE);
 
-            Button loadDriversButton = new Button("Load Available Drivers", new FontIcon(MaterialDesignU.UPLOAD));
+            Button loadDriversButton = new Button("Check Available Drivers", new FontIcon(MaterialDesignU.UPLOAD));
             HBox.setHgrow(loadDriversButton, Priority.ALWAYS);
             loadDriversButton.setMaxWidth(Double.MAX_VALUE);
 
@@ -740,7 +740,7 @@ public class AddConnectionModal extends VBox {
 
             buttonBox.getChildren().addAll(loadDriversButton, downloadButton, applyDriverButton);
 
-            Label statusLabel = new Label("Click 'Load Available Drivers' to see available versions");
+            Label statusLabel = new Label("Click 'Check Available Drivers' to see available versions");
             statusLabel.setWrapText(true);
             statusLabel.setStyle("-fx-text-fill: gray;");
 

@@ -48,7 +48,7 @@ public class ColumnPropertiesModal extends VBox {
     }
 
     private void initializeUI() {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(800, 550);
         this.setMinSize(800, 550);
         this.setPrefSize(800, 550);

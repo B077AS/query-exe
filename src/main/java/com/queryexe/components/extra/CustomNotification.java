@@ -22,6 +22,7 @@ public class CustomNotification {
     private final Timeline slideOutAnimation;
     private final PauseTransition pause;
     private StackPane customPane;
+    private boolean expired = false;
 
     public CustomNotification(String content, FontIcon icon) {
         notification = new Notification(content, icon);
@@ -33,18 +34,31 @@ public class CustomNotification {
         StackPane.setAlignment(notification, Pos.TOP_RIGHT);
         StackPane.setMargin(notification, new Insets(10, 10, 0, 0));
 
-        slideInAnimation = new Timeline(new KeyFrame(Duration.ZERO, new KeyValue(notification.translateXProperty(), 300)),
+        slideInAnimation = new Timeline(
+                new KeyFrame(Duration.ZERO, new KeyValue(notification.translateXProperty(), 300)),
                 new KeyFrame(Duration.millis(200), new KeyValue(notification.translateXProperty(), 0)));
 
-        slideOutAnimation = new Timeline(new KeyFrame(Duration.ZERO, new KeyValue(notification.translateXProperty(), 0)),
+        slideOutAnimation = new Timeline(
+                new KeyFrame(Duration.ZERO, new KeyValue(notification.translateXProperty(), 0)),
                 new KeyFrame(Duration.millis(250), new KeyValue(notification.translateXProperty(), 300)));
 
         pause = new PauseTransition(Duration.seconds(3));
-        pause.setOnFinished(event -> dismissNotification());
+        pause.setOnFinished(event -> {
+            expired = true;
+            if (!notification.isHover()) {
+                dismissNotification();
+            }
+        });
+
+        notification.setOnMouseExited(e -> {
+            if (expired) {
+                dismissNotification();
+            }
+        });
 
         notification.setOnClose(e -> dismissNotification());
-
         slideInAnimation.setOnFinished(e -> pause.play());
+
         slideOutAnimation.setOnFinished(e -> {
             if (customPane != null) {
                 customPane.getChildren().remove(notification);
@@ -55,18 +69,18 @@ public class CustomNotification {
     }
 
     public void showNotification() {
+        expired = false;
         notification.setTranslateX(300);
 
         if (App.getStackPane().getChildren().contains(notification)) {
             App.getStackPane().getChildren().remove(notification);
         }
-        Platform.runLater(() -> {
-            App.getStackPane().getChildren().add(notification);
-        });
+        Platform.runLater(() -> App.getStackPane().getChildren().add(notification));
         slideInAnimation.playFromStart();
     }
 
     public void showNotificationOnCustomPane(StackPane pane) {
+        expired = false;
         this.customPane = pane;
 
         StackPane.setMargin(notification, new Insets(10 + App.getHeaderBox().getHeight(), 10, 0, 0));
@@ -76,20 +90,13 @@ public class CustomNotification {
         if (pane.getChildren().contains(notification)) {
             pane.getChildren().remove(notification);
         }
-        Platform.runLater(() -> {
-            pane.getChildren().add(notification);
-        });
+        Platform.runLater(() -> pane.getChildren().add(notification));
         slideInAnimation.playFromStart();
     }
 
     private void dismissNotification() {
         slideInAnimation.stop();
         pause.stop();
-
         slideOutAnimation.playFromStart();
-    }
-
-    public Notification getNotification() {
-        return notification;
     }
 }

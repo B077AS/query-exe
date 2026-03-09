@@ -14,7 +14,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignF;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignH;
@@ -51,8 +50,8 @@ public class CustomTree extends VBox {
 
     private TreeView<String> databaseTree = new TreeView<String>();
     private TreeView<String> usersTree;
-    private LinkedHashMap<String, CustomTreeItem> databasesMap;
-    private CustomTreeItem selectedDatabase;
+    private LinkedHashMap<String, DatabaseTreeItem> databasesMap;
+    private DatabaseTreeItem selectedDatabase;
     private TextField searchField;
     private Button searchButton;
     private HBox headerBox;
@@ -104,11 +103,12 @@ public class CustomTree extends VBox {
 
     public void initialize() {
         this.structureCache = new DatabaseStructureCache();
-        this.databasesMap = new LinkedHashMap<String, CustomTreeItem>();
+        this.databasesMap = new LinkedHashMap<>();
         this.getChildren().clear();
         this.setStyle("-fx-background-color: -color-bg-default;");
 
-        ArrayList<String> databaseStringList = DatabaseConnection.getInstance().getConnectionObject().getDatabases(DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
+        ArrayList<String> databaseStringList = DatabaseConnection.getInstance().getConnectionObject()
+                .getDatabases(DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
 
         if (DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.PostgreSQL.toString())) {
 
@@ -122,7 +122,7 @@ public class CustomTree extends VBox {
                     path.next();
 
                     String defaultSchema = path.getString(1).split(",")[1].trim();
-                    CustomTreeItem schemaItem = databasesMap.get(defaultSchema.toLowerCase());
+                    DatabaseTreeItem schemaItem = databasesMap.get(defaultSchema.toLowerCase());
 
                     if (schemaItem != null) {
                         databaseTree.getSelectionModel().select(schemaItem);
@@ -132,70 +132,67 @@ public class CustomTree extends VBox {
                 } catch (SQLException e) {
                 }
             } else {
-                LinkedHashMap<String, LinkedHashMap<String, LinkedHashMap<String, ArrayList<ColumnData>>>> structure = ((PostgresConnection) DatabaseConnection.getInstance().getConnectionObject()).getCompleteHierarchy();
-                CustomTreeItem databasesMainTreeItem = new CustomTreeItem(DatabaseConnection.getInstance().getConnectionObject().getConnectionName(), new FontIcon(MaterialDesignD.DATABASE));
-                databasesMainTreeItem.setupDatabasesContextMenu();
+                LinkedHashMap<String, LinkedHashMap<String, LinkedHashMap<String, ArrayList<ColumnData>>>> structure =
+                        ((PostgresConnection) DatabaseConnection.getInstance().getConnectionObject()).getCompleteHierarchy();
+
+                RootTreeItem databasesMainTreeItem = new RootTreeItem(
+                        DatabaseConnection.getInstance().getConnectionObject().getConnectionName(),
+                        new FontIcon(MaterialDesignD.DATABASE));
                 databasesMainTreeItem.setExpanded(true);
 
-                databaseTree = new TreeView<String>(databasesMainTreeItem);
+                databaseTree = new TreeView<>(databasesMainTreeItem);
 
                 for (Map.Entry<String, LinkedHashMap<String, LinkedHashMap<String, ArrayList<ColumnData>>>> database : structure.entrySet()) {
                     CustomTreeItem databaseItem = new CustomTreeItem(database.getKey(), new FontIcon(MaterialDesignH.HOCKEY_PUCK));
                     databasesMainTreeItem.setDatabaseName(database.getKey());
                     databasesMainTreeItem.getChildren().add(databaseItem);
 
-                    CustomTreeItem schemaMainItem = new CustomTreeItem("Schemas", new FontIcon(MaterialDesignF.FILE_TABLE_BOX_MULTIPLE_OUTLINE));
-                    schemaMainItem.setupSchemasContextMenu();
+                    SchemasTreeItem schemaMainItem = new SchemasTreeItem("Schemas", new FontIcon(MaterialDesignF.FILE_TABLE_BOX_MULTIPLE_OUTLINE));
                     databaseItem.getChildren().add(schemaMainItem);
 
                     for (Map.Entry<String, LinkedHashMap<String, ArrayList<ColumnData>>> schema : database.getValue().entrySet()) {
                         CustomTreeItem schemaItem = new CustomTreeItem(schema.getKey(), new FontIcon(MaterialDesignF.FILE_TABLE_BOX_OUTLINE));
                         schemaMainItem.getChildren().add(schemaItem);
 
-                        CustomTreeItem tablesMainTreeItem = new CustomTreeItem("Tables", new FontIcon(MaterialDesignT.TABLE_MULTIPLE));
+                        TablesTreeItem tablesMainTreeItem = new TablesTreeItem("Tables", new FontIcon(MaterialDesignT.TABLE_MULTIPLE));
                         tablesMainTreeItem.setDatabaseName(schema.getKey());
                         schemaItem.getChildren().add(tablesMainTreeItem);
 
                         for (Map.Entry<String, ArrayList<ColumnData>> table : schema.getValue().entrySet()) {
-                            CustomTreeItem tableItem = new CustomTreeItem(table.getKey(), new FontIcon(MaterialDesignT.TABLE));
+                            TableTreeItem tableItem = new TableTreeItem(table.getKey(), new FontIcon(MaterialDesignT.TABLE));
                             tablesMainTreeItem.getChildren().add(tableItem);
 
                             for (ColumnData column : table.getValue()) {
-                                CustomTreeItem columnsTree;
-                                if (column.isPrimaryKey()) {
-                                    columnsTree = new CustomTreeItem(column.getColumnName(), new FontIcon(MaterialDesignT.TABLE_COLUMN));
-                                } else {
-                                    columnsTree = new CustomTreeItem(column.getColumnName(), new FontIcon(MaterialDesignK.KEY));
-                                }
-                                columnsTree.setDatabaseName(schema.getKey());
-                                columnsTree.setupColumnContextMenu();
-                                tableItem.getChildren().add(columnsTree);
+                                ColumnTreeItem columnItem = new ColumnTreeItem(column.getColumnName(),
+                                        new FontIcon(column.isPrimaryKey() ? MaterialDesignK.KEY : MaterialDesignT.TABLE_COLUMN));
+                                columnItem.setDatabaseName(schema.getKey());
+                                tableItem.getChildren().add(columnItem);
                             }
                         }
                     }
                 }
             }
             this.getChildren().addAll(createHeaderBox(), databaseTree);
+
         } else {
-            CustomTreeItem databasesMainTreeItem = new CustomTreeItem(DatabaseConnection.getInstance().getConnectionObject().getConnectionName(), new FontIcon(MaterialDesignD.DATABASE));
-            databasesMainTreeItem.setupDatabasesContextMenu();
+            RootTreeItem databasesMainTreeItem = new RootTreeItem(
+                    DatabaseConnection.getInstance().getConnectionObject().getConnectionName(),
+                    new FontIcon(MaterialDesignD.DATABASE));
             databasesMainTreeItem.setExpanded(true);
 
-            databaseTree = new TreeView<String>(databasesMainTreeItem);
+            databaseTree = new TreeView<>(databasesMainTreeItem);
 
             for (String database : databaseStringList) {
-
-                CustomTreeItem databaseItem = new CustomTreeItem(database, new FontIcon(MaterialDesignH.HOCKEY_PUCK));
+                DatabaseTreeItem databaseItem = new DatabaseTreeItem(database, new FontIcon(MaterialDesignH.HOCKEY_PUCK));
                 databaseItem.setDatabaseName(database);
-                databaseItem.setupDatabaseContextMenu();
                 databasesMainTreeItem.getChildren().add(databaseItem);
                 databasesMap.put(database.toLowerCase(), databaseItem);
 
-                CustomTreeItem tablesMainTreeItem = new CustomTreeItem("Tables", new FontIcon(MaterialDesignT.TABLE_MULTIPLE));
+                TablesTreeItem tablesMainTreeItem = new TablesTreeItem("Tables", new FontIcon(MaterialDesignT.TABLE_MULTIPLE));
                 tablesMainTreeItem.setDatabaseName(database);
-                tablesMainTreeItem.setupTablesContextMenu();
 
-                Map<String, ArrayList<ColumnData>> tablesAndColumnsMap = DatabaseConnection.getInstance().getConnectionObject().getAllTablesAndColumns(database);
+                Map<String, ArrayList<ColumnData>> tablesAndColumnsMap = DatabaseConnection.getInstance()
+                        .getConnectionObject().getAllTablesAndColumns(database);
                 structureCache.addDatabase(database, tablesAndColumnsMap);
                 addTablesAndColumns(tablesAndColumnsMap, tablesMainTreeItem, database);
 
@@ -203,7 +200,8 @@ public class CustomTree extends VBox {
             }
             this.getChildren().addAll(createHeaderBox(), databaseTree);
 
-            if (DatabaseConnection.getInstance().getConnectionObject().getDatabaseName() != null && !DatabaseConnection.getInstance().getConnectionObject().getDatabaseName().isEmpty()) {
+            if (DatabaseConnection.getInstance().getConnectionObject().getDatabaseName() != null
+                    && !DatabaseConnection.getInstance().getConnectionObject().getDatabaseName().isEmpty()) {
                 try {
                     String useDb = "USE " + DatabaseConnection.getInstance().getConnectionObject().getDatabaseName();
                     PreparedStatement tableStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(useDb);
@@ -211,10 +209,12 @@ public class CustomTree extends VBox {
                 } catch (SQLException e) {
                 }
                 databaseTree.getSelectionModel().select(1);
-                selectedDatabase = databasesMap
-                        .get(DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
+                selectedDatabase = databasesMap.get(
+                        DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
                 selectedDatabase.setSelected();
-            } else if (DatabaseConnection.getInstance().getConnectionObject().getDatabaseName() == null && DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.H2.toString())) {
+
+            } else if (DatabaseConnection.getInstance().getConnectionObject().getDatabaseName() == null
+                    && DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.H2.toString())) {
                 try {
                     String useDb = "SELECT SCHEMA();";
                     PreparedStatement pathStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(useDb);
@@ -222,7 +222,7 @@ public class CustomTree extends VBox {
                     path.next();
 
                     String defaultSchema = path.getString(1);
-                    CustomTreeItem schemaItem = databasesMap.get(defaultSchema.toLowerCase());
+                    DatabaseTreeItem schemaItem = databasesMap.get(defaultSchema.toLowerCase());
 
                     if (schemaItem != null) {
                         databaseTree.getSelectionModel().select(schemaItem);
@@ -247,14 +247,13 @@ public class CustomTree extends VBox {
                 while (node != null && !(node instanceof TreeCell)) {
                     node = node.getParent();
                 }
-
                 if (node instanceof TreeCell<?>) {
                     TreeCell<?> cell = (TreeCell<?>) node;
                     if (cell.getItem() != null) {
                         CustomTreeItem selectedItem = (CustomTreeItem) databaseTree.getSelectionModel().getSelectedItem();
                         if (selectedItem.getContextMenu() != null) {
-                            selectedItem.getContextMenu().show(selectedItem.getGraphic(), event.getScreenX(),
-                                    event.getScreenY());
+                            selectedItem.getContextMenu().show(selectedItem.getGraphic(),
+                                    event.getScreenX(), event.getScreenY());
                         }
                     }
                 }
@@ -272,11 +271,7 @@ public class CustomTree extends VBox {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                 if (newValue != null && !newValue.trim().isEmpty()) {
-                    if (isUsersViewActive) {
-                        performAsyncSearch(newValue.trim(), true);
-                    } else {
-                        performAsyncSearch(newValue.trim(), false);
-                    }
+                    performAsyncSearch(newValue.trim(), isUsersViewActive);
                 } else {
                     cancelCurrentSearch();
                     clearFilter();
@@ -310,7 +305,6 @@ public class CustomTree extends VBox {
 
         Future<?> task = searchExecutor.submit(() -> {
             try {
-
                 TreeItem<String> filteredRoot;
                 if (isUsers) {
                     filteredRoot = createFilteredUsersTree(originalUsersRootItem, searchText.toLowerCase());
@@ -330,12 +324,10 @@ public class CustomTree extends VBox {
                         } else {
                             clearFilter();
                         }
-
                         searchProgress.setVisible(false);
                         closeSearchButton.setVisible(true);
                     }
                 });
-
             } catch (Exception e) {
                 if (!Thread.currentThread().isInterrupted()) {
                     Platform.runLater(() -> {
@@ -380,7 +372,7 @@ public class CustomTree extends VBox {
         searchProgress.setVisible(false);
 
         closeSearchButton = new Button();
-        closeSearchButton.setGraphic(new FontIcon(MaterialDesignC.CLOSE));
+        closeSearchButton.setGraphic(new FontIcon(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CLOSE));
         closeSearchButton.getStyleClass().addAll(Styles.FLAT);
         closeSearchButton.setPadding(new Insets(5, 5, 5, 5));
         closeSearchButton.setOnAction(event -> hideSearchField());
@@ -389,7 +381,6 @@ public class CustomTree extends VBox {
         searchControlStack.getChildren().addAll(searchProgress, closeSearchButton);
 
         HBox.setHgrow(searchField, Priority.ALWAYS);
-
         searchHeaderBox.getChildren().addAll(searchField, searchControlStack);
         return searchHeaderBox;
     }
@@ -440,7 +431,6 @@ public class CustomTree extends VBox {
         searchButton.setOnAction(event -> showSearchField());
 
         normalHeaderBox.getChildren().addAll(databaseViewButton, usersViewButton, headerFillerRegion, refresh, searchButton);
-
         return normalHeaderBox;
     }
 
@@ -463,7 +453,6 @@ public class CustomTree extends VBox {
         if (isUsersViewActive) return;
 
         isUsersViewActive = true;
-
         this.getChildren().clear();
         this.getChildren().addAll(createHeaderBox(), usersView);
 
@@ -476,29 +465,29 @@ public class CustomTree extends VBox {
     }
 
     private VBox createUsersView() {
-
         VBox usersContainer = new VBox();
         usersContainer.setStyle("-fx-background-color: -color-bg-default;");
         VBox.setVgrow(usersContainer, Priority.ALWAYS);
-        try {
 
+        try {
             List<String> users = DatabaseConnection.getInstance().getConnectionObject().getUsers();
 
-            CustomTreeItem databasesMainTreeItem = new CustomTreeItem(DatabaseConnection.getInstance().getConnectionObject().getConnectionName(), new FontIcon(MaterialDesignA.ACCOUNT_MULTIPLE));
-            databasesMainTreeItem.setExpanded(true);
+            CustomTreeItem usersRootItem = new CustomTreeItem(
+                    DatabaseConnection.getInstance().getConnectionObject().getConnectionName(),
+                    new FontIcon(MaterialDesignA.ACCOUNT_MULTIPLE));
+            usersRootItem.setExpanded(true);
 
             if (users != null) {
                 for (String user : users) {
-                    CustomTreeItem userTreeItem = new CustomTreeItem(user, new FontIcon(MaterialDesignA.ACCOUNT));
-                    databasesMainTreeItem.getChildren().add(userTreeItem);
+                    usersRootItem.getChildren().add(new UserTreeItem(user, new FontIcon(MaterialDesignA.ACCOUNT)));
                 }
             }
 
-            usersTree = new TreeView<String>(databasesMainTreeItem);
+            usersTree = new TreeView<>(usersRootItem);
             VBox.setVgrow(usersTree, Priority.ALWAYS);
 
         } catch (SQLException e) {
-            usersTree = new TreeView<String>();
+            usersTree = new TreeView<>();
         }
         usersContainer.getChildren().add(usersTree);
         return usersContainer;
@@ -509,12 +498,7 @@ public class CustomTree extends VBox {
             headerBox.getChildren().clear();
             headerBox.getChildren().addAll(createSearchHeaderBox().getChildren());
 
-            if (isUsersViewActive) {
-                searchField.setPromptText("Search users...");
-            } else {
-                searchField.setPromptText("Search tables and columns...");
-            }
-
+            searchField.setPromptText(isUsersViewActive ? "Search users..." : "Search tables and columns...");
             searchField.requestFocus();
             isSearchMode = true;
         } else {
@@ -537,31 +521,15 @@ public class CustomTree extends VBox {
     }
 
     private TreeItem<String> createFilteredTree(TreeItem<String> original, String searchText) {
-        if (original == null)
-            return null;
-
-        TreeItem<String> filteredItem = null;
-        boolean hasMatchingChildren = false;
+        if (original == null) return null;
 
         if (original instanceof CustomTreeItem) {
             CustomTreeItem customOriginal = (CustomTreeItem) original;
             String itemText = customOriginal.getTitleLabel().getText().toLowerCase();
 
-            CustomTreeItem filteredCustomItem = new CustomTreeItem(customOriginal.getTitleLabel().getText(),
-                    new FontIcon(customOriginal.getIcon().getIconCode()));
-            filteredCustomItem.setDatabaseName(customOriginal.getDatabaseName());
-            if (itemText.contains("tables")) {
-                filteredCustomItem.setupTablesContextMenu();
-            } else if (isTableItem(customOriginal)) {
-                filteredCustomItem.setupTableContextMenu();
-            } else if (isDatabaseOrSchemaItem(customOriginal)) {
-                filteredCustomItem.setupDatabaseContextMenu();
-            } else if (isColumnItem(customOriginal)) {
-                filteredCustomItem.setupColumnContextMenu();
-            }
+            CustomTreeItem filteredItem = cloneTreeItemType(customOriginal);
 
-            filteredItem = filteredCustomItem;
-
+            boolean hasMatchingChildren = false;
             for (TreeItem<String> child : original.getChildren()) {
                 TreeItem<String> filteredChild = createFilteredTree(child, searchText);
                 if (filteredChild != null) {
@@ -580,21 +548,15 @@ public class CustomTree extends VBox {
     }
 
     private TreeItem<String> createFilteredUsersTree(TreeItem<String> original, String searchText) {
-        if (original == null)
-            return null;
-
-        TreeItem<String> filteredItem = null;
-        boolean hasMatchingChildren = false;
+        if (original == null) return null;
 
         if (original instanceof CustomTreeItem) {
             CustomTreeItem customOriginal = (CustomTreeItem) original;
             String itemText = customOriginal.getTitleLabel().getText().toLowerCase();
 
-            CustomTreeItem filteredCustomItem = new CustomTreeItem(customOriginal.getTitleLabel().getText(),
-                    new FontIcon(customOriginal.getIcon().getIconCode()));
+            CustomTreeItem filteredItem = cloneTreeItemType(customOriginal);
 
-            filteredItem = filteredCustomItem;
-
+            boolean hasMatchingChildren = false;
             for (TreeItem<String> child : original.getChildren()) {
                 TreeItem<String> filteredChild = createFilteredUsersTree(child, searchText);
                 if (filteredChild != null) {
@@ -612,35 +574,31 @@ public class CustomTree extends VBox {
         return null;
     }
 
-    private boolean isTableItem(CustomTreeItem item) {
-        TreeItem<String> parent = item.getParent();
-        if (parent instanceof CustomTreeItem) {
-            CustomTreeItem parentCustom = (CustomTreeItem) parent;
-            return parentCustom.getTitleLabel().getText().equals("Tables");
-        }
-        return false;
-    }
+    private CustomTreeItem cloneTreeItemType(CustomTreeItem original) {
+        String name = original.getTitleLabel().getText();
+        FontIcon icon = new FontIcon(original.getIcon().getIconCode());
 
-    private boolean isDatabaseOrSchemaItem(CustomTreeItem item) {
-        TreeItem<String> parent = item.getParent();
-        if (parent instanceof CustomTreeItem) {
-            CustomTreeItem parentCustom = (CustomTreeItem) parent;
-            String parentText = parentCustom.getTitleLabel().getText();
-            return parentText.equals("Databases") || parentText.equals("Schemas");
+        CustomTreeItem clone;
+        if (original instanceof RootTreeItem) {
+            clone = new RootTreeItem(name, icon);
+        } else if (original instanceof DatabaseTreeItem) {
+            clone = new DatabaseTreeItem(name, icon);
+        } else if (original instanceof SchemasTreeItem) {
+            clone = new SchemasTreeItem(name, icon);
+        } else if (original instanceof TablesTreeItem) {
+            clone = new TablesTreeItem(name, icon);
+        } else if (original instanceof TableTreeItem) {
+            clone = new TableTreeItem(name, icon);
+        } else if (original instanceof ColumnTreeItem) {
+            clone = new ColumnTreeItem(name, icon);
+        } else if (original instanceof UserTreeItem) {
+            clone = new UserTreeItem(name, icon);
+        } else {
+            clone = new CustomTreeItem(name, icon);
         }
-        return false;
-    }
 
-    private boolean isColumnItem(CustomTreeItem item) {
-        TreeItem<String> parent = item.getParent();
-        if (parent instanceof CustomTreeItem) {
-            TreeItem<String> grandparent = parent.getParent();
-            if (grandparent instanceof CustomTreeItem) {
-                CustomTreeItem grandparentCustom = (CustomTreeItem) grandparent;
-                return grandparentCustom.getTitleLabel().getText().equals("Tables");
-            }
-        }
-        return false;
+        clone.setDatabaseName(original.getDatabaseName());
+        return clone;
     }
 
     private void expandFilteredTree(TreeItem<String> item) {
@@ -660,11 +618,8 @@ public class CustomTree extends VBox {
         } else {
             if (databaseTree.getRoot() != originalRootItem) {
                 databaseTree.setRoot(originalRootItem);
-
                 if (selectedDatabase != null) {
-                    Platform.runLater(() -> {
-                        databaseTree.getSelectionModel().select(selectedDatabase);
-                    });
+                    Platform.runLater(() -> databaseTree.getSelectionModel().select(selectedDatabase));
                 }
             }
         }
@@ -676,68 +631,56 @@ public class CustomTree extends VBox {
         headerBox.setPadding(new Insets(5, 5, 5, 5));
         headerBox.setStyle("-fx-border-width: 0px 0px 2px 0px; -fx-border-color: -color-border-default;");
         headerBox.setAlignment(Pos.CENTER_LEFT);
-
         headerBox.getChildren().addAll(createNormalHeaderBox().getChildren());
-
         return headerBox;
     }
 
     public void addTablesAndColumns(Map<String, ArrayList<ColumnData>> tablesAndColumnsMap,
                                     TreeItem<String> tablesMainTreeItem, String databaseName) {
         for (Map.Entry<String, ArrayList<ColumnData>> entry : tablesAndColumnsMap.entrySet()) {
-
             String tableName = entry.getKey();
             ArrayList<ColumnData> columns = entry.getValue();
-            CustomTreeItem tableItem = new CustomTreeItem(tableName, new FontIcon(MaterialDesignT.TABLE));
+
+            TableTreeItem tableItem = new TableTreeItem(tableName, new FontIcon(MaterialDesignT.TABLE));
             tableItem.setDatabaseName(databaseName);
-            tableItem.setupTableContextMenu();
             tablesMainTreeItem.getChildren().add(tableItem);
 
             for (ColumnData column : columns) {
-                CustomTreeItem columnsTree;
-                if (!column.isPrimaryKey()) {
-                    columnsTree = new CustomTreeItem(column.getColumnName(), new FontIcon(MaterialDesignT.TABLE_COLUMN));
-                } else {
-                    columnsTree = new CustomTreeItem(column.getColumnName(), new FontIcon(MaterialDesignK.KEY));
-                }
-                columnsTree.setDatabaseName(databaseName);
-                columnsTree.setupColumnContextMenu();
-                tableItem.getChildren().add(columnsTree);
+                ColumnTreeItem columnItem = new ColumnTreeItem(column.getColumnName(),
+                        new FontIcon(!column.isPrimaryKey() ? MaterialDesignT.TABLE_COLUMN : MaterialDesignK.KEY));
+                columnItem.setDatabaseName(databaseName);
+                tableItem.getChildren().add(columnItem);
             }
         }
     }
 
     public TreeItem<String> createPostgresTreeItem() {
-        CustomTreeItem databaseItem = new CustomTreeItem(
+        DatabaseTreeItem databaseItem = new DatabaseTreeItem(
                 DatabaseConnection.getInstance().getConnectionObject().getDatabaseName(),
                 new FontIcon(MaterialDesignH.HOCKEY_PUCK));
         databaseItem.setDatabaseName(DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
         databaseItem.setExpanded(true);
 
-        databaseTree = new TreeView<String>(databaseItem);
+        databaseTree = new TreeView<>(databaseItem);
 
-        CustomTreeItem schemaMainItem = new CustomTreeItem("Schemas", new FontIcon(MaterialDesignF.FILE_TABLE_BOX_MULTIPLE_OUTLINE));
+        SchemasTreeItem schemaMainItem = new SchemasTreeItem("Schemas", new FontIcon(MaterialDesignF.FILE_TABLE_BOX_MULTIPLE_OUTLINE));
         schemaMainItem.setExpanded(true);
-        schemaMainItem.setupSchemasContextMenu();
         databaseItem.getChildren().add(schemaMainItem);
 
         PostgresConnection postgres = (PostgresConnection) DatabaseConnection.getInstance().getConnectionObject();
         ArrayList<String> schemasList = postgres.getSchemas();
 
         for (String schema : schemasList) {
-            CustomTreeItem schemaItem = new CustomTreeItem(schema, new FontIcon(MaterialDesignF.FILE_TABLE_BOX_OUTLINE));
+            DatabaseTreeItem schemaItem = new DatabaseTreeItem(schema, new FontIcon(MaterialDesignF.FILE_TABLE_BOX_OUTLINE));
             schemaItem.setDatabaseName(schema);
-            schemaItem.setupDatabaseContextMenu();
             schemaMainItem.getChildren().add(schemaItem);
             databasesMap.put(schema.toLowerCase(), schemaItem);
 
-            CustomTreeItem tablesMainTreeItem = new CustomTreeItem("Tables", new FontIcon(MaterialDesignT.TABLE_MULTIPLE));
+            TablesTreeItem tablesMainTreeItem = new TablesTreeItem("Tables", new FontIcon(MaterialDesignT.TABLE_MULTIPLE));
             tablesMainTreeItem.setDatabaseName(schema);
-            tablesMainTreeItem.setupTablesContextMenu();
             schemaItem.getChildren().add(tablesMainTreeItem);
 
-            LinkedHashMap<String, ArrayList<ColumnData>> tablesAndColumnsMap = postgres
-                    .getAllTablesAndColumns(schema);
+            LinkedHashMap<String, ArrayList<ColumnData>> tablesAndColumnsMap = postgres.getAllTablesAndColumns(schema);
             structureCache.addSchema(schema, tablesAndColumnsMap);
             addTablesAndColumns(tablesAndColumnsMap, tablesMainTreeItem, schema);
         }
@@ -745,14 +688,11 @@ public class CustomTree extends VBox {
     }
 
     public void selectDatabase(String database) {
-
         if (databasesMap.containsKey(database.toLowerCase())) {
-
             if (selectedDatabase != null) {
                 selectedDatabase.setUnSelected();
             }
-
-            CustomTreeItem item = databasesMap.get(database.toLowerCase());
+            DatabaseTreeItem item = databasesMap.get(database.toLowerCase());
             databaseTree.getSelectionModel().select(item);
             item.setSelected();
             selectedDatabase = item;

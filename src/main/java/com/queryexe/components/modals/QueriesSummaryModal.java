@@ -25,7 +25,7 @@ public class QueriesSummaryModal extends VBox {
     private List<QueryData> updateQueries;
 
     public QueriesSummaryModal(List<QueryData> updateQueries, Runnable onConfirmAction) {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(800, 400);
         this.setMinSize(800, 400);
         this.setPrefSize(800, 400);

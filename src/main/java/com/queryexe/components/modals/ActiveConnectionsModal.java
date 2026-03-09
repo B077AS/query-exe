@@ -4,20 +4,15 @@ import atlantafx.base.theme.Styles;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Tooltip;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.text.TextAlignment;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.feather.Feather;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.components.extra.CustomProgressIndicator;
 import com.queryexe.model.connections.ConnectionObject;
@@ -36,88 +31,131 @@ public class ActiveConnectionsModal extends VBox {
     private VBox connectionsList;
     private Label emptyStateLabel;
     private Map<String, HBox> connectionItems;
+    private Button closeButton;
 
     public ActiveConnectionsModal() {
         this.connectionItems = new HashMap<>();
 
-        this.setAlignment(Pos.CENTER);
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
-        this.setMaxSize(600, 540);
-        this.setMinSize(600, 540);
-        this.setPrefSize(600, 540);
+        this.setAlignment(Pos.TOP_CENTER);
+        this.getStyleClass().add("modal-container");
+        this.setMaxSize(720, 560);
+        this.setMinSize(720, 560);
+        this.setPrefSize(720, 560);
 
-        VBox titleSection = new VBox();
-        titleSection.setPadding(new Insets(0, 0, 10, 0));
+        VBox header = buildHeader();
 
-        HBox headerBox = new HBox();
-        headerBox.setAlignment(Pos.CENTER_RIGHT);
-        headerBox.setPadding(new Insets(20, 10, 0, 10));
-        headerBox.setMinHeight(40);
-        headerBox.setMaxHeight(40);
+        HBox searchRow = buildSearchBar();
 
-        Region headerFillerRegion = new Region();
-        Region headerSecondFillerRegion = new Region();
+        Separator separator = new Separator();
+        separator.setPadding(new Insets(0));
 
-        Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
-        closeButton.setOnAction(event -> {
-            App.closeModal();
-        });
-
-        Button fakeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        fakeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
-        fakeButton.setVisible(false);
-
-        HBox.setHgrow(headerFillerRegion, Priority.ALWAYS);
-        HBox.setHgrow(headerSecondFillerRegion, Priority.ALWAYS);
-
-        Label title = new Label("Active Connections");
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
-        title.setAlignment(Pos.CENTER);
-
-        headerBox.getChildren().addAll(fakeButton, headerFillerRegion, title, headerSecondFillerRegion, closeButton);
-
-        Label subtitle = new Label("Manage your active database connections");
-        subtitle.getStyleClass().addAll(Styles.TEXT_MUTED);
-        subtitle.setStyle("-fx-font-size: 13px;");
-        subtitle.setAlignment(Pos.CENTER);
-        subtitle.setMaxWidth(Double.MAX_VALUE);
-        subtitle.setPadding(new Insets(5, 20, 0, 20));
-
-        titleSection.getChildren().addAll(headerBox, subtitle);
-
-        connectionsList = new VBox(8);
-        connectionsList.setAlignment(Pos.TOP_CENTER);
-        connectionsList.setPadding(new Insets(0, 10, 0, 10));
+        connectionsList = new VBox(6);
+        connectionsList.setPadding(new Insets(12, 16, 12, 16));
 
         emptyStateLabel = new Label("No active connections");
-        emptyStateLabel.getStyleClass().addAll(Styles.TEXT_MUTED);
-        emptyStateLabel.setStyle("-fx-font-size: 14px; -fx-padding: 40 0 40 0;");
+        emptyStateLabel.getStyleClass().add(Styles.TEXT_MUTED);
+        emptyStateLabel.setStyle("-fx-font-size: 13px; -fx-padding: 40 0 40 0;");
+        emptyStateLabel.setMaxWidth(Double.MAX_VALUE);
         emptyStateLabel.setAlignment(Pos.CENTER);
 
         loadActiveConnections();
 
-        ScrollPane scrollPane = new ScrollPane();
-        scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
-        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-
         if (connectionsList.getChildren().isEmpty()) {
-            VBox emptyContainer = new VBox();
-            emptyContainer.setAlignment(Pos.CENTER);
-            emptyContainer.getChildren().add(emptyStateLabel);
-            scrollPane.setContent(emptyContainer);
-            VBox.setVgrow(emptyContainer, Priority.ALWAYS);
-        } else {
-            scrollPane.setContent(connectionsList);
+            connectionsList.setAlignment(Pos.CENTER);
+            connectionsList.getChildren().add(emptyStateLabel);
         }
 
-        VBox scrollContainer = new VBox();
-        scrollContainer.setPadding(new Insets(10));
-        scrollContainer.getChildren().add(scrollPane);
-        VBox.setVgrow(scrollContainer, Priority.ALWAYS);
+        ScrollPane scrollPane = new ScrollPane(connectionsList);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-        this.getChildren().addAll(titleSection, scrollContainer);
+        HBox footer = buildFooter(connectionItems.size());
+
+        this.getChildren().addAll(header, searchRow, separator, scrollPane, footer);
+    }
+
+    private VBox buildHeader() {
+        VBox header = new VBox(4);
+        header.setPadding(new Insets(18, 16, 12, 16));
+
+        HBox topRow = new HBox();
+        topRow.setAlignment(Pos.CENTER);
+
+        Button phantom = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
+        phantom.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        phantom.setVisible(false);
+
+        Region spacerLeft = new Region();
+        Region spacerRight = new Region();
+        HBox.setHgrow(spacerLeft, Priority.ALWAYS);
+        HBox.setHgrow(spacerRight, Priority.ALWAYS);
+
+        Label title = new Label("Active Connections");
+        title.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
+
+        closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.setOnAction(e -> App.closeModal());
+
+        topRow.getChildren().addAll(phantom, spacerLeft, title, spacerRight, closeButton);
+
+        Label subtitle = new Label("Manage your active database connections");
+        subtitle.getStyleClass().add(Styles.TEXT_MUTED);
+        subtitle.setStyle("-fx-font-size: 12px;");
+        subtitle.setMaxWidth(Double.MAX_VALUE);
+        subtitle.setTextAlignment(TextAlignment.CENTER);
+        subtitle.setAlignment(Pos.CENTER);
+
+        header.getChildren().addAll(topRow, subtitle);
+        return header;
+    }
+
+    private HBox buildSearchBar() {
+        HBox row = new HBox();
+        row.setPadding(new Insets(0, 16, 12, 16));
+
+        HBox searchBox = new HBox(8);
+        searchBox.setAlignment(Pos.CENTER_LEFT);
+        searchBox.setPadding(new Insets(6, 12, 6, 12));
+        searchBox.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 6;");
+        HBox.setHgrow(searchBox, Priority.ALWAYS);
+
+        FontIcon searchIcon = new FontIcon(Feather.SEARCH);
+        searchIcon.setIconSize(14);
+        searchIcon.getStyleClass().add(Styles.TEXT_MUTED);
+
+        TextField searchField = new TextField();
+        searchField.setPromptText("Search connections…");
+        searchField.setStyle("-fx-background-color: transparent; -fx-border-width: 0;");
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+
+        searchField.textProperty().addListener((obs, oldVal, newVal) ->
+                filterConnections(newVal.trim().toLowerCase()));
+
+        searchBox.getChildren().addAll(searchIcon, searchField);
+        row.getChildren().add(searchBox);
+        return row;
+    }
+
+    private void filterConnections(String query) {
+        connectionsList.getChildren().forEach(node -> {
+            if (node instanceof HBox card) {
+                Object tag = card.getUserData();
+                if (tag instanceof ConnectionObject conn) {
+                    String displayUrl = (conn.getHost() == null || conn.getHost().isBlank())
+                            ? conn.getFullUrl() : conn.getSimpleURL();
+                    boolean matches = query.isEmpty()
+                            || conn.getConnectionName().toLowerCase().contains(query)
+                            || conn.getDbType().toLowerCase().contains(query)
+                            || displayUrl.toLowerCase().contains(query);
+                    card.setVisible(matches);
+                    card.setManaged(matches);
+                }
+            }
+        });
     }
 
     private void loadActiveConnections() {
@@ -127,76 +165,69 @@ public class ActiveConnectionsModal extends VBox {
         for (String connectionId : connectionIds) {
             ConnectionObject connectionObject = dbConnection.getConnectionObject(connectionId);
             if (connectionObject != null) {
-                HBox listItem = createConnectionListItem(connectionObject, connectionId);
+                HBox listItem = createConnectionCard(connectionObject, connectionId);
                 connectionsList.getChildren().add(listItem);
                 connectionItems.put(connectionId, listItem);
             }
         }
     }
 
-    private HBox createConnectionListItem(ConnectionObject connection, String connectionId) {
-        HBox listItem = new HBox();
-        listItem.setAlignment(Pos.CENTER_LEFT);
-        listItem.setPadding(new Insets(12, 15, 12, 15));
-        listItem.setSpacing(10);
-        listItem.getStyleClass().add("connection-list-item");
-        listItem.setStyle("-fx-background-radius: 8px; " +
-                "-fx-border-color: -color-border-default; " +
-                "-fx-border-width: 1px; " +
-                "-fx-border-radius: 8px;");
+    private HBox createConnectionCard(ConnectionObject connection, String connectionId) {
+        HBox card = new HBox(14);
+        card.setAlignment(Pos.CENTER_LEFT);
+        card.setPadding(new Insets(12, 14, 12, 14));
+        card.setUserData(connection);
+        card.getStyleClass().add("connection-lineitem-card");
 
         boolean isCurrent = connectionId.equals(DatabaseConnection.getInstance().getCurrentConnectionId());
 
-        VBox infoSection = new VBox(4);
-        infoSection.setAlignment(Pos.CENTER_LEFT);
+        VBox info = new VBox(3);
+        info.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(info, Priority.ALWAYS);
 
-        VBox nameBox = new VBox(2);
-        nameBox.setAlignment(Pos.CENTER_LEFT);
+        HBox nameRow = new HBox(8);
+        nameRow.setAlignment(Pos.CENTER_LEFT);
 
-        HBox topRow = new HBox(8);
-        topRow.setAlignment(Pos.CENTER_LEFT);
-
-        Label connectionName = new Label(connection.getConnectionName());
-        connectionName.setGraphic(new FontIcon(MaterialDesignD.DATABASE));
-        connectionName.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        Label nameLabel = new Label(connection.getConnectionName());
+        nameLabel.setGraphic(new FontIcon(MaterialDesignD.DATABASE));
+        nameLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+        nameRow.getChildren().add(nameLabel);
 
         if (isCurrent) {
             Label currentBadge = new Label("CURRENT");
-            currentBadge.getStyleClass().addAll(Styles.TEXT_SMALL);
-            currentBadge.setStyle("-fx-background-color: -color-success-emphasis; " +
-                    "-fx-text-fill: -color-bg-default; " +
-                    "-fx-padding: 2 6 2 6; " +
-                    "-fx-background-radius: 10; " +
-                    "-fx-font-size: 9px; " +
-                    "-fx-font-weight: bold;");
-            topRow.getChildren().addAll(connectionName, currentBadge);
-        } else {
-            topRow.getChildren().add(connectionName);
+            currentBadge.setStyle("""
+                    -fx-font-size: 9px;
+                    -fx-font-weight: bold;
+                    -fx-background-color: -color-success-emphasis;
+                    -fx-background-radius: 4px;
+                    -fx-padding: 2 6 2 6;
+                    -fx-text-fill: -color-bg-default;
+                    """);
+            nameRow.getChildren().add(currentBadge);
         }
 
-        Label dbTypeBadge = new Label(connection.getDbType().toUpperCase());
-        dbTypeBadge.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
-        dbTypeBadge.setStyle("-fx-background-color: -color-border-muted; " +
-                "-fx-padding: 2 6 2 6; " +
-                "-fx-background-radius: 10; " +
-                "-fx-font-size: 9px; " +
-                "-fx-font-weight: bold;");
+        HBox metaRow = new HBox(8);
+        metaRow.setAlignment(Pos.CENTER_LEFT);
 
-        nameBox.getChildren().addAll(topRow, dbTypeBadge);
+        Label dbBadge = new Label(connection.getDbType().toUpperCase());
+        dbBadge.setStyle("""
+                -fx-font-size: 9px;
+                -fx-font-weight: bold;
+                -fx-background-color: -color-border-muted;
+                -fx-background-radius: 4px;
+                -fx-padding: 2 6 2 6;
+                -fx-text-fill: -color-fg-muted;
+                """);
 
-        Label details = new Label();
-        if (connection.getHost() == null || connection.getHost().isBlank()) {
-            details.setText(connection.getFullUrl());
-        } else {
-            details.setText(connection.getSimpleURL());
-        }
-        details.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
-        details.setStyle("-fx-font-size: 11px;");
+        String displayUrl = (connection.getHost() == null || connection.getHost().isBlank())
+                ? connection.getFullUrl() : connection.getSimpleURL();
+        Label urlLabel = new Label(displayUrl);
+        urlLabel.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+        urlLabel.setStyle("-fx-font-size: 11px;");
+        urlLabel.setMaxWidth(360);
 
         Label statusLabel = new Label();
-        statusLabel.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
         statusLabel.setStyle("-fx-font-size: 10px;");
-
         try {
             Connection conn = DatabaseConnection.getInstance().getConnection(connectionId);
             if (conn != null && !conn.isClosed()) {
@@ -211,38 +242,44 @@ public class ActiveConnectionsModal extends VBox {
             statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-danger-emphasis;");
         }
 
-        infoSection.getChildren().addAll(nameBox, details, statusLabel);
+        metaRow.getChildren().addAll(dbBadge, urlLabel, statusLabel);
+        info.getChildren().addAll(nameRow, metaRow);
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        CustomProgressIndicator progressIndicator = new CustomProgressIndicator(18, 18);
+        progressIndicator.setVisible(false);
 
         HBox buttonContainer = new HBox(4);
         buttonContainer.setAlignment(Pos.CENTER_RIGHT);
 
-        CustomProgressIndicator progressIndicator = new CustomProgressIndicator(20, 20);
-        progressIndicator.setVisible(false);
-
-        Button reconnectButton = new Button();
-        reconnectButton.setGraphic(new FontIcon(MaterialDesignR.REFRESH));
-        reconnectButton.getStyleClass().addAll(Styles.FLAT, Styles.SMALL, Styles.BUTTON_ICON);
-        reconnectButton.setMinWidth(Region.USE_PREF_SIZE);
-        reconnectButton.setMinHeight(Region.USE_PREF_SIZE);
+        Button reconnectButton = new Button(null, new FontIcon(MaterialDesignR.REFRESH));
+        reconnectButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         reconnectButton.setTooltip(new Tooltip("Reconnect"));
-        reconnectButton.setOnAction(event -> handleReconnect(connectionId, progressIndicator, statusLabel));
+        reconnectButton.setOnAction(e -> handleReconnect(connectionId, progressIndicator, statusLabel));
 
-        Button closeButton = new Button();
-        closeButton.setGraphic(new FontIcon(MaterialDesignC.CLOSE_CIRCLE_OUTLINE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.SMALL, Styles.BUTTON_ICON, Styles.DANGER);
-        closeButton.setMinWidth(Region.USE_PREF_SIZE);
-        closeButton.setMinHeight(Region.USE_PREF_SIZE);
+        Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE_CIRCLE_OUTLINE));
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE, Styles.DANGER);
         closeButton.setTooltip(new Tooltip("Close Connection"));
-        closeButton.setOnAction(event -> handleCloseConnection(connectionId, listItem));
+        closeButton.setOnAction(e -> handleCloseConnection(connectionId, card));
 
         buttonContainer.getChildren().addAll(progressIndicator, reconnectButton, closeButton);
 
-        listItem.getChildren().addAll(infoSection, spacer, buttonContainer);
+        card.getChildren().addAll(info, buttonContainer);
 
-        return listItem;
+        return card;
+    }
+
+    private HBox buildFooter(int count) {
+        HBox footer = new HBox();
+        footer.setAlignment(Pos.CENTER_LEFT);
+        footer.setPadding(new Insets(10, 16, 12, 16));
+        footer.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px 0 0 0;");
+
+        Label hint = new Label(count + " active connection" + (count != 1 ? "s" : ""));
+        hint.getStyleClass().add(Styles.TEXT_MUTED);
+        hint.setStyle("-fx-font-size: 11px;");
+
+        footer.getChildren().add(hint);
+        return footer;
     }
 
     private void handleReconnect(String connectionId, CustomProgressIndicator progressIndicator, Label statusLabel) {
@@ -299,6 +336,7 @@ public class ActiveConnectionsModal extends VBox {
             connectionItems.remove(connectionId);
 
             if (connectionsList.getChildren().isEmpty()) {
+                connectionsList.setAlignment(Pos.CENTER);
                 connectionsList.getChildren().add(emptyStateLabel);
             }
 
@@ -324,7 +362,10 @@ public class ActiveConnectionsModal extends VBox {
             });
 
         } catch (Exception e) {
-            CustomNotification notification = new CustomNotification("Failed to close connection!\n" + e.getMessage(), new FontIcon(MaterialDesignC.CLOSE_CIRCLE));
+            CustomNotification notification = new CustomNotification(
+                    "Failed to close connection!\n" + e.getMessage(),
+                    new FontIcon(MaterialDesignC.CLOSE_CIRCLE)
+            );
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
         }
     }
@@ -335,6 +376,7 @@ public class ActiveConnectionsModal extends VBox {
         loadActiveConnections();
 
         if (connectionsList.getChildren().isEmpty()) {
+            connectionsList.setAlignment(Pos.CENTER);
             connectionsList.getChildren().add(emptyStateLabel);
         }
     }

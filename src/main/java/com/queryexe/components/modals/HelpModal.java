@@ -27,7 +27,7 @@ public class HelpModal extends VBox {
 
     public HelpModal() {
         this.setAlignment(Pos.TOP_CENTER);
-        this.setStyle("-fx-background-color: -color-bg-overlay; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(1000, 550);
         this.setMinSize(1000, 550);
         this.setPrefSize(1000, 550);

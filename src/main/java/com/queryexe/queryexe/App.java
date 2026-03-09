@@ -1,5 +1,9 @@
 package com.queryexe.queryexe;
 
+import javafx.animation.FadeTransition;
+import javafx.animation.Interpolator;
+import javafx.animation.ParallelTransition;
+import javafx.animation.ScaleTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.ListChangeListener;
@@ -26,12 +30,14 @@ import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.service.DatabaseConnection;
+import javafx.util.Duration;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import atlantafx.base.controls.ModalPane;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Stack;
 
 import com.sun.jna.Native;
@@ -57,7 +63,7 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
 
-        Image appIcon = new Image(getClass().getResourceAsStream("/icon.png"));
+        Image appIcon = new Image(Objects.requireNonNull(getClass().getResourceAsStream("/icon.png")));
         stage.getIcons().add(appIcon);
 
         stackPane = new StackPane();
@@ -251,17 +257,73 @@ public class App extends Application {
     }
 
     public static void showModal(Node modal) {
-        modalPane.show(modal);
-        modalPane.usePredefinedTransitionFactories(null);
-        modal.requestFocus();
-        modalStack.push(modal);
+        modalPane.setInTransitionFactory(node -> {
+            ScaleTransition scale = new ScaleTransition(Duration.millis(150), node);
+            scale.setFromX(0.92);
+            scale.setFromY(0.92);
+            scale.setToX(1.0);
+            scale.setToY(1.0);
+            scale.setInterpolator(Interpolator.EASE_OUT);
+
+            FadeTransition fade = new FadeTransition(Duration.millis(150), node);
+            fade.setFromValue(0.0);
+            fade.setToValue(1.0);
+            fade.setInterpolator(Interpolator.EASE_OUT);
+
+            return new ParallelTransition(scale, fade);
+        });
+
+        modalPane.setOutTransitionFactory(node -> {
+            FadeTransition fade = new FadeTransition(Duration.millis(80), node);
+            fade.setFromValue(1.0);
+            fade.setToValue(0.0);
+            fade.setInterpolator(Interpolator.EASE_IN);
+            return fade;
+        });
+
+        modalPane.setContent(modal);
+        modal.applyCss();
+
+        Platform.runLater(() -> {
+            modalPane.setDisplay(true);
+            modal.requestFocus();
+            modalStack.push(modal);
+        });
     }
 
     public static void showModalOnTop(Node modal) {
-        secondaryModalPane.show(modal);
-        secondaryModalPane.usePredefinedTransitionFactories(null);
-        modal.requestFocus();
-        modalStack.push(modal);
+        secondaryModalPane.setInTransitionFactory(node -> {
+            ScaleTransition scale = new ScaleTransition(Duration.millis(150), node);
+            scale.setFromX(0.92);
+            scale.setFromY(0.92);
+            scale.setToX(1.0);
+            scale.setToY(1.0);
+            scale.setInterpolator(Interpolator.EASE_OUT);
+
+            FadeTransition fade = new FadeTransition(Duration.millis(150), node);
+            fade.setFromValue(0.0);
+            fade.setToValue(1.0);
+            fade.setInterpolator(Interpolator.EASE_OUT);
+
+            return new ParallelTransition(scale, fade);
+        });
+
+        secondaryModalPane.setOutTransitionFactory(node -> {
+            FadeTransition fade = new FadeTransition(Duration.millis(80), node);
+            fade.setFromValue(1.0);
+            fade.setToValue(0.0);
+            fade.setInterpolator(Interpolator.EASE_IN);
+            return fade;
+        });
+
+        secondaryModalPane.setContent(modal);
+        modal.applyCss();
+
+        Platform.runLater(() -> {
+            secondaryModalPane.setDisplay(true);
+            modal.requestFocus();
+            modalStack.push(modal);
+        });
     }
 
     public static void closeTopModal() {
