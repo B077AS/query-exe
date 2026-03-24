@@ -52,6 +52,7 @@ public class App extends Application {
     private static CustomToolBar toolbar;
     private static CustomMenuBar menuBar;
     private static TabPane tabPane;
+    private static ConnectionsPane connectionsPane;
     private static SplitPane codeAndResultSplitPane;
     private static ModalPane modalPane;
     private static ModalPane secondaryModalPane;
@@ -95,7 +96,7 @@ public class App extends Application {
         secondaryModalPane = new ModalPane();
         secondaryModalPane.setPersistent(false);
 
-        ConnectionsPane connectionsPane = new ConnectionsPane();
+        connectionsPane = new ConnectionsPane();
         stackPane.getChildren().add(connectionsPane);
         borderPane.setCenter(stackPane);
 
@@ -368,14 +369,25 @@ public class App extends Application {
             }
         }
         toolbar.setDisable(true);
-        stackPane.getChildren().clear();
 
-        ConnectionsPane connectionsPane = new ConnectionsPane();
-        stackPane.getChildren().add(connectionsPane);
+        if (connectionsPane == null) {
+            connectionsPane = new ConnectionsPane();
+        } else {
+            connectionsPane.refresh();
+        }
+
+        if (!stackPane.getChildren().contains(connectionsPane)) {
+            stackPane.getChildren().clear();
+            stackPane.getChildren().add(connectionsPane);
+        }
     }
 
     public static ModalPane getSecondaryModalPane() {
         return secondaryModalPane;
+    }
+
+    public static ConnectionsPane getConnectionsPane() {
+        return connectionsPane;
     }
 
     public static boolean isModalShowing() {

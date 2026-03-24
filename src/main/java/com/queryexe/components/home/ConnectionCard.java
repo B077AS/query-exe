@@ -1,5 +1,6 @@
 package com.queryexe.components.home;
 
+import javafx.application.Platform;
 import javafx.scene.control.TextField;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -288,16 +289,24 @@ public class ConnectionCard extends Card {
     public void cloneConnection() {
         ConnectionService.getInstance().cloneConnection(this.connection.getId(), this.connection.getConnectionName() + " (copy)");
         App.closeConnection();
-        CustomNotification customNotification = new CustomNotification("Connection duplicated successfully.", new FontIcon(MaterialDesignC.CONTENT_COPY));
-        customNotification.showNotification();
+
+        Platform.runLater(() -> App.getConnectionsPane().goToLastPage());
+
+        new CustomNotification("Connection duplicated successfully.", new FontIcon(MaterialDesignC.CONTENT_COPY))
+                .showNotification();
     }
 
     public void deleteConnection() {
         if (ConnectionService.getInstance().deleteConnection(connection.getId())) {
             App.closeModal();
-            CustomNotification customNotification = new CustomNotification("Connection deleted successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE));
-            customNotification.showNotification();
-            App.closeConnection();
+
+            ConnectionsPane connectionsPane = App.getConnectionsPane();
+            int currentPage = connectionsPane != null ? connectionsPane.getCurrentPageIndex() : 0;
+
+            connectionsPane.refresh(currentPage);
+
+            new CustomNotification("Connection deleted successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE))
+                    .showNotification();
         }
     }
 

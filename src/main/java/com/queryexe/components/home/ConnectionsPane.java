@@ -1,6 +1,5 @@
 package com.queryexe.components.home;
 
-import com.google.gson.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -26,13 +25,16 @@ public class ConnectionsPane extends VBox {
     private int cardsPerPage;
     private BorderPane currentPage;
 
+    private double availableWidth;
+    private double availableHeight;
+    private int cardsPerRow;
+    private int cardsPerColumn;
+
     public ConnectionsPane() {
         this.setAlignment(Pos.CENTER);
-        this.allCards = new ArrayList<Card>();
+        this.allCards = new ArrayList<>();
 
-        ConnectionCard addConnectionCard = new ConnectionCard();
-
-        this.allCards.add(addConnectionCard);
+        this.allCards.add(new ConnectionCard());
 
         pagination = new Pagination();
         currentPage = new BorderPane();
@@ -70,69 +72,47 @@ public class ConnectionsPane extends VBox {
             event.consume();
         });
 
+        pagination.setPageFactory(this::buildPage);
+
         this.getChildren().add(pagination);
 
-        Platform.runLater(this::updatePagination);
+        Platform.runLater(() -> updatePagination(0));
     }
 
-    private void updatePagination() {
+    private void updatePagination(int targetPage) {
         if (this.getScene() == null || this.getScene().getWindow() == null) {
             return;
         }
 
-        double availableWidth = this.getScene().getWindow().getWidth() - 40;
-        double availableHeight = this.getScene().getWindow().getHeight() - 220;
+        availableWidth = this.getScene().getWindow().getWidth() - 40;
+        availableHeight = this.getScene().getWindow().getHeight() - 220;
 
-        int cardsPerRow = Math.max((int) (availableWidth / 500), 1);
-        int cardsPerColumn = Math.max((int) (availableHeight / 170), 1);
+        cardsPerRow = Math.max((int) (availableWidth / 500), 1);
+        cardsPerColumn = Math.max((int) (availableHeight / 170), 1);
 
         cardsPerPage = cardsPerRow * cardsPerColumn;
 
         int totalPages = (int) Math.ceil((double) allCards.size() / cardsPerPage);
+        int clampedPage = Math.min(Math.max(targetPage, 0), totalPages - 1);
+
         pagination.setPageCount(totalPages);
+        pagination.setCurrentPageIndex(clampedPage);
+    }
 
-        if (pagination.getCurrentPageIndex() >= totalPages) {
-            pagination.setCurrentPageIndex(totalPages - 1);
-        }
+    private BorderPane buildPage(int pageIndex) {
+        currentPage = new BorderPane(buildGrid(pageIndex));
+        BorderPane.setAlignment(currentPage.getCenter(), Pos.CENTER);
+        return currentPage;
+    }
 
-        pagination.setPageFactory(pageIndex -> {
-            int startIndex = pageIndex * cardsPerPage;
-            int endIndex = Math.min(startIndex + cardsPerPage, allCards.size());
-
-            GridPane grid = new GridPane();
-            grid.setAlignment(Pos.CENTER);
-            grid.setPadding(new Insets(10));
-            grid.setHgap(20);
-            grid.setVgap(20);
-
-            double cardWidth = Math.min(500, (availableWidth - (cardsPerRow - 1) * 20) / cardsPerRow);
-            double cardHeight = Math.min(170, (availableHeight - (cardsPerColumn - 1) * 20) / cardsPerColumn);
-
-            for (int i = startIndex, row = 0, col = 0; i < endIndex; i++) {
-                Card card = allCards.get(i);
-                card.setMaxSize(cardWidth, cardHeight);
-                card.setPrefSize(cardWidth, cardHeight);
-                card.setMinSize(cardWidth, cardHeight);
-
-                grid.add(card, col, row);
-                col++;
-                if (col >= cardsPerRow) {
-                    col = 0;
-                    row++;
-                }
-            }
-
-            currentPage = new BorderPane(grid);
-            BorderPane.setAlignment(grid, Pos.CENTER);
-            return currentPage;
-        });
+    private void updatePagination() {
+        updatePagination(pagination.getCurrentPageIndex());
     }
 
     private void createConnectionCards() {
         List<ConnectionObject> connections = ConnectionService.getInstance().loadConnections();
         for (ConnectionObject connectionObject : connections) {
-            ConnectionCard connectionCard = new ConnectionCard(connectionObject);
-            allCards.add(connectionCard);
+            allCards.add(new ConnectionCard(connectionObject));
         }
     }
 
@@ -143,26 +123,82 @@ public class ConnectionsPane extends VBox {
         }
 
         String searchLower = searchText.toLowerCase().trim();
-
         List<Card> filteredCards = new ArrayList<>();
-
         filteredCards.add(allCards.get(0));
 
         for (int i = 1; i < allCards.size(); i++) {
             Card card = allCards.get(i);
-            if (card instanceof ConnectionCard) {
-                ConnectionCard connCard = (ConnectionCard) card;
-                if (connCard.getConnection() != null) {
-                    String connectionName = connCard.getConnection().getConnectionName().toLowerCase();
-                    if (connectionName.contains(searchLower)) {
-                        filteredCards.add(card);
-                    }
+            if (card instanceof ConnectionCard connCard && connCard.getConnection() != null) {
+                if (connCard.getConnection().getConnectionName().toLowerCase().contains(searchLower)) {
+                    filteredCards.add(card);
                 }
             }
         }
+
         List<Card> originalCards = allCards;
         allCards = filteredCards;
-        updatePagination();
+        updatePagination(0);
         allCards = originalCards;
+    }
+
+    public void refresh(int targetPage) {
+        allCards.clear();
+        allCards.add(new ConnectionCard());
+        createConnectionCards();
+
+        if (cardsPerPage == 0) cardsPerPage = 1;
+
+        int totalPages = Math.max((int) Math.ceil((double) allCards.size() / cardsPerPage), 1);
+        final int finalPage = Math.min(Math.max(targetPage, 0), totalPages - 1);
+
+        pagination.setPageCount(totalPages);
+        if (pagination.getCurrentPageIndex() != finalPage) {
+            pagination.setCurrentPageIndex(finalPage);
+        }
+
+        if (currentPage != null) {
+            currentPage.setCenter(buildGrid(finalPage));
+        }
+    }
+
+    private GridPane buildGrid(int pageIndex) {
+        int startIndex = pageIndex * cardsPerPage;
+        int endIndex = Math.min(startIndex + cardsPerPage, allCards.size());
+
+        GridPane grid = new GridPane();
+        grid.setAlignment(Pos.CENTER);
+        grid.setPadding(new Insets(10));
+        grid.setHgap(20);
+        grid.setVgap(20);
+
+        double cardWidth = Math.min(500, cardsPerRow > 1 ? (availableWidth - (cardsPerRow - 1) * 20) / cardsPerRow : availableWidth);
+        double cardHeight = Math.min(170, cardsPerColumn > 1 ? (availableHeight - (cardsPerColumn - 1) * 20) / cardsPerColumn : availableHeight);
+
+        for (int i = startIndex, row = 0, col = 0; i < endIndex; i++) {
+            Card card = allCards.get(i);
+            card.setMaxSize(cardWidth, cardHeight);
+            card.setPrefSize(cardWidth, cardHeight);
+            card.setMinSize(cardWidth, cardHeight);
+            grid.add(card, col, row);
+            col++;
+            if (col >= cardsPerRow) {
+                col = 0;
+                row++;
+            }
+        }
+        return grid;
+    }
+
+    public void refresh() {
+        refresh(0);
+    }
+
+    public void goToLastPage() {
+        updatePagination();
+        pagination.setCurrentPageIndex(pagination.getPageCount() - 1);
+    }
+
+    public int getCurrentPageIndex() {
+        return pagination.getCurrentPageIndex();
     }
 }
