@@ -40,6 +40,7 @@ public class ResultTable extends TableView<TableRowData> {
     private final int minColumnWidth = 150;
     private static final int MAX_CELL_LENGTH = 200;
     private Map<String, Integer> rowUpdateQueryIndex = new HashMap<>();
+    private List<Integer> columnSqlTypes = new ArrayList<>();
 
     public ResultTable(PreparedStatement preparedStatement, long executionTime, Runnable onCellUpdate) throws SQLException {
         this.updateQueries = new ArrayList<QueryData>();
@@ -82,6 +83,7 @@ public class ResultTable extends TableView<TableRowData> {
             final int columnOffset = columnIndex - 1;
 
             int columnType = metaData.getColumnType(columnIndex);
+            columnSqlTypes.add(metaData.getColumnType(columnIndex));
 
             if (columnType == java.sql.Types.BLOB || columnType == java.sql.Types.LONGVARBINARY ||
                     columnType == java.sql.Types.VARBINARY || columnType == java.sql.Types.BINARY) {
@@ -123,11 +125,7 @@ public class ResultTable extends TableView<TableRowData> {
                             fullValue = null;
                             if (getContextMenu() == null && getTableView() != null && getIndex() >= 0) {
                                 try {
-                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(
-                                            item,
-                                            getTableView().getItems().get(getIndex()),
-                                            this
-                                    );
+                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(item, this);
                                     setContextMenu(contextMenu);
                                 } catch (Exception e) {
                                 }
@@ -142,11 +140,7 @@ public class ResultTable extends TableView<TableRowData> {
 
                             if (getContextMenu() == null && getTableView() != null && getIndex() >= 0) {
                                 try {
-                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(
-                                            item,
-                                            getTableView().getItems().get(getIndex()),
-                                            this
-                                    );
+                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(item, this);
                                     setContextMenu(contextMenu);
                                 } catch (Exception e) {
                                 }
@@ -429,7 +423,7 @@ public class ResultTable extends TableView<TableRowData> {
 
     public void updateDatabaseRow(TableRowData rowData, int updatedColumnIndex, String oldValue, String newValue) {
         try {
-            Object typedValue = convertToOriginalType(rowData, updatedColumnIndex, newValue);
+            Object typedValue = convertToOriginalType(updatedColumnIndex, newValue);
 
             rowData.getStringData().set(updatedColumnIndex, newValue);
             rowData.getOriginalData().set(updatedColumnIndex, typedValue);
@@ -478,7 +472,7 @@ public class ResultTable extends TableView<TableRowData> {
                     for (String primaryKeyColumn : primaryKeyColumns) {
                         int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
                         if (pkIndex == updatedColumnIndex) {
-                            Object oldTypedValue = convertToOriginalType(rowData, pkIndex, oldValue);
+                            Object oldTypedValue = convertToOriginalType(pkIndex, oldValue);
                             primaryKeyValues.put(primaryKeyColumn, oldTypedValue);
                         } else {
                             primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
@@ -526,56 +520,52 @@ public class ResultTable extends TableView<TableRowData> {
         }
     }
 
-    private Object convertToOriginalType(TableRowData rowData, int columnIndex, String stringValue) {
+    private Object convertToOriginalType(int columnIndex, String stringValue) {
         if (stringValue == null || stringValue.isEmpty()) {
             return null;
         }
 
-        if (!backupData.isEmpty() && columnIndex < backupData.get(0).getOriginalData().size()) {
-            Object originalValue = null;
-
-            int rowIndex = this.getItems().indexOf(rowData);
-            if (rowIndex >= 0 && rowIndex < backupData.size()) {
-                originalValue = backupData.get(rowIndex).getOriginalData().get(columnIndex);
-            }
-
-            if (originalValue == null && rowData.getOriginalData().get(columnIndex) != null) {
-                originalValue = rowData.getOriginalData().get(columnIndex);
-            }
-
-            if (originalValue != null) {
-                try {
-                    if (originalValue instanceof UUID) {
-                        return UUID.fromString(stringValue);
-                    } else if (originalValue instanceof Integer) {
-                        return Integer.parseInt(stringValue);
-                    } else if (originalValue instanceof Long) {
-                        return Long.parseLong(stringValue);
-                    } else if (originalValue instanceof Double) {
-                        return Double.parseDouble(stringValue);
-                    } else if (originalValue instanceof Float) {
-                        return Float.parseFloat(stringValue);
-                    } else if (originalValue instanceof Short) {
-                        return Short.parseShort(stringValue);
-                    } else if (originalValue instanceof Byte) {
-                        return Byte.parseByte(stringValue);
-                    } else if (originalValue instanceof Boolean) {
-                        return Boolean.parseBoolean(stringValue) || stringValue.equals("1");
-                    } else if (originalValue instanceof java.sql.Date) {
-                        return java.sql.Date.valueOf(stringValue);
-                    } else if (originalValue instanceof java.sql.Time) {
-                        return java.sql.Time.valueOf(stringValue);
-                    } else if (originalValue instanceof java.sql.Timestamp) {
-                        return java.sql.Timestamp.valueOf(stringValue);
-                    } else if (originalValue instanceof java.math.BigDecimal) {
-                        return new java.math.BigDecimal(stringValue);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Failed to convert value to original type: " + e.getMessage());
-                }
-            }
+        if (columnIndex >= columnSqlTypes.size()) {
+            return stringValue;
         }
-        return stringValue;
+
+        try {
+            switch (columnSqlTypes.get(columnIndex)) {
+                case java.sql.Types.BOOLEAN:
+                case java.sql.Types.BIT: {
+                    String lower = stringValue.trim().toLowerCase();
+                    return lower.equals("true") || lower.equals("1") || lower.equals("yes");
+                }
+                case java.sql.Types.INTEGER:
+                case java.sql.Types.SMALLINT:
+                    return Integer.parseInt(stringValue);
+                case java.sql.Types.BIGINT:
+                    return Long.parseLong(stringValue);
+                case java.sql.Types.FLOAT:
+                case java.sql.Types.REAL:
+                    return Float.parseFloat(stringValue);
+                case java.sql.Types.DOUBLE:
+                    return Double.parseDouble(stringValue);
+                case java.sql.Types.NUMERIC:
+                case java.sql.Types.DECIMAL:
+                    return new java.math.BigDecimal(stringValue);
+                case java.sql.Types.DATE:
+                    return java.sql.Date.valueOf(stringValue);
+                case java.sql.Types.TIME:
+                    return java.sql.Time.valueOf(stringValue);
+                case java.sql.Types.TIMESTAMP:
+                    return java.sql.Timestamp.valueOf(stringValue);
+                case java.sql.Types.BINARY:
+                case java.sql.Types.VARBINARY:
+                case java.sql.Types.BLOB:
+                    return UUID.fromString(stringValue);
+                default:
+                    return stringValue;
+            }
+        } catch (Exception e) {
+            System.err.println("Type conversion failed for column " + columnIndex + ": " + e.getMessage());
+            return stringValue;
+        }
     }
 
     public void addDatabaseRow() {
@@ -618,6 +608,59 @@ public class ResultTable extends TableView<TableRowData> {
 
         this.getItems().add(newRow);
 
+        this.scrollTo(newRow);
+        this.getSelectionModel().clearSelection();
+        this.getSelectionModel().select(newRow);
+
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+    }
+
+    public void duplicateDatabaseRow(TableRowData sourceRow) {
+        List<Object> newOriginalData = new ArrayList<>(sourceRow.getOriginalData());
+        List<String> newStringData = new ArrayList<>(sourceRow.getStringData());
+
+        for (int i = 0; i < this.getColumns().size(); i++) {
+            String colName = this.getColumns().get(i).getText().toUpperCase();
+            if (primaryKeyColumns.contains(colName)) {
+                newOriginalData.set(i, null);
+                newStringData.set(i, "");
+            }
+        }
+
+        TableRowData newRow = new TableRowData(
+                FXCollections.observableArrayList(newOriginalData),
+                FXCollections.observableArrayList(newStringData)
+        );
+        newRow.setNewRow(true);
+
+        StringBuilder columnsClause = new StringBuilder();
+        StringBuilder valuesClause = new StringBuilder();
+        List<Object> parameters = new ArrayList<>();
+
+        for (int i = 0; i < this.getColumns().size(); i++) {
+            if (i > 0) {
+                columnsClause.append(", ");
+                valuesClause.append(", ");
+            }
+            columnsClause.append(this.getColumns().get(i).getText());
+            valuesClause.append("?");
+            parameters.add(newOriginalData.get(i));
+        }
+
+        String insertQuery = String.format(
+                "INSERT INTO %s (%s) VALUES (%s)",
+                tableName,
+                columnsClause.toString(),
+                valuesClause.toString()
+        );
+
+        QueryData queryInfo = new QueryData(insertQuery, parameters);
+        updateQueries.add(queryInfo);
+        newRow.setQueryIndex(updateQueries.size() - 1);
+
+        this.getItems().add(newRow);
         this.scrollTo(newRow);
         this.getSelectionModel().clearSelection();
         this.getSelectionModel().select(newRow);

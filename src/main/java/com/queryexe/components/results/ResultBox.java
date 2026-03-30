@@ -371,6 +371,8 @@ public class ResultBox extends VBox {
                             } else {
                                 stmt.setObject(i + 1, param);
                             }
+                        } else if (param instanceof Boolean) {
+                            stmt.setBoolean(i + 1, (Boolean) param);
                         } else {
                             stmt.setObject(i + 1, param);
                         }
