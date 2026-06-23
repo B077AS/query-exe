@@ -316,6 +316,25 @@ public class ConnectionService {
         return connections;
     }
 
+    public ConnectionObject loadConnection(String connectionId) {
+        JsonObject element = getConnection(connectionId);
+        if (element == null) {
+            return null;
+        }
+
+        element.addProperty("id", connectionId);
+
+        try {
+            Gson gsonWithDeserializer = new GsonBuilder()
+                    .registerTypeAdapter(ConnectionObject.class, new ConnectionObjectDeserializer())
+                    .create();
+            return gsonWithDeserializer.fromJson(element, ConnectionObject.class);
+        } catch (Exception e) {
+            System.err.println("Error loading connection " + connectionId + ": " + e.getMessage());
+            return null;
+        }
+    }
+
     public void saveConnection(String connectionId, JsonObject connectionData) {
         String password = null;
         if (connectionData.has("password") && !connectionData.get("password").isJsonNull()) {

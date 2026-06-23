@@ -36,6 +36,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import com.queryexe.components.extra.CustomNotification;
+import com.queryexe.components.home.ConnectionsPane;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.drivers.DriverAPIs;
@@ -537,11 +538,20 @@ public class AddConnectionModal extends VBox {
             connectionObj.remove("customDriver");
         }
 
-        String id = (connection == null) ? UUID.randomUUID().toString() : connection.getId();
+        boolean isNew = (connection == null);
+        String id = isNew ? UUID.randomUUID().toString() : connection.getId();
         ConnectionService.getInstance().saveConnection(id, connectionObj);
 
-        App.closeConnection();
         App.closeModal();
+
+        ConnectionsPane connectionsPane = App.getConnectionsPane();
+        if (connectionsPane != null) {
+            if (isNew) {
+                connectionsPane.addConnection(id);
+            } else {
+                connectionsPane.updateConnection(id);
+            }
+        }
 
         CustomNotification notification = new CustomNotification("Database Connection Saved", new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
         notification.showNotification();

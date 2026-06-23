@@ -1,6 +1,5 @@
 package com.queryexe.components.home;
 
-import javafx.application.Platform;
 import javafx.scene.control.TextField;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -91,7 +90,10 @@ public class ConnectionCard extends Card {
         refreshButton.setGraphic(new FontIcon(MaterialDesignR.REFRESH));
         refreshButton.getStyleClass().addAll(Styles.BUTTON_OUTLINED);
         refreshButton.setOnAction(e -> {
-            App.goHome();
+            ConnectionsPane connectionsPane = App.getConnectionsPane();
+            if (connectionsPane != null) {
+                connectionsPane.refresh();
+            }
         });
 
         topSection.getChildren().addAll(mainLabel, spacer, addButton, refreshButton);
@@ -287,10 +289,13 @@ public class ConnectionCard extends Card {
     }
 
     public void cloneConnection() {
-        ConnectionService.getInstance().cloneConnection(this.connection.getId(), this.connection.getConnectionName() + " (copy)");
-        App.closeConnection();
+        String newId = ConnectionService.getInstance().cloneConnection(
+                this.connection.getId(), this.connection.getConnectionName() + " (copy)");
 
-        Platform.runLater(() -> App.getConnectionsPane().goToLastPage());
+        ConnectionsPane connectionsPane = App.getConnectionsPane();
+        if (connectionsPane != null) {
+            connectionsPane.addConnection(newId);
+        }
 
         new CustomNotification("Connection duplicated successfully.", new FontIcon(MaterialDesignC.CONTENT_COPY))
                 .showNotification();
@@ -301,9 +306,9 @@ public class ConnectionCard extends Card {
             App.closeModal();
 
             ConnectionsPane connectionsPane = App.getConnectionsPane();
-            int currentPage = connectionsPane != null ? connectionsPane.getCurrentPageIndex() : 0;
-
-            connectionsPane.refresh(currentPage);
+            if (connectionsPane != null) {
+                connectionsPane.removeConnection(connection.getId());
+            }
 
             new CustomNotification("Connection deleted successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE))
                     .showNotification();

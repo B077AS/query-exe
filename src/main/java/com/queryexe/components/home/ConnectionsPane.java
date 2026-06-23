@@ -141,11 +141,25 @@ public class ConnectionsPane extends VBox {
         allCards = originalCards;
     }
 
+    /**
+     * Full reload of all cards from disk. Use only for the explicit "Refresh"
+     * action; routine add/edit/delete should use the incremental methods below
+     * so the in-memory order is preserved and the user is not catapulted away
+     * from the page they are on.
+     */
     public void refresh(int targetPage) {
         allCards.clear();
         allCards.add(new ConnectionCard());
         createConnectionCards();
+        showPage(targetPage);
+    }
 
+    /**
+     * Re-renders the grid for {@code targetPage} (clamped to a valid range)
+     * without touching the underlying card list. This is the single place that
+     * updates the pagination page count and the visible grid.
+     */
+    private void showPage(int targetPage) {
         if (cardsPerPage == 0) cardsPerPage = 1;
 
         int totalPages = Math.max((int) Math.ceil((double) allCards.size() / cardsPerPage), 1);
@@ -159,6 +173,56 @@ public class ConnectionsPane extends VBox {
         if (currentPage != null) {
             currentPage.setCenter(buildGrid(finalPage));
         }
+    }
+
+    /** Index of the card backing the given connection id, or -1. Index 0 is the manager card. */
+    private int indexOfConnection(String connectionId) {
+        if (connectionId == null) return -1;
+        for (int i = 1; i < allCards.size(); i++) {
+            Card card = allCards.get(i);
+            if (card instanceof ConnectionCard connCard && connCard.getConnection() != null
+                    && connectionId.equals(connCard.getConnection().getId())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Appends a newly created/cloned connection and navigates to the page that now contains it. */
+    public void addConnection(String connectionId) {
+        ConnectionObject connection = ConnectionService.getInstance().loadConnection(connectionId);
+        if (connection == null) {
+            refresh();
+            return;
+        }
+        allCards.add(new ConnectionCard(connection));
+
+        if (cardsPerPage == 0) cardsPerPage = 1;
+        int pageOfNewCard = (allCards.size() - 1) / cardsPerPage;
+        showPage(pageOfNewCard);
+    }
+
+    /** Replaces an edited connection's card in place, staying on the current page. */
+    public void updateConnection(String connectionId) {
+        int index = indexOfConnection(connectionId);
+        ConnectionObject connection = ConnectionService.getInstance().loadConnection(connectionId);
+        if (index < 0 || connection == null) {
+            refresh();
+            return;
+        }
+        allCards.set(index, new ConnectionCard(connection));
+        showPage(getCurrentPageIndex());
+    }
+
+    /** Removes a deleted connection's card, staying on the current page (clamped if it emptied). */
+    public void removeConnection(String connectionId) {
+        int index = indexOfConnection(connectionId);
+        if (index < 0) {
+            refresh();
+            return;
+        }
+        allCards.remove(index);
+        showPage(getCurrentPageIndex());
     }
 
     private GridPane buildGrid(int pageIndex) {
@@ -190,12 +254,7 @@ public class ConnectionsPane extends VBox {
     }
 
     public void refresh() {
-        refresh(0);
-    }
-
-    public void goToLastPage() {
-        updatePagination();
-        pagination.setCurrentPageIndex(pagination.getPageCount() - 1);
+        refresh(getCurrentPageIndex());
     }
 
     public int getCurrentPageIndex() {

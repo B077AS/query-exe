@@ -372,8 +372,6 @@ public class App extends Application {
 
         if (connectionsPane == null) {
             connectionsPane = new ConnectionsPane();
-        } else {
-            connectionsPane.refresh();
         }
 
         if (!stackPane.getChildren().contains(connectionsPane)) {
