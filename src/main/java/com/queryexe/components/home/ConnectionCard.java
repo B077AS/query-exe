@@ -297,7 +297,7 @@ public class ConnectionCard extends Card {
             connectionsPane.addConnection(newId);
         }
 
-        new CustomNotification("Connection duplicated successfully.", new FontIcon(MaterialDesignC.CONTENT_COPY))
+        new CustomNotification("Connection Duplicated", "A copy of the connection was created.", new FontIcon(MaterialDesignC.CONTENT_COPY))
                 .showNotification();
     }
 
@@ -310,7 +310,7 @@ public class ConnectionCard extends Card {
                 connectionsPane.removeConnection(connection.getId());
             }
 
-            new CustomNotification("Connection deleted successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE))
+            new CustomNotification("Connection Deleted", "The connection was removed successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE))
                     .showNotification();
         }
     }

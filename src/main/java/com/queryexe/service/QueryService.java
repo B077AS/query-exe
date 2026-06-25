@@ -177,7 +177,8 @@ public class QueryService {
             openFileInTab(file);
         } catch (IOException e) {
             CustomNotification errorNotification = new CustomNotification(
-                    "Error opening file: " + e.getMessage(),
+                    "Open Failed",
+                    "Could not open the file: " + e.getMessage(),
                     new FontIcon(MaterialDesignC.CLOSE_CIRCLE_OUTLINE)
             );
             errorNotification.showNotification();
@@ -226,14 +227,16 @@ public class QueryService {
             RecentFilesManager.getInstance().addRecentFile(associatedFile);
 
             CustomNotification fileSavedNotification = new CustomNotification(
-                    "File saved successfully to: " + associatedFile.getAbsolutePath(),
+                    "File Saved",
+                    "Saved to " + associatedFile.getAbsolutePath(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE)
             );
             fileSavedNotification.showNotification();
 
         } catch (IOException e) {
             CustomNotification errorNotification = new CustomNotification(
-                    "Error saving file: " + e.getMessage(),
+                    "Save Failed",
+                    "Could not save the file: " + e.getMessage(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE_ALERT)
             );
             errorNotification.showNotification();
@@ -271,14 +274,16 @@ public class QueryService {
             RecentFilesManager.getInstance().addRecentFile(newFile);
 
             CustomNotification fileSavedNotification = new CustomNotification(
-                    "File saved successfully to: " + newFile.getAbsolutePath(),
+                    "File Saved",
+                    "Saved to " + newFile.getAbsolutePath(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE)
             );
             fileSavedNotification.showNotification();
 
         } catch (IOException e) {
             CustomNotification errorNotification = new CustomNotification(
-                    "Error saving file: " + e.getMessage(),
+                    "Save Failed",
+                    "Could not save the file: " + e.getMessage(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE_ALERT)
             );
             errorNotification.showNotification();

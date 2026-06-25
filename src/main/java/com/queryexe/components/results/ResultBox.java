@@ -126,7 +126,7 @@ public class ResultBox extends VBox {
         removeRow.setOnAction(event -> {
             ObservableList<Integer> rows = ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getSelectionModel().getSelectedIndices();
             if (rows.isEmpty()) {
-                CustomNotification errorRemoveNotification = new CustomNotification("Error: no row selected", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification errorRemoveNotification = new CustomNotification("No Row Selected", "Select a row to remove first.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 errorRemoveNotification.showNotification();
             } else {
                 ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).deleteDatabaseRows(rows);
@@ -343,7 +343,7 @@ public class ResultBox extends VBox {
             }
         }
         if (hasErrors) {
-            CustomNotification errorNotification = new CustomNotification("Some queries failed to execute.", new FontIcon(MaterialDesignC.CLOSE_CIRCLE));
+            CustomNotification errorNotification = new CustomNotification("Execution Errors", "Some queries failed to execute.", new FontIcon(MaterialDesignC.CLOSE_CIRCLE));
             errorNotification.showNotification();
         }
 
@@ -392,7 +392,7 @@ public class ResultBox extends VBox {
             ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).clearUpdateTracking();
 
             App.closeModal();
-            CustomNotification customNotification = new CustomNotification("Changes saved", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
+            CustomNotification customNotification = new CustomNotification("Changes Saved", "Your edits were committed to the database.", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
             customNotification.showNotification();
 
         } catch (SQLException e) {
@@ -406,7 +406,7 @@ public class ResultBox extends VBox {
             }
             e.printStackTrace();
 
-            CustomNotification customNotification = new CustomNotification("Error Saving Changes " + e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
+            CustomNotification customNotification = new CustomNotification("Save Failed", e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
             customNotification.showNotification();
         }
     }
@@ -434,7 +434,7 @@ public class ResultBox extends VBox {
         applyButton.setDisable(true);
         App.closeModal();
 
-        CustomNotification customNotification = new CustomNotification("Changes reverted successfully.", new FontIcon(MaterialDesignC.CHECKBOX_MARKED_CIRCLE_OUTLINE));
+        CustomNotification customNotification = new CustomNotification("Changes Reverted", "Your unsaved edits were discarded.", new FontIcon(MaterialDesignC.CHECKBOX_MARKED_CIRCLE_OUTLINE));
         customNotification.showNotification();
     }
 }

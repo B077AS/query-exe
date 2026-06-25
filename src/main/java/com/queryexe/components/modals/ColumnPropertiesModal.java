@@ -100,7 +100,7 @@ public class ColumnPropertiesModal extends VBox {
                 App.closeModal();
             });
 
-            CustomNotification notification = new CustomNotification("Failed to load column data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Load Failed", "Could not load column data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotification();
             e.printStackTrace();
         }

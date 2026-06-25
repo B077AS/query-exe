@@ -299,7 +299,8 @@ public class ActiveConnectionsModal extends VBox {
                     statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-success-emphasis;");
 
                     CustomNotification notification = new CustomNotification(
-                            "Connection refreshed successfully",
+                            "Connection Refreshed",
+                            "The connection was re-established successfully.",
                             new FontIcon(MaterialDesignL.LAN_CONNECT)
                     );
                     notification.showNotificationOnCustomPane((StackPane) this.getParent());
@@ -310,7 +311,8 @@ public class ActiveConnectionsModal extends VBox {
                     statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-danger-emphasis;");
 
                     CustomNotification notification = new CustomNotification(
-                            "Reconnection failed!\n" + e.getMessage(),
+                            "Reconnection Failed",
+                            e.getMessage(),
                             new FontIcon(MaterialDesignL.LAN_DISCONNECT)
                     );
                     notification.showNotificationOnCustomPane((StackPane) this.getParent());
@@ -347,7 +349,8 @@ public class ActiveConnectionsModal extends VBox {
                 }
 
                 CustomNotification notification = new CustomNotification(
-                        "Connection closed successfully",
+                        "Connection Closed",
+                        "The session was closed successfully.",
                         new FontIcon(MaterialDesignL.LAN_DISCONNECT)
                 );
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
@@ -363,7 +366,8 @@ public class ActiveConnectionsModal extends VBox {
 
         } catch (Exception e) {
             CustomNotification notification = new CustomNotification(
-                    "Failed to close connection!\n" + e.getMessage(),
+                    "Close Failed",
+                    e.getMessage(),
                     new FontIcon(MaterialDesignC.CLOSE_CIRCLE)
             );
             notification.showNotificationOnCustomPane((StackPane) this.getParent());

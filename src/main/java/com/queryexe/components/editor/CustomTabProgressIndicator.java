@@ -34,7 +34,7 @@ public class CustomTabProgressIndicator extends StackPane {
                 try {
                     this.parentTab.getCurrentStatement().cancel();
                 } catch (SQLException e) {
-                    CustomNotification notification = new CustomNotification("Error cancelling statement:\n" + e.getMessage(), new FontIcon(MaterialDesignC.CANCEL));
+                    CustomNotification notification = new CustomNotification("Cancel Failed", e.getMessage(), new FontIcon(MaterialDesignC.CANCEL));
                     notification.showNotification();
                 }
             }

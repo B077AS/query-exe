@@ -42,7 +42,7 @@ public class ExportUtils {
 
 				csvWriter.flush();
 
-				CustomNotification notification = new CustomNotification("Results Exported Successfully", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
+				CustomNotification notification = new CustomNotification("Export Complete", "Your results were exported successfully.", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
 				notification.showNotification();
 
 			} catch (IOException e) {
@@ -108,7 +108,8 @@ public class ExportUtils {
 	            jsonWriter.flush();
 
 	            CustomNotification notification = new CustomNotification(
-	                "Results Exported Successfully",
+	                "Export Complete",
+	                "Your results were exported successfully.",
 	                new FontIcon(MaterialDesignD.DATABASE_EXPORT)
 	            );
 	            notification.showNotification();
@@ -162,7 +163,7 @@ public class ExportUtils {
 	            xmlWriter.write("</Table>\n");
 	            xmlWriter.flush();
 
-	            CustomNotification notification = new CustomNotification("Results Exported Successfully", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
+	            CustomNotification notification = new CustomNotification("Export Complete", "Your results were exported successfully.", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
 	            notification.showNotification();
 
 	        } catch (IOException e) {

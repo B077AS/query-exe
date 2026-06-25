@@ -72,7 +72,7 @@ public class ResultErrorBox extends HBox {
             content.putString(query.trim() + " - " + e.getMessage() + " - " + e.getErrorCode());
             clipboard.setContent(content);
 
-            CustomNotification copiedNotification = new CustomNotification("Error Copied", new FontIcon(MaterialDesignC.CLIPBOARD_CHECK_MULTIPLE_OUTLINE));
+            CustomNotification copiedNotification = new CustomNotification("Error Copied", "The error details were copied to your clipboard.", new FontIcon(MaterialDesignC.CLIPBOARD_CHECK_MULTIPLE_OUTLINE));
             copiedNotification.showNotification();
         });
 

@@ -272,7 +272,7 @@ public class CreateTableModal extends VBox {
             }
 
         } catch (SQLException e) {
-            CustomNotification notification = new CustomNotification("Failed to load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
             e.printStackTrace();
         }
@@ -630,7 +630,7 @@ public class CreateTableModal extends VBox {
 
     private void handleCreateTable(String tableName) {
         if (tableName == null || tableName.trim().isEmpty()) {
-            CustomNotification notification = new CustomNotification("Table name cannot be empty", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Invalid Table", "The table name cannot be empty.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
             return;
         }
@@ -641,13 +641,13 @@ public class CreateTableModal extends VBox {
             String dataType = comp.dataTypeCombo.getValue();
 
             if (name == null || name.trim().isEmpty()) {
-                CustomNotification notification = new CustomNotification("Column name cannot be empty", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification notification = new CustomNotification("Invalid Column", "A column name cannot be empty.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
                 return;
             }
 
             if (dataType == null || dataType.trim().isEmpty()) {
-                CustomNotification notification = new CustomNotification("Data type for column '" + name + "' cannot be empty", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification notification = new CustomNotification("Invalid Column", "The data type for column '" + name + "' cannot be empty.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
                 return;
             }
@@ -663,7 +663,7 @@ public class CreateTableModal extends VBox {
         }
 
         if (columns.isEmpty()) {
-            CustomNotification notification = new CustomNotification("At least one column is required", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Invalid Table", "At least one column is required.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
             return;
         }
@@ -711,7 +711,7 @@ public class CreateTableModal extends VBox {
                         .generateAlterTableSQL(databaseName, originalTableName, tableName.trim(),
                                 oldColumns, columns, oldForeignKeys, foreignKeys, columnRenames);
             } catch (SQLException e) {
-                CustomNotification notification = new CustomNotification("Failed to generate ALTER script: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification notification = new CustomNotification("Script Generation Failed", "Could not generate the ALTER script: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
                 return;
             }

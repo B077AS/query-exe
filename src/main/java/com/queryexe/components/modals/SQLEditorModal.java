@@ -106,8 +106,7 @@ public class SQLEditorModal extends VBox {
                     conn.commit();
 
                     App.closeAllModals();
-                    String message = "Table updated successfully!";
-                    new CustomNotification(message, new FontIcon(MaterialDesignT.TABLE_CHECK)).showNotification();
+                    new CustomNotification("Table Updated", "The table was updated successfully.", new FontIcon(MaterialDesignT.TABLE_CHECK)).showNotification();
                     onConfirmAction.run();
 
                 } catch (Exception e) {
@@ -132,7 +131,7 @@ public class SQLEditorModal extends VBox {
 
             } catch (Exception e) {
                 e.printStackTrace();
-                new CustomNotification("Failed to create/update table\n" + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL)).showNotificationOnCustomPane((StackPane) this.getParent());
+                new CustomNotification("Table Operation Failed", e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL)).showNotificationOnCustomPane((StackPane) this.getParent());
             }
         });
 

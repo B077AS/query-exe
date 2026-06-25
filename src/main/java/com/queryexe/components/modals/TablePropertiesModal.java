@@ -100,7 +100,7 @@ public class TablePropertiesModal extends VBox {
             contentPane.getChildren().add(columnsTab);
 
         } catch (SQLException e) {
-            CustomNotification notification = new CustomNotification("Failed to load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
             e.printStackTrace();
         }

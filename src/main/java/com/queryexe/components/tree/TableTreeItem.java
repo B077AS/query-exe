@@ -161,13 +161,13 @@ public class TableTreeItem extends CustomTreeItem {
                     Platform.runLater(() -> {
                         DatabaseTreeItem databaseItem = (DatabaseTreeItem) this.getParent().getParent();
                         databaseItem.refreshDatabase();
-                        CustomNotification customNotification = new CustomNotification("Table dropped successfully", new FontIcon(MaterialDesignT.TABLE_CHECK));
+                        CustomNotification customNotification = new CustomNotification("Table Dropped", "The table was dropped successfully.", new FontIcon(MaterialDesignT.TABLE_CHECK));
                         customNotification.showNotification();
                         App.closeModal();
                     });
                 } catch (Exception e) {
                     Platform.runLater(() -> {
-                        CustomNotification customNotification = new CustomNotification("Drop table failed!\n" + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                        CustomNotification customNotification = new CustomNotification("Drop Failed", e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
                         customNotification.showNotification();
                         App.closeModal();
                     });

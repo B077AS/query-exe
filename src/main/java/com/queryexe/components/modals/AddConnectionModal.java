@@ -553,7 +553,7 @@ public class AddConnectionModal extends VBox {
             }
         }
 
-        CustomNotification notification = new CustomNotification("Database Connection Saved", new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
+        CustomNotification notification = new CustomNotification("Connection Saved", "Your database connection was saved.", new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
         notification.showNotification();
     }
 
@@ -579,14 +579,14 @@ public class AddConnectionModal extends VBox {
             Connection connection = DriverManager.getConnection(fullUrl, username, password);
             if (connection != null) {
                 connection.close();
-                CustomNotification notification = new CustomNotification("Connection established correctly!", new FontIcon(MaterialDesignC.CHECK_CIRCLE_OUTLINE));
+                CustomNotification notification = new CustomNotification("Connection Successful", "The database connection was established correctly.", new FontIcon(MaterialDesignC.CHECK_CIRCLE_OUTLINE));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
             } else {
-                CustomNotification notification = new CustomNotification("Connection failed!", new FontIcon(MaterialDesignL.LAN_DISCONNECT));
+                CustomNotification notification = new CustomNotification("Connection Failed", "Could not establish a connection.", new FontIcon(MaterialDesignL.LAN_DISCONNECT));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
             }
         } catch (Exception e) {
-            CustomNotification notification = new CustomNotification("Connection failed!\n" + e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
+            CustomNotification notification = new CustomNotification("Connection Failed", e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
         }
     }

@@ -237,7 +237,7 @@ public class ConnectionService {
                 }
             }
 
-            CustomNotification customNotification = new CustomNotification("Connection failed!\n" + e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
+            CustomNotification customNotification = new CustomNotification("Connection Failed", e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
 
             if (insertPasswordModal != null) {
                 customNotification.showNotificationOnCustomPane((StackPane) insertPasswordModal.getParent());

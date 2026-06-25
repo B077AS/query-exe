@@ -35,7 +35,7 @@ public class SchemasTreeItem extends CustomTreeItem {
                         });
                     } catch (Exception e) {
                         Platform.runLater(() -> {
-                            CustomNotification customNotification = new CustomNotification("Schema creation failed", new FontIcon(MaterialDesignD.DATABASE_ALERT));
+                            CustomNotification customNotification = new CustomNotification("Creation Failed", "The schema could not be created.", new FontIcon(MaterialDesignD.DATABASE_ALERT));
                             customNotification.showNotification();
                         });
                     } finally {
@@ -61,7 +61,8 @@ public class SchemasTreeItem extends CustomTreeItem {
                     Platform.runLater(() -> {
                         App.getDatabaseTree().initialize();
                         CustomNotification customNotification = new CustomNotification(
-                                "Schema created successfully",
+                                "Schema Created",
+                                "The schema was created successfully.",
                                 new FontIcon(MaterialDesignD.DATABASE_CHECK)
                         );
                         customNotification.showNotification();
@@ -69,7 +70,8 @@ public class SchemasTreeItem extends CustomTreeItem {
                 } catch (Exception e) {
                     Platform.runLater(() -> {
                         CustomNotification customNotification = new CustomNotification(
-                                "Schema creation failed!\n" + e.getMessage(),
+                                "Schema Creation Failed",
+                                e.getMessage(),
                                 new FontIcon(MaterialDesignD.DATABASE_REMOVE)
                         );
                         customNotification.showNotification();

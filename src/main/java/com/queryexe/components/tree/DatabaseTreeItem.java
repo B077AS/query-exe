@@ -46,7 +46,7 @@ public class DatabaseTreeItem extends CustomTreeItem {
                 DatabaseConnection.getInstance().getConnectionObject().useDatabase(this.titleLabel.getText());
                 App.getDatabaseTree().selectDatabase(this.titleLabel.getText());
             } catch (SQLException e) {
-                CustomNotification customNotification = new CustomNotification("Database selection failed", new FontIcon(MaterialDesignD.DATABASE_ALERT));
+                CustomNotification customNotification = new CustomNotification("Selection Failed", "The database could not be selected.", new FontIcon(MaterialDesignD.DATABASE_ALERT));
                 customNotification.showNotification();
             }
         });
@@ -108,7 +108,8 @@ public class DatabaseTreeItem extends CustomTreeItem {
                         App.getDatabaseTree().initialize();
                         String entityType = isDatabase ? "Database" : "Schema";
                         CustomNotification customNotification = new CustomNotification(
-                                entityType + " dropped successfully",
+                                entityType + " Dropped",
+                                "The " + entityType.toLowerCase() + " was dropped successfully.",
                                 new FontIcon(MaterialDesignD.DATABASE_CHECK)
                         );
                         customNotification.showNotification();
@@ -117,7 +118,8 @@ public class DatabaseTreeItem extends CustomTreeItem {
                     Platform.runLater(() -> {
                         String entityType = isDatabase ? "Database" : "Schema";
                         CustomNotification customNotification = new CustomNotification(
-                                entityType + " drop failed!\n" + e.getMessage(),
+                                entityType + " Drop Failed",
+                                e.getMessage(),
                                 new FontIcon(MaterialDesignD.DATABASE_REMOVE)
                         );
                         customNotification.showNotification();

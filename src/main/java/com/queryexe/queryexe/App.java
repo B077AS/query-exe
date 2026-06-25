@@ -35,10 +35,10 @@ import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import atlantafx.base.controls.ModalPane;
 
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Stack;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -55,11 +55,11 @@ public class App extends Application {
     private static ConnectionsPane connectionsPane;
     private static SplitPane codeAndResultSplitPane;
     private static ModalPane modalPane;
-    private static ModalPane secondaryModalPane;
+    private static StackPane mainStackPane;
     private static VBox headerBox;
     private static CustomTree customTree;
     private static Map<ConnectionObject, CustomTree> databaseTreeCache = new HashMap<>();
-    private static Stack<Node> modalStack = new Stack<>();
+    private static final ArrayDeque<ModalPane> modalPaneStack = new ArrayDeque<>();
 
     @Override
     public void start(Stage stage) {
@@ -92,16 +92,14 @@ public class App extends Application {
 
         modalPane = new ModalPane();
         modalPane.setPersistent(false);
-
-        secondaryModalPane = new ModalPane();
-        secondaryModalPane.setPersistent(false);
+        setupTransitions(modalPane);
 
         connectionsPane = new ConnectionsPane();
         stackPane.getChildren().add(connectionsPane);
         borderPane.setCenter(stackPane);
 
-        StackPane mainStackPane = new StackPane();
-        mainStackPane.getChildren().addAll(borderPane, modalPane, secondaryModalPane);
+        mainStackPane = new StackPane();
+        mainStackPane.getChildren().addAll(borderPane, modalPane);
 
         scene = new Scene(mainStackPane, 1100, 500);
         Application.setUserAgentStylesheet(App.class.getClassLoader().getResource("dracula.css").toExternalForm());
@@ -257,43 +255,76 @@ public class App extends Application {
         databaseTreeCache.remove(connection);
     }
 
+    /**
+     * Displays a modal. If a modal is already showing, this stacks a new
+     * {@link ModalPane} overlay on top (with a lower z-order than the previous
+     * one) so modals can be layered indefinitely. Each overlay removes itself
+     * from the stack and the scene when it is hidden.
+     */
     public static void showModal(Node modal) {
-        modalPane.setInTransitionFactory(node -> {
-            ScaleTransition scale = new ScaleTransition(Duration.millis(150), node);
-            scale.setFromX(0.92);
-            scale.setFromY(0.92);
-            scale.setToX(1.0);
-            scale.setToY(1.0);
-            scale.setInterpolator(Interpolator.EASE_OUT);
-
-            FadeTransition fade = new FadeTransition(Duration.millis(150), node);
-            fade.setFromValue(0.0);
-            fade.setToValue(1.0);
-            fade.setInterpolator(Interpolator.EASE_OUT);
-
-            return new ParallelTransition(scale, fade);
-        });
-
-        modalPane.setOutTransitionFactory(node -> {
-            FadeTransition fade = new FadeTransition(Duration.millis(80), node);
-            fade.setFromValue(1.0);
-            fade.setToValue(0.0);
-            fade.setInterpolator(Interpolator.EASE_IN);
-            return fade;
-        });
+        if (modalPane.isDisplay() || !modalPaneStack.isEmpty()) {
+            int nextOrder = ModalPane.Z_FRONT - (modalPaneStack.size() + 1) * 5;
+            ModalPane overlay = new ModalPane(nextOrder);
+            overlay.setPersistent(false);
+            setupTransitions(overlay);
+            overlay.displayProperty().addListener((obs, was, now) -> {
+                if (!now) {
+                    modalPaneStack.remove(overlay);
+                    mainStackPane.getChildren().remove(overlay);
+                }
+            });
+            mainStackPane.getChildren().add(overlay);
+            overlay.applyCss();
+            modalPaneStack.push(overlay);
+            overlay.setContent(modal);
+            modal.applyCss();
+            Platform.runLater(() -> {
+                overlay.setDisplay(true);
+                modal.requestFocus();
+            });
+            return;
+        }
 
         modalPane.setContent(modal);
         modal.applyCss();
-
         Platform.runLater(() -> {
             modalPane.setDisplay(true);
             modal.requestFocus();
-            modalStack.push(modal);
         });
     }
 
+    /**
+     * Kept for source compatibility. Stacking is now automatic, so this simply
+     * delegates to {@link #showModal(Node)}.
+     */
     public static void showModalOnTop(Node modal) {
-        secondaryModalPane.setInTransitionFactory(node -> {
+        showModal(modal);
+    }
+
+    /** Closes the top-most modal (a stacked overlay if present, otherwise the base modal). */
+    public static void closeModal() {
+        if (!modalPaneStack.isEmpty()) {
+            modalPaneStack.peek().hide(true);
+        } else {
+            modalPane.hide(true);
+        }
+    }
+
+    /** Closes every open modal, from the top of the stack down to the base modal. */
+    public static void closeAllModals() {
+        while (!modalPaneStack.isEmpty()) {
+            modalPaneStack.pop().hide(true);
+        }
+        modalPane.hide(true);
+    }
+
+    /** The top-most modal pane currently in use (a stacked overlay, or the base pane). */
+    public static ModalPane getTopModalPane() {
+        return modalPaneStack.isEmpty() ? modalPane : modalPaneStack.peek();
+    }
+
+    private static void setupTransitions(ModalPane pane) {
+        pane.setInTransitionFactory(node -> {
             ScaleTransition scale = new ScaleTransition(Duration.millis(150), node);
             scale.setFromX(0.92);
             scale.setFromY(0.92);
@@ -308,49 +339,13 @@ public class App extends Application {
 
             return new ParallelTransition(scale, fade);
         });
-
-        secondaryModalPane.setOutTransitionFactory(node -> {
+        pane.setOutTransitionFactory(node -> {
             FadeTransition fade = new FadeTransition(Duration.millis(80), node);
             fade.setFromValue(1.0);
             fade.setToValue(0.0);
             fade.setInterpolator(Interpolator.EASE_IN);
             return fade;
         });
-
-        secondaryModalPane.setContent(modal);
-        modal.applyCss();
-
-        Platform.runLater(() -> {
-            secondaryModalPane.setDisplay(true);
-            modal.requestFocus();
-            modalStack.push(modal);
-        });
-    }
-
-    public static void closeTopModal() {
-        if (!modalStack.isEmpty()) {
-            Node topModal = modalStack.pop();
-
-            if (secondaryModalPane.getContent() == topModal) {
-                secondaryModalPane.hide(true);
-            } else if (modalPane.getContent() == topModal) {
-                modalPane.hide(true);
-            }
-        }
-    }
-
-    public static void closeAllModals() {
-        modalStack.clear();
-        secondaryModalPane.hide(true);
-        modalPane.hide(true);
-    }
-
-    public static void closeModal() {
-        if (!modalStack.isEmpty()) {
-            closeTopModal();
-        } else {
-            modalPane.hide(true);
-        }
     }
 
     public static void closeConnection() {
@@ -380,20 +375,8 @@ public class App extends Application {
         }
     }
 
-    public static ModalPane getSecondaryModalPane() {
-        return secondaryModalPane;
-    }
-
     public static ConnectionsPane getConnectionsPane() {
         return connectionsPane;
-    }
-
-    public static boolean isModalShowing() {
-        return !modalStack.isEmpty();
-    }
-
-    public static int getModalStackSize() {
-        return modalStack.size();
     }
 
     public static StackPane getStackPane() {

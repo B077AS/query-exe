@@ -36,7 +36,7 @@ public class RootTreeItem extends CustomTreeItem {
                         });
                     } catch (Exception e) {
                         Platform.runLater(() -> {
-                            CustomNotification customNotification = new CustomNotification("Database creation failed", new FontIcon(MaterialDesignD.DATABASE_ALERT));
+                            CustomNotification customNotification = new CustomNotification("Creation Failed", "The database could not be created.", new FontIcon(MaterialDesignD.DATABASE_ALERT));
                             customNotification.showNotification();
                         });
                     } finally {
@@ -68,7 +68,8 @@ public class RootTreeItem extends CustomTreeItem {
                         App.getDatabaseTree().initialize();
                         String entityType = isDatabase ? "Database" : "Schema";
                         CustomNotification customNotification = new CustomNotification(
-                                entityType + " created successfully",
+                                entityType + " Created",
+                                "The " + entityType.toLowerCase() + " was created successfully.",
                                 new FontIcon(MaterialDesignD.DATABASE_CHECK)
                         );
                         customNotification.showNotification();
@@ -77,7 +78,8 @@ public class RootTreeItem extends CustomTreeItem {
                     Platform.runLater(() -> {
                         String entityType = isDatabase ? "Database" : "Schema";
                         CustomNotification customNotification = new CustomNotification(
-                                entityType + " creation failed!\n" + e.getMessage(),
+                                entityType + " Creation Failed",
+                                e.getMessage(),
                                 new FontIcon(MaterialDesignD.DATABASE_REMOVE)
                         );
                         customNotification.showNotification();
