@@ -3,7 +3,6 @@ package com.queryexe.components.tree;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
@@ -19,6 +18,7 @@ import com.queryexe.components.modals.ConfirmationModal;
 import com.queryexe.components.modals.CreateTableModal;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 
@@ -99,37 +99,32 @@ public class DatabaseTreeItem extends CustomTreeItem {
     }
 
     public void deleteDatabase(boolean isDatabase) {
-        if (this.executor == null) {
-            executor = Executors.newSingleThreadExecutor();
-            executor.execute(() -> {
-                try {
-                    DatabaseConnection.getInstance().getConnectionObject().deleteDatabase(this.titleLabel.getText());
-                    Platform.runLater(() -> {
-                        App.getDatabaseTree().initialize();
-                        String entityType = isDatabase ? "Database" : "Schema";
-                        CustomNotification customNotification = new CustomNotification(
-                                entityType + " Dropped",
-                                "The " + entityType.toLowerCase() + " was dropped successfully.",
-                                new FontIcon(MaterialDesignD.DATABASE_CHECK)
-                        );
-                        customNotification.showNotification();
-                    });
-                } catch (Exception e) {
-                    Platform.runLater(() -> {
-                        String entityType = isDatabase ? "Database" : "Schema";
-                        CustomNotification customNotification = new CustomNotification(
-                                entityType + " Drop Failed",
-                                e.getMessage(),
-                                new FontIcon(MaterialDesignD.DATABASE_REMOVE)
-                        );
-                        customNotification.showNotification();
-                    });
-                } finally {
-                    executor.shutdown();
-                    executor = null;
-                    Platform.runLater(App::closeModal);
-                }
-            });
-        }
+        Async.run(() -> {
+            try {
+                DatabaseConnection.getInstance().getConnectionObject().deleteDatabase(this.titleLabel.getText());
+                Platform.runLater(() -> {
+                    App.getDatabaseTree().initialize();
+                    String entityType = isDatabase ? "Database" : "Schema";
+                    CustomNotification customNotification = new CustomNotification(
+                            entityType + " Dropped",
+                            "The " + entityType.toLowerCase() + " was dropped successfully.",
+                            new FontIcon(MaterialDesignD.DATABASE_CHECK)
+                    );
+                    customNotification.showNotification();
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    String entityType = isDatabase ? "Database" : "Schema";
+                    CustomNotification customNotification = new CustomNotification(
+                            entityType + " Drop Failed",
+                            e.getMessage(),
+                            new FontIcon(MaterialDesignD.DATABASE_REMOVE)
+                    );
+                    customNotification.showNotification();
+                });
+            } finally {
+                Platform.runLater(App::closeModal);
+            }
+        });
     }
 }

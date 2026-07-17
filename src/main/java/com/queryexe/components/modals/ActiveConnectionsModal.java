@@ -16,9 +16,10 @@ import org.kordamp.ikonli.feather.Feather;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.components.extra.CustomProgressIndicator;
 import com.queryexe.model.connections.ConnectionObject;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
-import com.queryexe.service.SingleExecutorService;
 import com.queryexe.queryexe.App;
+import javafx.concurrent.Task;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -32,6 +33,7 @@ public class ActiveConnectionsModal extends VBox {
     private Label emptyStateLabel;
     private Map<String, HBox> connectionItems;
     private Button closeButton;
+    private Task<Void> reconnectTask;
 
     public ActiveConnectionsModal() {
         this.connectionItems = new HashMap<>();
@@ -283,48 +285,54 @@ public class ActiveConnectionsModal extends VBox {
     }
 
     private void handleReconnect(String connectionId, CustomProgressIndicator progressIndicator, Label statusLabel) {
-        if (!SingleExecutorService.tryStartRunning()) {
+        // One reconnect at a time; it can be relaunched once it finished.
+        if (reconnectTask != null && reconnectTask.isRunning()) {
             return;
         }
 
         progressIndicator.setVisible(true);
         App.getModalPane().setPersistent(true);
 
-        SingleExecutorService.getExecutor().execute(() -> {
-            try {
+        reconnectTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
                 DatabaseConnection.getInstance().reconnect(connectionId);
-
-                Platform.runLater(() -> {
-                    statusLabel.setText("● Connected");
-                    statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-success-emphasis;");
-
-                    CustomNotification notification = new CustomNotification(
-                            "Connection Refreshed",
-                            "The connection was re-established successfully.",
-                            new FontIcon(MaterialDesignL.LAN_CONNECT)
-                    );
-                    notification.showNotificationOnCustomPane((StackPane) this.getParent());
-                });
-            } catch (SQLException e) {
-                Platform.runLater(() -> {
-                    statusLabel.setText("● Disconnected");
-                    statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-danger-emphasis;");
-
-                    CustomNotification notification = new CustomNotification(
-                            "Reconnection Failed",
-                            e.getMessage(),
-                            new FontIcon(MaterialDesignL.LAN_DISCONNECT)
-                    );
-                    notification.showNotificationOnCustomPane((StackPane) this.getParent());
-                });
-            } finally {
-                SingleExecutorService.finishRunning();
-                Platform.runLater(() -> {
-                    progressIndicator.setVisible(false);
-                    App.getModalPane().setPersistent(false);
-                });
+                return null;
             }
+        };
+
+        reconnectTask.setOnSucceeded(event -> {
+            statusLabel.setText("● Connected");
+            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-success-emphasis;");
+
+            CustomNotification notification = new CustomNotification(
+                    "Connection Refreshed",
+                    "The connection was re-established successfully.",
+                    new FontIcon(MaterialDesignL.LAN_CONNECT)
+            );
+            notification.showNotificationOnCustomPane((StackPane) this.getParent());
+            finishReconnect(progressIndicator);
         });
+
+        reconnectTask.setOnFailed(event -> {
+            statusLabel.setText("● Disconnected");
+            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: -color-danger-emphasis;");
+
+            CustomNotification notification = new CustomNotification(
+                    "Reconnection Failed",
+                    reconnectTask.getException().getMessage(),
+                    new FontIcon(MaterialDesignL.LAN_DISCONNECT)
+            );
+            notification.showNotificationOnCustomPane((StackPane) this.getParent());
+            finishReconnect(progressIndicator);
+        });
+
+        Async.run(reconnectTask);
+    }
+
+    private void finishReconnect(CustomProgressIndicator progressIndicator) {
+        progressIndicator.setVisible(false);
+        App.getModalPane().setPersistent(false);
     }
 
     private void handleCloseConnection(String connectionId, HBox listItem) {

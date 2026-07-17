@@ -6,9 +6,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
-import javafx.application.Platform;
+import javafx.concurrent.Task;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -293,74 +292,61 @@ public class QueryService {
     public void runQuery() {
         @SuppressWarnings("unchecked")
         CustomTab<VirtualizedScrollPane<CodeArea>> tab = (CustomTab<VirtualizedScrollPane<CodeArea>>) App.getTabPane().getSelectionModel().getSelectedItem();
-        tab.setLoading();
         @SuppressWarnings("unchecked")
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
+        CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        if (tab.getExecutor() == null) {
-            tab.setExecutor(Executors.newSingleThreadExecutor());
-            tab.getExecutor().execute(() -> {
-                try {
-                    String query = "";
-                    if (!((CodeArea) scroll.getContent()).getSelectedText().isEmpty()) {
-                        query = ((CodeArea) scroll.getContent()).getSelectedText();
-                    } else {
-                        query = ((CodeArea) scroll.getContent()).getText();
-                    }
+        String query = !codeArea.getSelectedText().isEmpty()
+                ? codeArea.getSelectedText()
+                : codeArea.getText();
 
-                    ResultBox customResultTable = new ResultBox(query, tab);
-
-                    Platform.runLater(() -> {
-                        tab.setResultBox(customResultTable);
-                    });
-                } finally {
-                    tab.setCurrentStatement(null);
-                    tab.getExecutor().shutdown();
-                    tab.setExecutor(null);
-                    Platform.runLater(() -> {
-                        tab.stopLoading();
-                    });
-                }
-            });
-        }
+        executeQuery(tab, query);
     }
 
     public void runStatement() {
         @SuppressWarnings("unchecked")
         CustomTab<VirtualizedScrollPane<CodeArea>> tab = (CustomTab<VirtualizedScrollPane<CodeArea>>) App.getTabPane().getSelectionModel().getSelectedItem();
-        tab.setLoading();
-
         @SuppressWarnings("unchecked")
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
         CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        if (tab.getExecutor() == null) {
-            tab.setExecutor(Executors.newSingleThreadExecutor());
-            tab.getExecutor().execute(() -> {
-                try {
-                    String query = extractStatementAtCaret(codeArea);
+        executeQuery(tab, extractStatementAtCaret(codeArea));
+    }
 
-                    if (query == null || query.trim().isEmpty()) {
-                        Platform.runLater(() -> {
-                            tab.stopLoading();
-                        });
-                        return;
-                    }
-
-                    ResultBox customResultTable = new ResultBox(query, tab);
-                    Platform.runLater(() -> {
-                        tab.setResultBox(customResultTable);
-                    });
-                } finally {
-                    tab.setCurrentStatement(null);
-                    tab.getExecutor().shutdown();
-                    tab.setExecutor(null);
-                    Platform.runLater(() -> {
-                        tab.stopLoading();
-                    });
-                }
-            });
+    // One query at a time per tab; other tabs can run their own queries in parallel.
+    private void executeQuery(CustomTab<VirtualizedScrollPane<CodeArea>> tab, String query) {
+        if (tab.isQueryRunning()) {
+            return;
         }
+
+        if (query == null || query.trim().isEmpty()) {
+            return;
+        }
+
+        tab.setLoading();
+
+        Task<ResultBox> queryTask = new Task<>() {
+            @Override
+            protected ResultBox call() {
+                return new ResultBox(query, tab);
+            }
+        };
+
+        queryTask.setOnSucceeded(event -> {
+            tab.setResultBox(queryTask.getValue());
+            finishQuery(tab);
+        });
+        queryTask.setOnFailed(event -> finishQuery(tab));
+        queryTask.setOnCancelled(event -> finishQuery(tab));
+
+        tab.setRunningQueryTask(queryTask);
+        Async.run(queryTask);
+    }
+
+    private void finishQuery(CustomTab<VirtualizedScrollPane<CodeArea>> tab) {
+        tab.setCurrentStatement(null);
+        tab.setRunningQueryTask(null);
+        tab.stopLoading();
     }
 
     private String extractStatementAtCaret(CodeArea codeArea) {

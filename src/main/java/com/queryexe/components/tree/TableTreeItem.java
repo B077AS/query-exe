@@ -2,7 +2,6 @@ package com.queryexe.components.tree;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.concurrent.Executors;
 
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
@@ -23,6 +22,7 @@ import com.queryexe.components.modals.CreateTableModal;
 import com.queryexe.components.modals.TablePropertiesModal;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 
@@ -58,22 +58,17 @@ public class TableTreeItem extends CustomTreeItem {
             queryTab.setLoading();
             App.getTabPane().getTabs().add(queryTab);
 
-            if (this.executor == null) {
-                executor = Executors.newSingleThreadExecutor();
-                executor.execute(() -> {
-                    try {
-                        String script = DatabaseConnection.getInstance().getConnectionObject()
-                                .generateInsertScript(this.titleLabel.getText(), this.databaseName);
-                        Platform.runLater(() -> codeArea.replaceText(script));
-                    } catch (Exception e) {
-                        Platform.runLater(() -> codeArea.replaceText("-- ERROR: " + e.getMessage()));
-                    } finally {
-                        executor.shutdown();
-                        executor = null;
-                        Platform.runLater(queryTab::stopLoading);
-                    }
-                });
-            }
+            Async.run(() -> {
+                try {
+                    String script = DatabaseConnection.getInstance().getConnectionObject()
+                            .generateInsertScript(this.titleLabel.getText(), this.databaseName);
+                    Platform.runLater(() -> codeArea.replaceText(script));
+                } catch (Exception e) {
+                    Platform.runLater(() -> codeArea.replaceText("-- ERROR: " + e.getMessage()));
+                } finally {
+                    Platform.runLater(queryTab::stopLoading);
+                }
+            });
         });
 
         MenuItem createScriptMenuItem = new MenuItem("Create Script");
@@ -85,22 +80,17 @@ public class TableTreeItem extends CustomTreeItem {
             queryTab.setLoading();
             App.getTabPane().getTabs().add(queryTab);
 
-            if (this.executor == null) {
-                executor = Executors.newSingleThreadExecutor();
-                executor.execute(() -> {
-                    try {
-                        String script = DatabaseConnection.getInstance().getConnectionObject()
-                                .generateCreateScript(this.titleLabel.getText(), this.databaseName);
-                        Platform.runLater(() -> codeArea.replaceText(script));
-                    } catch (Exception e) {
-                        Platform.runLater(() -> codeArea.replaceText("-- ERROR: " + e.getMessage()));
-                    } finally {
-                        executor.shutdown();
-                        executor = null;
-                        Platform.runLater(queryTab::stopLoading);
-                    }
-                });
-            }
+            Async.run(() -> {
+                try {
+                    String script = DatabaseConnection.getInstance().getConnectionObject()
+                            .generateCreateScript(this.titleLabel.getText(), this.databaseName);
+                    Platform.runLater(() -> codeArea.replaceText(script));
+                } catch (Exception e) {
+                    Platform.runLater(() -> codeArea.replaceText("-- ERROR: " + e.getMessage()));
+                } finally {
+                    Platform.runLater(queryTab::stopLoading);
+                }
+            });
         });
 
         MenuItem deleteTableMenuItem = new MenuItem("Delete Table");
@@ -152,30 +142,24 @@ public class TableTreeItem extends CustomTreeItem {
     }
 
     public void deleteTable() {
-        if (this.executor == null) {
-            executor = Executors.newSingleThreadExecutor();
-            executor.execute(() -> {
-                try {
-                    DatabaseConnection.getInstance().getConnectionObject()
-                            .deleteTable(this.databaseName, this.titleLabel.getText());
-                    Platform.runLater(() -> {
-                        DatabaseTreeItem databaseItem = (DatabaseTreeItem) this.getParent().getParent();
-                        databaseItem.refreshDatabase();
-                        CustomNotification customNotification = new CustomNotification("Table Dropped", "The table was dropped successfully.", new FontIcon(MaterialDesignT.TABLE_CHECK));
-                        customNotification.showNotification();
-                        App.closeModal();
-                    });
-                } catch (Exception e) {
-                    Platform.runLater(() -> {
-                        CustomNotification customNotification = new CustomNotification("Drop Failed", e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
-                        customNotification.showNotification();
-                        App.closeModal();
-                    });
-                } finally {
-                    executor.shutdown();
-                    executor = null;
-                }
-            });
-        }
+        Async.run(() -> {
+            try {
+                DatabaseConnection.getInstance().getConnectionObject()
+                        .deleteTable(this.databaseName, this.titleLabel.getText());
+                Platform.runLater(() -> {
+                    DatabaseTreeItem databaseItem = (DatabaseTreeItem) this.getParent().getParent();
+                    databaseItem.refreshDatabase();
+                    CustomNotification customNotification = new CustomNotification("Table Dropped", "The table was dropped successfully.", new FontIcon(MaterialDesignT.TABLE_CHECK));
+                    customNotification.showNotification();
+                    App.closeModal();
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    CustomNotification customNotification = new CustomNotification("Drop Failed", e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                    customNotification.showNotification();
+                    App.closeModal();
+                });
+            }
+        });
     }
 }

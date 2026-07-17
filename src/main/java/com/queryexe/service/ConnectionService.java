@@ -2,6 +2,7 @@ package com.queryexe.service;
 
 import com.google.gson.*;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.scene.layout.StackPane;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
@@ -31,6 +32,7 @@ import java.util.function.Consumer;
 public class ConnectionService {
 
     private static volatile ConnectionService instance;
+    private Task<Void> connectTask;
     private final Path connectionsPath;
     private final Gson gson;
     private final SecretStore<StoredCredential> credentialStore;
@@ -192,7 +194,8 @@ public class ConnectionService {
 
     private void attemptConnection(ConnectionObject connection, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError, boolean isUserInserted) {
 
-        if (!SingleExecutorService.tryStartRunning()) {
+        // Only one connection attempt at a time; it can be relaunched once it finished.
+        if (connectTask != null && connectTask.isRunning()) {
             return;
         }
 
@@ -200,21 +203,34 @@ public class ConnectionService {
             Platform.runLater(onConnectionStart);
         }
 
-        SingleExecutorService.getExecutor().execute(() -> {
-            try {
+        connectTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
                 DatabaseConnection.getInstance().initialize(connection);
+                // The success callback stays on the background thread: callers build
+                // the database tree here, which performs blocking JDBC metadata calls.
                 if (onSuccess != null) {
                     onSuccess.run();
                 }
-            } catch (Exception e) {
-                handleConnectionError(e, connection, isUserInserted, onConnectionStart, onConnectionEnd, onSuccess, onError);
-            } finally {
-                SingleExecutorService.finishRunning();
-                if (onConnectionEnd != null) {
-                    Platform.runLater(onConnectionEnd);
-                }
+                return null;
+            }
+        };
+
+        connectTask.setOnFailed(event -> {
+            Throwable e = connectTask.getException();
+            handleConnectionError(e instanceof Exception ex ? ex : new Exception(e),
+                    connection, isUserInserted, onConnectionStart, onConnectionEnd, onSuccess, onError);
+            if (onConnectionEnd != null) {
+                onConnectionEnd.run();
             }
         });
+        connectTask.setOnSucceeded(event -> {
+            if (onConnectionEnd != null) {
+                onConnectionEnd.run();
+            }
+        });
+
+        Async.run(connectTask);
     }
 
     private void handleConnectionError(Exception e, ConnectionObject connection, boolean isUserInserted, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError) {

@@ -9,13 +9,11 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import com.queryexe.components.extra.CustomNotification;
 
 import java.sql.SQLException;
-import java.util.concurrent.ExecutorService;
 
 public class CustomTabProgressIndicator extends StackPane {
 
     private ProgressIndicator progressIndicator;
     private FontIcon cancelButton;
-    private ExecutorService executor;
     private CustomTab<?> parentTab;
 
     public CustomTabProgressIndicator(CustomTab<?> parentTab) {
@@ -38,7 +36,9 @@ public class CustomTabProgressIndicator extends StackPane {
                     notification.showNotification();
                 }
             }
-            this.executor.shutdownNow();
+            if (this.parentTab != null) {
+                this.parentTab.cancelRunningQuery();
+            }
         });
 
         this.getChildren().addAll(progressIndicator, cancelButton);
@@ -52,9 +52,5 @@ public class CustomTabProgressIndicator extends StackPane {
             progressIndicator.setVisible(true);
             cancelButton.setVisible(false);
         });
-    }
-
-    public void setExecutor(ExecutorService executor) {
-        this.executor = executor;
     }
 }

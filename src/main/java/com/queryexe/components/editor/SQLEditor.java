@@ -6,20 +6,21 @@ import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
 import javafx.application.Platform;
+import javafx.concurrent.Service;
+import javafx.concurrent.Task;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.service.QueryService;
 import com.queryexe.queryexe.App;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,17 +36,60 @@ public class SQLEditor extends CodeArea {
     private AutocompletePopup autocompletePopup;
     private final boolean[] isAutocompleteActive = {false};
     private final long[] lastUpdateTime = {0};
-    private ExecutorService suggestionExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r);
-        thread.setDaemon(true);
-        return thread;
-    });
+
+    // Restartable suggestion lookup: a new keystroke cancels the previous
+    // computation, so only suggestions for the latest word reach the popup.
+    private String suggestionWord = "";
+    private boolean suggestionRequestedManually;
+    private final Service<List<String>> suggestionService = new Service<>() {
+        @Override
+        protected Task<List<String>> createTask() {
+            String word = suggestionWord;
+            return new Task<>() {
+                @Override
+                protected List<String> call() {
+                    return getSuggestions(word);
+                }
+            };
+        }
+    };
 
     public SQLEditor() {
         super();
+        setupSuggestionService();
         initializePatterns();
         initializeEditor();
         setupEventHandlers();
+    }
+
+    private void setupSuggestionService() {
+        suggestionService.setExecutor(Async.VIRTUAL_EXECUTOR);
+        suggestionService.setOnSucceeded(event -> {
+            List<String> suggestions = suggestionService.getValue();
+            if (suggestionRequestedManually) {
+                if (!suggestions.isEmpty()) {
+                    Optional<Bounds> caretBounds = this.getCaretBounds();
+                    if (caretBounds.isPresent()) {
+                        Bounds bounds = caretBounds.get();
+                        autocompletePopup.show(suggestions, bounds.getMinX(), bounds.getMaxY() + 5);
+                        isAutocompleteActive[0] = true;
+                    }
+                }
+            } else if (isAutocompleteActive[0]) {
+                if (suggestions.isEmpty()) {
+                    autocompletePopup.hide();
+                    isAutocompleteActive[0] = false;
+                } else {
+                    autocompletePopup.updateSuggestions(suggestions);
+                }
+            }
+        });
+    }
+
+    private void requestSuggestions(String word, boolean manual) {
+        suggestionWord = word;
+        suggestionRequestedManually = manual;
+        suggestionService.restart();
     }
 
     private void initializePatterns() {
@@ -95,19 +139,7 @@ public class SQLEditor extends CodeArea {
                 return;
             }
 
-            suggestionExecutor.submit(() -> {
-                List<String> suggestions = getSuggestions(currentWord);
-                Platform.runLater(() -> {
-                    if (isAutocompleteActive[0]) {
-                        if (suggestions.isEmpty()) {
-                            autocompletePopup.hide();
-                            isAutocompleteActive[0] = false;
-                        } else {
-                            autocompletePopup.updateSuggestions(suggestions);
-                        }
-                    }
-                });
-            });
+            requestSuggestions(currentWord, false);
         });
 
         // Keyboard event handler
@@ -149,21 +181,7 @@ public class SQLEditor extends CodeArea {
 
     private void handleCtrlSpace(KeyEvent event) {
         event.consume();
-        String currentWord = getCurrentWord();
-
-        suggestionExecutor.submit(() -> {
-            List<String> suggestions = getSuggestions(currentWord);
-            Platform.runLater(() -> {
-                if (!suggestions.isEmpty()) {
-                    Optional<Bounds> caretBounds = this.getCaretBounds();
-                    if (caretBounds.isPresent()) {
-                        Bounds bounds = caretBounds.get();
-                        autocompletePopup.show(suggestions, bounds.getMinX(), bounds.getMaxY() + 5);
-                        isAutocompleteActive[0] = true;
-                    }
-                }
-            });
-        });
+        requestSuggestions(getCurrentWord(), true);
     }
 
     private void handleCtrlF(KeyEvent event) {
@@ -559,10 +577,9 @@ public class SQLEditor extends CodeArea {
     }
 
     public void shutdown() {
-        suggestionExecutor.shutdownNow();
+        suggestionService.cancel();
         if (findPopup != null && findPopup.isShowing()) {
             findPopup.hide();
         }
-        suggestionExecutor=null;
     }
 }

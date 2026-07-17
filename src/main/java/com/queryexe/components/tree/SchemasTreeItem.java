@@ -1,7 +1,5 @@
 package com.queryexe.components.tree;
 
-import java.util.concurrent.Executors;
-
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
 import javafx.application.Platform;
@@ -9,6 +7,7 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.components.modals.CreateDatabaseModal;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 
@@ -24,26 +23,9 @@ public class SchemasTreeItem extends CustomTreeItem {
 
         MenuItem createSchema = new MenuItem("Create Schema");
         createSchema.setOnAction(event -> {
-            if (this.executor == null) {
-                executor = Executors.newSingleThreadExecutor();
-                executor.execute(() -> {
-                    try {
-                        Platform.runLater(() -> {
-                            App.showModal(new CreateDatabaseModal(dbName -> {
-                                createSchema(dbName);
-                            }, false));
-                        });
-                    } catch (Exception e) {
-                        Platform.runLater(() -> {
-                            CustomNotification customNotification = new CustomNotification("Creation Failed", "The schema could not be created.", new FontIcon(MaterialDesignD.DATABASE_ALERT));
-                            customNotification.showNotification();
-                        });
-                    } finally {
-                        executor.shutdown();
-                        executor = null;
-                    }
-                });
-            }
+            App.showModal(new CreateDatabaseModal(dbName -> {
+                createSchema(dbName);
+            }, false));
         });
 
         MenuItem refreshSchemasMenuItem = new MenuItem("Refresh");
@@ -53,35 +35,30 @@ public class SchemasTreeItem extends CustomTreeItem {
     }
 
     public void createSchema(String schemaName) {
-        if (this.executor == null) {
-            executor = Executors.newSingleThreadExecutor();
-            executor.execute(() -> {
-                try {
-                    DatabaseConnection.getInstance().getConnectionObject().createDatabase(schemaName);
-                    Platform.runLater(() -> {
-                        App.getDatabaseTree().initialize();
-                        CustomNotification customNotification = new CustomNotification(
-                                "Schema Created",
-                                "The schema was created successfully.",
-                                new FontIcon(MaterialDesignD.DATABASE_CHECK)
-                        );
-                        customNotification.showNotification();
-                    });
-                } catch (Exception e) {
-                    Platform.runLater(() -> {
-                        CustomNotification customNotification = new CustomNotification(
-                                "Schema Creation Failed",
-                                e.getMessage(),
-                                new FontIcon(MaterialDesignD.DATABASE_REMOVE)
-                        );
-                        customNotification.showNotification();
-                    });
-                } finally {
-                    executor.shutdown();
-                    executor = null;
-                    Platform.runLater(App::closeModal);
-                }
-            });
-        }
+        Async.run(() -> {
+            try {
+                DatabaseConnection.getInstance().getConnectionObject().createDatabase(schemaName);
+                Platform.runLater(() -> {
+                    App.getDatabaseTree().initialize();
+                    CustomNotification customNotification = new CustomNotification(
+                            "Schema Created",
+                            "The schema was created successfully.",
+                            new FontIcon(MaterialDesignD.DATABASE_CHECK)
+                    );
+                    customNotification.showNotification();
+                });
+            } catch (Exception e) {
+                Platform.runLater(() -> {
+                    CustomNotification customNotification = new CustomNotification(
+                            "Schema Creation Failed",
+                            e.getMessage(),
+                            new FontIcon(MaterialDesignD.DATABASE_REMOVE)
+                    );
+                    customNotification.showNotification();
+                });
+            } finally {
+                Platform.runLater(App::closeModal);
+            }
+        });
     }
 }

@@ -7,10 +7,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
@@ -23,6 +19,8 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
 import atlantafx.base.theme.Styles;
 import javafx.application.Platform;
+import javafx.concurrent.Service;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -42,6 +40,7 @@ import javafx.scene.layout.VBox;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.connections.PostgresConnection;
@@ -62,11 +61,28 @@ public class CustomTree extends VBox {
     private boolean isUsersViewActive = false;
     private DatabaseStructureCache structureCache;
 
-    private ExecutorService searchExecutor;
-    private AtomicReference<Future<?>> currentSearchTask = new AtomicReference<>(null);
     private ProgressIndicator searchProgress;
     private Button closeSearchButton;
     private StackPane searchControlStack;
+
+    // Restartable search: every restart() cancels the previous filtering task,
+    // so only the latest search text ever reaches the tree.
+    private boolean searchTargetIsUsers;
+    private final Service<TreeItem<String>> searchService = new Service<>() {
+        @Override
+        protected Task<TreeItem<String>> createTask() {
+            String searchText = searchField.getText().trim().toLowerCase();
+            searchTargetIsUsers = isUsersViewActive;
+            TreeItem<String> root = searchTargetIsUsers ? originalUsersRootItem : originalRootItem;
+
+            return new Task<>() {
+                @Override
+                protected TreeItem<String> call() {
+                    return createFilteredTree(root, searchText, this);
+                }
+            };
+        }
+    };
 
     public static class DatabaseStructureCache {
         private Map<String, LinkedHashMap<String, ArrayList<ColumnData>>> postgresSchemas = new LinkedHashMap<>();
@@ -98,7 +114,25 @@ public class CustomTree extends VBox {
     }
 
     public CustomTree() {
+        setupSearchService();
         initialize();
+    }
+
+    private void setupSearchService() {
+        searchService.setExecutor(Async.VIRTUAL_EXECUTOR);
+        searchService.setOnSucceeded(event -> {
+            TreeItem<String> filteredRoot = searchService.getValue();
+            if (filteredRoot != null) {
+                if (searchTargetIsUsers) {
+                    usersTree.setRoot(filteredRoot);
+                } else {
+                    databaseTree.setRoot(filteredRoot);
+                }
+                expandFilteredTree(filteredRoot);
+            } else {
+                clearFilter();
+            }
+        });
     }
 
     public void initialize() {
@@ -271,9 +305,9 @@ public class CustomTree extends VBox {
             @Override
             public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                 if (newValue != null && !newValue.trim().isEmpty()) {
-                    performAsyncSearch(newValue.trim(), isUsersViewActive);
+                    searchService.restart();
                 } else {
-                    cancelCurrentSearch();
+                    searchService.cancel();
                     clearFilter();
                 }
             }
@@ -284,76 +318,6 @@ public class CustomTree extends VBox {
                 hideSearchField();
             }
         });
-    }
-
-    private void performAsyncSearch(String searchText, boolean isUsers) {
-        cancelCurrentSearch();
-
-        Platform.runLater(() -> {
-            searchProgress.setVisible(true);
-            closeSearchButton.setVisible(false);
-        });
-
-        if (searchExecutor == null || searchExecutor.isShutdown()) {
-            searchExecutor = Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r);
-                t.setDaemon(true);
-                t.setName("TreeSearchThread");
-                return t;
-            });
-        }
-
-        Future<?> task = searchExecutor.submit(() -> {
-            try {
-                TreeItem<String> filteredRoot;
-                if (isUsers) {
-                    filteredRoot = createFilteredUsersTree(originalUsersRootItem, searchText.toLowerCase());
-                } else {
-                    filteredRoot = createFilteredTree(originalRootItem, searchText.toLowerCase());
-                }
-
-                Platform.runLater(() -> {
-                    if (!Thread.currentThread().isInterrupted()) {
-                        if (filteredRoot != null) {
-                            if (isUsers) {
-                                usersTree.setRoot(filteredRoot);
-                            } else {
-                                databaseTree.setRoot(filteredRoot);
-                            }
-                            expandFilteredTree(filteredRoot);
-                        } else {
-                            clearFilter();
-                        }
-                        searchProgress.setVisible(false);
-                        closeSearchButton.setVisible(true);
-                    }
-                });
-            } catch (Exception e) {
-                if (!Thread.currentThread().isInterrupted()) {
-                    Platform.runLater(() -> {
-                        searchProgress.setVisible(false);
-                        closeSearchButton.setVisible(true);
-                    });
-                }
-            }
-        });
-
-        currentSearchTask.set(task);
-    }
-
-    private void cancelCurrentSearch() {
-        Future<?> task = currentSearchTask.getAndSet(null);
-        if (task != null && !task.isDone()) {
-            task.cancel(true);
-        }
-    }
-
-    private void shutdownSearchExecutor() {
-        cancelCurrentSearch();
-        if (searchExecutor != null && !searchExecutor.isShutdown()) {
-            searchExecutor.shutdownNow();
-            searchExecutor = null;
-        }
     }
 
     private HBox createSearchHeaderBox() {
@@ -369,14 +333,14 @@ public class CustomTree extends VBox {
         searchProgress = new ProgressIndicator();
         searchProgress.setMinSize(20, 20);
         searchProgress.setMaxSize(20, 20);
-        searchProgress.setVisible(false);
+        searchProgress.visibleProperty().bind(searchService.runningProperty());
 
         closeSearchButton = new Button();
         closeSearchButton.setGraphic(new FontIcon(org.kordamp.ikonli.materialdesign2.MaterialDesignC.CLOSE));
         closeSearchButton.getStyleClass().addAll(Styles.FLAT);
         closeSearchButton.setPadding(new Insets(5, 5, 5, 5));
         closeSearchButton.setOnAction(event -> hideSearchField());
-        closeSearchButton.setVisible(true);
+        closeSearchButton.visibleProperty().bind(searchService.runningProperty().not());
 
         searchControlStack.getChildren().addAll(searchProgress, closeSearchButton);
 
@@ -419,7 +383,7 @@ public class CustomTree extends VBox {
         refresh.getStyleClass().addAll(Styles.FLAT);
         refresh.setPadding(new Insets(5, 5, 5, 5));
         refresh.setOnAction(event -> {
-            shutdownSearchExecutor();
+            searchService.cancel();
             this.initialize();
         });
 
@@ -509,8 +473,7 @@ public class CustomTree extends VBox {
     private void hideSearchField() {
         if (isSearchMode) {
             searchField.clear();
-            cancelCurrentSearch();
-            shutdownSearchExecutor();
+            searchService.cancel();
             clearFilter();
 
             headerBox.getChildren().clear();
@@ -520,45 +483,18 @@ public class CustomTree extends VBox {
         }
     }
 
-    private TreeItem<String> createFilteredTree(TreeItem<String> original, String searchText) {
-        if (original == null) return null;
+    private TreeItem<String> createFilteredTree(TreeItem<String> original, String searchText, Task<?> task) {
+        if (original == null || task.isCancelled()) return null;
 
-        if (original instanceof CustomTreeItem) {
-            CustomTreeItem customOriginal = (CustomTreeItem) original;
+        if (original instanceof CustomTreeItem customOriginal) {
             String itemText = customOriginal.getTitleLabel().getText().toLowerCase();
 
             CustomTreeItem filteredItem = cloneTreeItemType(customOriginal);
 
             boolean hasMatchingChildren = false;
             for (TreeItem<String> child : original.getChildren()) {
-                TreeItem<String> filteredChild = createFilteredTree(child, searchText);
-                if (filteredChild != null) {
-                    filteredItem.getChildren().add(filteredChild);
-                    hasMatchingChildren = true;
-                }
-            }
-
-            if (itemText.contains(searchText) || hasMatchingChildren) {
-                filteredItem.setExpanded(true);
-                return filteredItem;
-            }
-        }
-
-        return null;
-    }
-
-    private TreeItem<String> createFilteredUsersTree(TreeItem<String> original, String searchText) {
-        if (original == null) return null;
-
-        if (original instanceof CustomTreeItem) {
-            CustomTreeItem customOriginal = (CustomTreeItem) original;
-            String itemText = customOriginal.getTitleLabel().getText().toLowerCase();
-
-            CustomTreeItem filteredItem = cloneTreeItemType(customOriginal);
-
-            boolean hasMatchingChildren = false;
-            for (TreeItem<String> child : original.getChildren()) {
-                TreeItem<String> filteredChild = createFilteredUsersTree(child, searchText);
+                if (task.isCancelled()) return null;
+                TreeItem<String> filteredChild = createFilteredTree(child, searchText, task);
                 if (filteredChild != null) {
                     filteredItem.getChildren().add(filteredChild);
                     hasMatchingChildren = true;

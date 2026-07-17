@@ -1,7 +1,5 @@
 package com.queryexe.components.tree;
 
-import java.util.concurrent.ExecutorService;
-
 import lombok.Getter;
 import lombok.Setter;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -19,7 +17,6 @@ public class CustomTreeItem extends TreeItem<String> {
     protected String databaseName;
     protected FontIcon icon;
     protected ContextMenu contextMenu;
-    protected static ExecutorService executor;
 
     public CustomTreeItem(String name, FontIcon icon) {
         this.icon = icon;

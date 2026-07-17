@@ -18,7 +18,8 @@ import com.queryexe.components.results.ResultBox;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.concurrent.ExecutorService;
+
+import javafx.concurrent.Task;
 
 public class CustomTab<T extends Node> extends Tab {
 
@@ -29,7 +30,7 @@ public class CustomTab<T extends Node> extends Tab {
     private HBox graphicBox;
     private CustomTabProgressIndicator progressIndicator;
     private boolean error = false;
-    private ExecutorService executor;
+    private Task<ResultBox> runningQueryTask;
     private ResultBox resultBox;
     private T content;
     private TabPane tabPane;
@@ -210,13 +211,18 @@ public class CustomTab<T extends Node> extends Tab {
         return tabLabel;
     }
 
-    public void setExecutor(ExecutorService executor) {
-        this.progressIndicator.setExecutor(executor);
-        this.executor = executor;
+    public void setRunningQueryTask(Task<ResultBox> task) {
+        this.runningQueryTask = task;
     }
 
-    public ExecutorService getExecutor() {
-        return executor;
+    public boolean isQueryRunning() {
+        return runningQueryTask != null && runningQueryTask.isRunning();
+    }
+
+    public void cancelRunningQuery() {
+        if (runningQueryTask != null) {
+            runningQueryTask.cancel(true);
+        }
     }
 
     public ConnectionObject getConnectionObject() {
