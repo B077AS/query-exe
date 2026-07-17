@@ -9,7 +9,7 @@ public class TableRowData {
     private final ObservableList<Object> originalData;
     private final ObservableList<String> stringData;
     private boolean isNewRow = false;
-    private int queryIndex = -1;
+    private QueryData pendingInsert;
 
     public TableRowData(ObservableList<Object> originalData, ObservableList<String> stringData) {
         this.originalData = originalData;

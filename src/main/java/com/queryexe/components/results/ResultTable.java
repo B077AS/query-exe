@@ -19,9 +19,12 @@ import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.util.StringConverter;
@@ -39,12 +42,11 @@ public class ResultTable extends TableView<TableRowData> {
     private Runnable onCellUpdate;
     private final int minColumnWidth = 150;
     private static final int MAX_CELL_LENGTH = 200;
-    private Map<String, Integer> rowUpdateQueryIndex = new HashMap<>();
+    private Map<String, QueryData> rowUpdateQueries = new HashMap<>();
     private List<Integer> columnSqlTypes = new ArrayList<>();
 
-    public ResultTable(PreparedStatement preparedStatement, long executionTime, Runnable onCellUpdate) throws SQLException {
+    public ResultTable(PreparedStatement preparedStatement, long executionTime) throws SQLException {
         this.updateQueries = new ArrayList<QueryData>();
-        this.onCellUpdate = onCellUpdate;
         this.executionTime = executionTime;
 
         Styles.toggleStyleClass(this, Styles.BORDERED);
@@ -110,6 +112,13 @@ public class ResultTable extends TableView<TableRowData> {
                         }) {
 
                     private String fullValue;
+                    private TextField editorField;
+                    private boolean escapePressed;
+                    // Captured at startEdit: when a cell is recycled while editing
+                    // (scrolling), updateItem swaps in another row's data before
+                    // cancelEdit runs, so reading them there would hit the wrong row.
+                    private TableRowData editingRowData;
+                    private String editingOldValue;
 
                     @Override
                     public void updateItem(String item, boolean empty) {
@@ -156,10 +165,45 @@ public class ResultTable extends TableView<TableRowData> {
                         super.startEdit();
                         setText(null);
                         setStyle("");
+
+                        escapePressed = false;
+                        if (isEditing()) {
+                            editingRowData = getTableRow() != null ? getTableRow().getItem() : null;
+                            editingOldValue = getItem();
+                        }
+                        if (isEditing() && getGraphic() instanceof TextField textField && textField != editorField) {
+                            // TextFieldTableCell reuses one text field per cell, so the
+                            // listeners are attached exactly once.
+                            editorField = textField;
+                            textField.addEventFilter(KeyEvent.KEY_PRESSED, keyEvent -> {
+                                if (keyEvent.getCode() == KeyCode.ESCAPE) {
+                                    escapePressed = true;
+                                }
+                            });
+                            // Close the edit when the editor loses focus (e.g. a click
+                            // outside the table). Routed through cancelEdit rather than
+                            // commitEdit: cancelEdit reliably removes the text field, and
+                            // our override below still logs the typed value.
+                            textField.focusedProperty().addListener((obs, hadFocus, hasFocus) -> {
+                                if (!hasFocus && isEditing()) {
+                                    cancelEdit();
+                                }
+                            });
+                        }
                     }
 
                     @Override
                     public void cancelEdit() {
+                        // An edit interrupted by anything other than ESC (clicking another
+                        // cell, scrolling, ...) still counts: log the typed value as a
+                        // pending change instead of discarding it.
+                        boolean logPendingEdit = !escapePressed && editorField != null && isEditing();
+                        String editedValue = logPendingEdit ? editorField.getText() : null;
+                        String previousValue = editingOldValue;
+                        TableRowData rowData = editingRowData;
+                        editingRowData = null;
+                        editingOldValue = null;
+
                         super.cancelEdit();
                         String item = getItem();
                         if (item == null) {
@@ -171,6 +215,11 @@ public class ResultTable extends TableView<TableRowData> {
                                     : item;
                             setText(displayText);
                             setStyle("");
+                        }
+
+                        if (logPendingEdit && rowData != null && !Objects.equals(previousValue, editedValue)
+                                && !isUnchangedNull(previousValue, editedValue)) {
+                            updateDatabaseRow(rowData, columnOffset, previousValue, editedValue);
                         }
                     }
                 };
@@ -325,6 +374,10 @@ public class ResultTable extends TableView<TableRowData> {
         addTableResizeListener();
     }
 
+    private static boolean isUnchangedNull(String previousValue, String editedValue) {
+        return previousValue == null && (editedValue == null || editedValue.isEmpty());
+    }
+
     private UUID bytesToUUID(byte[] bytes) {
         if (bytes.length != 16) {
             throw new IllegalArgumentException("UUID must be 16 bytes");
@@ -422,6 +475,7 @@ public class ResultTable extends TableView<TableRowData> {
     }
 
     public void updateDatabaseRow(TableRowData rowData, int updatedColumnIndex, String oldValue, String newValue) {
+        Object previousOriginal = rowData.getOriginalData().get(updatedColumnIndex);
         try {
             Object typedValue = convertToOriginalType(updatedColumnIndex, newValue);
 
@@ -429,16 +483,15 @@ public class ResultTable extends TableView<TableRowData> {
             rowData.getOriginalData().set(updatedColumnIndex, typedValue);
 
             if (rowData.isNewRow()) {
-                int queryIndex = rowData.getQueryIndex();
-                QueryData insertQuery = updateQueries.get(queryIndex);
-                insertQuery.getParameters().set(updatedColumnIndex, newValue.isEmpty() ? null : typedValue);
+                // typedValue is already null for null/empty input, which also avoids
+                // the NPE the old newValue.isEmpty() check caused on "Set NULL".
+                QueryData insertQuery = rowData.getPendingInsert();
+                insertQuery.getParameters().set(updatedColumnIndex, typedValue);
             } else {
                 String rowIdentifier = getRowIdentifier(rowData);
+                QueryData existingQuery = rowUpdateQueries.get(rowIdentifier);
 
-                if (rowUpdateQueryIndex.containsKey(rowIdentifier)) {
-                    int queryIndex = rowUpdateQueryIndex.get(rowIdentifier);
-                    QueryData existingQuery = updateQueries.get(queryIndex);
-
+                if (existingQuery != null) {
                     String columnName = this.getColumns().get(updatedColumnIndex).getText();
                     String currentQuery = existingQuery.getQuery();
                     int setIndex = currentQuery.indexOf("SET ") + 4;
@@ -446,7 +499,22 @@ public class ResultTable extends TableView<TableRowData> {
                     String setClause = currentQuery.substring(setIndex, whereIndex);
                     String whereClause = currentQuery.substring(whereIndex);
 
-                    if (!setClause.contains(columnName + " = ?")) {
+                    // Exact match against the SET columns: a contains() check would
+                    // confuse columns whose names are suffixes of one another
+                    // (e.g. "name" matches inside "username = ?").
+                    String[] setColumns = setClause.split(",");
+                    int existingParamIndex = -1;
+                    for (int i = 0; i < setColumns.length; i++) {
+                        String colName = setColumns[i].trim().split(" = ")[0];
+                        if (colName.equals(columnName)) {
+                            existingParamIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (existingParamIndex >= 0) {
+                        existingQuery.getParameters().set(existingParamIndex, typedValue);
+                    } else {
                         setClause += ", " + columnName + " = ?";
 
                         String updatedQuery = String.format("UPDATE %s SET %s%s", tableName, setClause, whereClause);
@@ -455,17 +523,6 @@ public class ResultTable extends TableView<TableRowData> {
                         List<Object> params = existingQuery.getParameters();
                         int whereParamIndex = params.size() - primaryKeyColumns.size();
                         params.add(whereParamIndex, typedValue);
-                    } else {
-                        String[] setColumns = setClause.split(",");
-                        int paramIndex = 0;
-                        for (String setColumn : setColumns) {
-                            String colName = setColumn.trim().split(" = ")[0];
-                            if (colName.equals(columnName)) {
-                                existingQuery.getParameters().set(paramIndex, typedValue);
-                                break;
-                            }
-                            paramIndex++;
-                        }
                     }
                 } else {
                     Map<String, Object> primaryKeyValues = new HashMap<>();
@@ -504,7 +561,7 @@ public class ResultTable extends TableView<TableRowData> {
 
                         QueryData queryInfo = new QueryData(updateQuery, parameters);
                         updateQueries.add(queryInfo);
-                        rowUpdateQueryIndex.put(rowIdentifier, updateQueries.size() - 1);
+                        rowUpdateQueries.put(rowIdentifier, queryInfo);
                     }
                 }
             }
@@ -516,6 +573,7 @@ public class ResultTable extends TableView<TableRowData> {
         } catch (Exception e) {
             e.printStackTrace();
             rowData.getStringData().set(updatedColumnIndex, oldValue);
+            rowData.getOriginalData().set(updatedColumnIndex, previousOriginal);
             this.refresh();
         }
     }
@@ -603,8 +661,7 @@ public class ResultTable extends TableView<TableRowData> {
 
         QueryData queryInfo = new QueryData(insertQuery, parameters);
         updateQueries.add(queryInfo);
-
-        newRow.setQueryIndex(updateQueries.size() - 1);
+        newRow.setPendingInsert(queryInfo);
 
         this.getItems().add(newRow);
 
@@ -658,7 +715,7 @@ public class ResultTable extends TableView<TableRowData> {
 
         QueryData queryInfo = new QueryData(insertQuery, parameters);
         updateQueries.add(queryInfo);
-        newRow.setQueryIndex(updateQueries.size() - 1);
+        newRow.setPendingInsert(queryInfo);
 
         this.getItems().add(newRow);
         this.scrollTo(newRow);
@@ -671,7 +728,38 @@ public class ResultTable extends TableView<TableRowData> {
     }
 
     public void deleteDatabaseRow(int rowIndex) {
-        TableRowData rowData = this.getItems().get(rowIndex);
+        queueRowDeletion(this.getItems().get(rowIndex));
+        this.getItems().remove(rowIndex);
+
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+    }
+
+    public void deleteDatabaseRows(ObservableList<Integer> rows) {
+        List<Integer> sortedRows = new ArrayList<>(rows);
+        sortedRows.sort(Collections.reverseOrder());
+
+        for (Integer row : sortedRows) {
+            queueRowDeletion(this.getItems().get(row));
+            this.getItems().remove(row.intValue());
+        }
+
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+    }
+
+    private void queueRowDeletion(TableRowData rowData) {
+        if (rowData.isNewRow()) {
+            // The row never reached the database: dropping its pending INSERT is
+            // enough. Identity comparison, because two duplicated rows can hold
+            // equal-by-value insert queries.
+            QueryData pendingInsert = rowData.getPendingInsert();
+            updateQueries.removeIf(queryData -> queryData == pendingInsert);
+            return;
+        }
+
         Map<String, Object> primaryKeyValues = new HashMap<>();
         for (String primaryKeyColumn : primaryKeyColumns) {
             int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
@@ -697,52 +785,6 @@ public class ResultTable extends TableView<TableRowData> {
 
         QueryData queryInfo = new QueryData(deleteQuery, parameters);
         updateQueries.add(queryInfo);
-
-        this.getItems().remove(rowIndex);
-
-        if (onCellUpdate != null) {
-            onCellUpdate.run();
-        }
-    }
-
-    public void deleteDatabaseRows(ObservableList<Integer> rows) {
-        List<Integer> sortedRows = new ArrayList<>(rows);
-        sortedRows.sort(Collections.reverseOrder());
-
-        for (Integer row : sortedRows) {
-            TableRowData rowData = this.getItems().get(row);
-            Map<String, Object> primaryKeyValues = new HashMap<>();
-            for (String primaryKeyColumn : primaryKeyColumns) {
-                int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
-                if (pkIndex >= 0) {
-                    primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
-                }
-            }
-
-            StringBuilder whereClause = new StringBuilder();
-            List<Object> parameters = new ArrayList<>();
-
-            boolean isFirst = true;
-            for (Map.Entry<String, Object> entry : primaryKeyValues.entrySet()) {
-                if (!isFirst) {
-                    whereClause.append(" AND ");
-                }
-                whereClause.append(entry.getKey()).append(" = ?");
-                parameters.add(entry.getValue());
-                isFirst = false;
-            }
-
-            String deleteQuery = String.format("DELETE FROM %s WHERE %s", tableName, whereClause.toString());
-
-            QueryData queryInfo = new QueryData(deleteQuery, parameters);
-            updateQueries.add(queryInfo);
-
-            this.getItems().remove(row.intValue());
-        }
-
-        if (onCellUpdate != null) {
-            onCellUpdate.run();
-        }
     }
 
     private int getPrimaryKeyColumnIndex(TableRowData rowData, String primaryKeyColumnName) {
@@ -767,7 +809,7 @@ public class ResultTable extends TableView<TableRowData> {
             this.setItems(restoredData);
 
             this.updateQueries.clear();
-            this.rowUpdateQueryIndex.clear();
+            this.rowUpdateQueries.clear();
             this.refresh();
         });
     }
@@ -813,7 +855,15 @@ public class ResultTable extends TableView<TableRowData> {
 
     public void clearUpdateTracking() {
         this.updateQueries.clear();
-        this.rowUpdateQueryIndex.clear();
+        this.rowUpdateQueries.clear();
+    }
+
+    public boolean hasPendingChanges() {
+        return !updateQueries.isEmpty();
+    }
+
+    public void setOnCellUpdate(Runnable onCellUpdate) {
+        this.onCellUpdate = onCellUpdate;
     }
 
     public String getTableName() {

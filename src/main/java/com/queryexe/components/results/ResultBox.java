@@ -281,10 +281,14 @@ public class ResultBox extends VBox {
                     long executionTime = endTime - startTime;
 
                     if (hasResultSet) {
-                        customTableView = new ResultTable(preparedStatement, executionTime, () -> {
-                            applyButton.setDisable(false);
-                            revertButton.setDisable(false);
+                        ResultTable resultTable = new ResultTable(preparedStatement, executionTime);
+                        resultTable.setOnCellUpdate(() -> {
+                            boolean hasChanges = resultTable.hasPendingChanges();
+                            applyButton.setDisable(!hasChanges);
+                            revertButton.setDisable(!hasChanges);
+                            rowsLabel.setText("Rows: " + resultTable.getItems().size());
                         });
+                        customTableView = resultTable;
 
                         if (customTableView != null) {
                             CustomTab<ResultTable> tableTab = new CustomTab<>(customTableView, tabPane);
