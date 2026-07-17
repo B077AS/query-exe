@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -25,6 +27,7 @@ import java.io.InputStream;
 import java.time.Year;
 import java.util.Properties;
 
+@Slf4j
 public class AboutModal extends VBox {
 
     private static final Properties props = new Properties();
@@ -40,7 +43,7 @@ public class AboutModal extends VBox {
         try (InputStream is = AboutModal.class.getResourceAsStream("/app.properties")) {
             if (is != null) props.load(is);
         } catch (IOException e) {
-            System.err.println("Could not load app.properties: " + e.getMessage());
+            log.error("Could not load app.properties: " + e.getMessage());
         }
         APP_NAME = props.getProperty("app.name", "QueryExe");
         VERSION = props.getProperty("app.version", "Unknown");
@@ -83,10 +86,10 @@ public class AboutModal extends VBox {
                 Image icon = new Image(iconStream, 80, 80, true, true);
                 appIcon.setImage(icon);
             } else {
-                System.err.println("Could not find icon.png in resources");
+                log.error("Could not find icon.png in resources");
             }
         } catch (Exception e) {
-            System.err.println("Error loading icon: " + e.getMessage());
+            log.error("Error loading icon: " + e.getMessage());
         }
 
         Label appNameLabel = new Label(APP_NAME);
@@ -201,7 +204,7 @@ public class AboutModal extends VBox {
             try {
                 java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
             } catch (IOException ex) {
-                System.err.println("Failed to open browser: " + ex.getMessage());
+                log.error("Failed to open browser: " + ex.getMessage());
             }
         });
         return link;

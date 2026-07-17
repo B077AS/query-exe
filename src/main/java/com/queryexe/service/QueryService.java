@@ -1,5 +1,7 @@
 package com.queryexe.service;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -24,6 +26,7 @@ import com.queryexe.components.results.ResultBox;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.queryexe.App;
 
+@Slf4j
 public class QueryService {
 
     private static volatile QueryService instance;
@@ -167,7 +170,7 @@ public class QueryService {
                 openFileInTab(selectedFile);
             }
         } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
+            log.error("Error reading file: " + e.getMessage());
         }
     }
 

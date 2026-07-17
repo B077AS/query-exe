@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.io.*;
@@ -44,6 +46,7 @@ import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ConnectionService;
 
+@Slf4j
 public class AddConnectionModal extends VBox {
 
     private TextField portField;
@@ -861,7 +864,7 @@ public class AddConnectionModal extends VBox {
 
             driversTab.getChildren().addAll(scrollPane);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("updateItem failed", e);
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.queryexe.components.results;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -49,6 +51,7 @@ import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ExportUtils;
 
+@Slf4j
 public class ResultBox extends VBox {
 
     private Button revertButton;
@@ -325,7 +328,7 @@ public class ResultBox extends VBox {
                         preparedStatement.close();
                     }
                 } catch (SQLException e) {
-                    //e.printStackTrace();
+                    log.warn("Query failed: {}", e.getMessage());
                     hasErrors = true;
 
                     try {
@@ -333,7 +336,7 @@ public class ResultBox extends VBox {
                             preparedStatement.close();
                         }
                     } catch (SQLException closeException) {
-                        closeException.printStackTrace();
+                        log.error("ResultBox failed", closeException);
                     }
 
                     ResultErrorBox errorBox = new ResultErrorBox(singleQuery, e);
@@ -406,9 +409,9 @@ public class ResultBox extends VBox {
                     connection.setAutoCommit(true);
                 }
             } catch (SQLException e1) {
-                e1.printStackTrace();
+                log.error("applyChanges failed", e1);
             }
-            e.printStackTrace();
+            log.error("applyChanges failed", e);
 
             CustomNotification customNotification = new CustomNotification("Save Failed", e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
             customNotification.showNotification();

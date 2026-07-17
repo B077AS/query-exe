@@ -1,5 +1,7 @@
 package com.queryexe.components.tree;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.SQLException;
 import java.util.ArrayList;
 
@@ -26,6 +28,7 @@ import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 
+@Slf4j
 public class TableTreeItem extends CustomTreeItem {
 
     public TableTreeItem(String name, FontIcon icon) {
@@ -137,7 +140,7 @@ public class TableTreeItem extends CustomTreeItem {
                 this.getChildren().add(columnItem);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("refreshTable failed", e);
         }
     }
 

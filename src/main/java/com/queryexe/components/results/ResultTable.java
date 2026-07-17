@@ -1,5 +1,7 @@
 package com.queryexe.components.results;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -32,6 +34,7 @@ import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.data.QueryData;
 
+@Slf4j
 public class ResultTable extends TableView<TableRowData> {
 
     private String tableName;
@@ -426,12 +429,12 @@ public class ResultTable extends TableView<TableRowData> {
         }
 
         if (tableNames.size() > 1) {
-            System.out.println("Multiple tables detected - likely a JOIN query");
+            log.debug("Multiple tables detected - likely a JOIN query");
             return false;
         }
 
         if (tableNames.isEmpty()) {
-            System.out.println("No table names found in metadata");
+            log.debug("No table names found in metadata");
             return false;
         }
 
@@ -447,7 +450,7 @@ public class ResultTable extends TableView<TableRowData> {
         }
 
         if (primaryKeyColumns.isEmpty()) {
-            System.out.println("No primary keys or unique indexes found for table: " + tableName);
+            log.debug("No primary keys or unique indexes found for table: {}", tableName);
             return false;
         }
 
@@ -571,7 +574,7 @@ public class ResultTable extends TableView<TableRowData> {
             }
             this.refresh();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("updateDatabaseRow failed", e);
             rowData.getStringData().set(updatedColumnIndex, oldValue);
             rowData.getOriginalData().set(updatedColumnIndex, previousOriginal);
             this.refresh();
@@ -621,7 +624,7 @@ public class ResultTable extends TableView<TableRowData> {
                     return stringValue;
             }
         } catch (Exception e) {
-            System.err.println("Type conversion failed for column " + columnIndex + ": " + e.getMessage());
+            log.warn("Type conversion failed for column {}: {}", columnIndex, e.getMessage());
             return stringValue;
         }
     }

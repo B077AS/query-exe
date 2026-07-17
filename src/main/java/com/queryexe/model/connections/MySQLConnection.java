@@ -1,5 +1,7 @@
 package com.queryexe.model.connections;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,6 +22,7 @@ import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
 import javafx.scene.control.TableColumn;
 
+@Slf4j
 public class MySQLConnection extends ConnectionObject {
 
     private String[] KEYWORDS = new String[]{
@@ -87,7 +90,7 @@ public class MySQLConnection extends ConnectionObject {
 
             return tablesMap;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getAllTablesAndColumns failed", e);
         }
         return null;
     }
@@ -393,7 +396,7 @@ public class MySQLConnection extends ConnectionObject {
             result.close();
             return databases;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getDatabases failed", e);
         }
         return databases;
     }
@@ -523,7 +526,7 @@ public class MySQLConnection extends ConnectionObject {
             return script.toString();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateCreateScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -707,7 +710,7 @@ public class MySQLConnection extends ConnectionObject {
             insertScript.append(");");
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -781,7 +784,7 @@ public class MySQLConnection extends ConnectionObject {
             insertScript.append(");");
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateRowInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -1355,7 +1358,7 @@ public class MySQLConnection extends ConnectionObject {
             if (result.next()) {
                 String user = result.getString("user");
                 String actualIp = result.getString("actual_ip");
-                System.out.println("'" + user + "'@'" + actualIp + "'");
+                log.debug("Current user: '{}'@'{}'", user, actualIp);
                 users.add("'" + user + "'@'" + actualIp + "'");
             }
 

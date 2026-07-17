@@ -4,6 +4,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class Launcher {
 
     private static final String APP_NAME = "QueryExe";
@@ -41,31 +44,41 @@ public class Launcher {
         return getAppDataDirectory().resolve("jdbc-drivers");
     }
 
+    public static Path getLogsDirectory() {
+        return getAppDataDirectory().resolve("logs");
+    }
+
     public static void main(String[] args) {
-        try {
-            Path appDataDir = getAppDataDirectory();
-            if (!Files.exists(appDataDir)) {
-                Files.createDirectories(appDataDir);
-                System.out.println("Created app directory: " + appDataDir);
-            }
-
-            Path dataDir = getDataDirectory();
-            if (!Files.exists(dataDir)) {
-                Files.createDirectories(dataDir);
-                System.out.println("Created data directory: " + dataDir);
-            }
-
-            Path jdbcDir = getJdbcDriversDirectory();
-            if (!Files.exists(jdbcDir)) {
-                Files.createDirectories(jdbcDir);
-                System.out.println("Created JDBC drivers directory: " + jdbcDir);
-            }
-
-        } catch (Exception e) {
-            System.err.println("Error creating application directories: " + e.getMessage());
-            e.printStackTrace();
-        }
+        // Must run before the first logger is created: logback resolves the log
+        // directory from these properties. Launcher therefore has no @Slf4j
+        // (its static logger would initialize logback too early).
+        initializeSystemProperties();
+        initializeDirectories();
 
         App.appStart(args);
+    }
+
+    private static void initializeSystemProperties() {
+        System.setProperty("slf4j.provider", "ch.qos.logback.classic.spi.LogbackServiceProvider");
+        System.setProperty("queryexe.logDir", getLogsDirectory().toAbsolutePath().toString());
+    }
+
+    private static void initializeDirectories() {
+        Logger log = LoggerFactory.getLogger(Launcher.class);
+        try {
+            createDirectory(getAppDataDirectory(), log);
+            createDirectory(getDataDirectory(), log);
+            createDirectory(getJdbcDriversDirectory(), log);
+            createDirectory(getLogsDirectory(), log);
+        } catch (Exception e) {
+            log.error("Error creating application directories", e);
+        }
+    }
+
+    private static void createDirectory(Path path, Logger log) throws Exception {
+        if (!Files.exists(path)) {
+            Files.createDirectories(path);
+            log.info("Created directory: {}", path);
+        }
     }
 }

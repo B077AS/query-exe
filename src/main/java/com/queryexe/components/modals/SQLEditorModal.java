@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -24,6 +26,7 @@ import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 
+@Slf4j
 public class SQLEditorModal extends VBox {
 
     private CodeArea codeArea;
@@ -98,7 +101,7 @@ public class SQLEditorModal extends VBox {
                     for (String statement : queryText.split(";\\s*(\\r?\\n)?")) {
                         String trimmed = statement.trim();
                         if (!trimmed.isEmpty()) {
-                            System.out.println("Executing statement: " + trimmed);
+                            log.debug("Executing statement: {}", trimmed);
                             stmt.execute(trimmed);
                         }
                     }
@@ -113,9 +116,9 @@ public class SQLEditorModal extends VBox {
                     if (conn != null) {
                         try {
                             conn.rollback();
-                            System.out.println("Transaction rolled back due to error: " + e.getMessage());
+                            log.warn("Transaction rolled back due to error: {}", e.getMessage());
                         } catch (SQLException rollbackEx) {
-                            rollbackEx.printStackTrace();
+                            log.error("SQLEditorModal failed", rollbackEx);
                         }
                     }
                     throw e;
@@ -124,13 +127,13 @@ public class SQLEditorModal extends VBox {
                         try {
                             conn.setAutoCommit(true);
                         } catch (SQLException ex) {
-                            ex.printStackTrace();
+                            log.error("SQLEditorModal failed", ex);
                         }
                     }
                 }
 
             } catch (Exception e) {
-                e.printStackTrace();
+                log.error("SQLEditorModal failed", e);
                 new CustomNotification("Table Operation Failed", e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL)).showNotificationOnCustomPane((StackPane) this.getParent());
             }
         });

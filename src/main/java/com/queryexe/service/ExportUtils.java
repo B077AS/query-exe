@@ -1,5 +1,7 @@
 package com.queryexe.service;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -12,6 +14,7 @@ import javafx.stage.FileChooser;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.model.data.TableRowData;
 
+@Slf4j
 public class ExportUtils {
 	
 	public static void exportToCSV(TableView<TableRowData> tableView) {
@@ -46,7 +49,7 @@ public class ExportUtils {
 				notification.showNotification();
 
 			} catch (IOException e) {
-				e.printStackTrace();
+				log.error("exportToCSV failed", e);
 			}
 		}
 	}
@@ -115,7 +118,7 @@ public class ExportUtils {
 	            notification.showNotification();
 
 	        } catch (IOException e) {
-	            e.printStackTrace();
+	            log.error("exportToJSON failed", e);
 	        }
 	    }
 	}
@@ -167,7 +170,7 @@ public class ExportUtils {
 	            notification.showNotification();
 
 	        } catch (IOException e) {
-	            e.printStackTrace();
+	            log.error("exportToXML failed", e);
 	        }
 	    }
 	}

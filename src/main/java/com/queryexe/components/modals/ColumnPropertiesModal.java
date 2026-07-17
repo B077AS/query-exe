@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,6 +18,7 @@ import com.queryexe.queryexe.App;
 import java.sql.SQLException;
 import java.util.Map;
 
+@Slf4j
 public class ColumnPropertiesModal extends VBox {
 
     private String databaseName;
@@ -102,7 +105,7 @@ public class ColumnPropertiesModal extends VBox {
 
             CustomNotification notification = new CustomNotification("Load Failed", "Could not load column data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotification();
-            e.printStackTrace();
+            log.error("loadColumnData failed", e);
         }
     }
 

@@ -1,5 +1,7 @@
 package com.queryexe.queryexe;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
 import javafx.animation.ParallelTransition;
@@ -45,6 +47,7 @@ import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.User32;
 import com.sun.jna.platform.win32.WinDef.HWND;
 
+@Slf4j
 public class App extends Application {
 
     private static Scene scene;
@@ -114,9 +117,9 @@ public class App extends Application {
         stage.setOnCloseRequest(event -> {
             try {
                 DatabaseConnection.getInstance().shutdown();
-                System.out.println("Connection Closed");
+                log.info("Connection Closed");
             } catch (Exception e) {
-                //e.printStackTrace();
+                log.warn("Error while shutting down connections", e);
             }
         });
 
@@ -140,7 +143,7 @@ public class App extends Application {
             HWND hwnd = User32.INSTANCE.FindWindow(null, stage.getTitle());
 
             if (hwnd == null) {
-                System.err.println("Could not find window handle");
+                log.error("Could not find window handle");
                 return;
             }
 
@@ -161,7 +164,7 @@ public class App extends Application {
                 );
             }
         } catch (Exception e) {
-            System.err.println("Failed to enable dark titlebar: " + e.getMessage());
+            log.error("Failed to enable dark titlebar: " + e.getMessage());
         }
     }
 

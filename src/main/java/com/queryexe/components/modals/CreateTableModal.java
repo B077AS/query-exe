@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -27,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class CreateTableModal extends VBox {
 
     private ObservableList<String> localColumnsList;
@@ -274,7 +277,7 @@ public class CreateTableModal extends VBox {
         } catch (SQLException e) {
             CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
-            e.printStackTrace();
+            log.error("loadTableData failed", e);
         }
     }
 

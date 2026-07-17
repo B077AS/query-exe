@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -20,6 +22,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Map;
 
+@Slf4j
 public class TablePropertiesModal extends VBox {
 
     private String databaseName;
@@ -102,7 +105,7 @@ public class TablePropertiesModal extends VBox {
         } catch (SQLException e) {
             CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
-            e.printStackTrace();
+            log.error("loadTableData failed", e);
         }
     }
 
@@ -479,7 +482,7 @@ public class TablePropertiesModal extends VBox {
             addPropertyRow(statsGrid, 0, "Table Size:", formattedSize);
         } catch (SQLException e) {
             addPropertyRow(statsGrid, 0, "Table Size:", "N/A (Error retrieving)");
-            e.printStackTrace();
+            log.error("createPropertiesTab failed", e);
         }
 
         statsSection.getChildren().add(statsGrid);
