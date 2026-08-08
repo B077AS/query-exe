@@ -14,12 +14,16 @@ import atlantafx.base.theme.Styles;
 import atlantafx.base.theme.Tweaks;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Orientation;
+import javafx.scene.Node;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -29,6 +33,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.stage.Window;
 import javafx.util.StringConverter;
 import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
@@ -47,6 +52,54 @@ public class ResultTable extends TableView<TableRowData> {
     private static final int MAX_CELL_LENGTH = 200;
     private Map<String, QueryData> rowUpdateQueries = new HashMap<>();
     private List<Integer> columnSqlTypes = new ArrayList<>();
+    private final javafx.event.EventHandler<MouseEvent> outsideEditClickFilter = event -> {
+        TablePosition<TableRowData, ?> editingCell = this.getEditingCell();
+        if (editingCell == null) {
+            return;
+        }
+
+        Node target = (Node) event.getTarget();
+        while (target != null) {
+            if (target instanceof TableCell<?, ?> cell
+                    && cell.getTableView() == this
+                    && cell.getIndex() == editingCell.getRow()
+                    && this.getColumns().indexOf(cell.getTableColumn()) == editingCell.getColumn()) {
+                return;
+            }
+            target = target.getParent();
+        }
+
+        Platform.runLater(this::endEditCleanly);
+    };
+
+    // A click on another node in the same window is caught by outsideEditClickFilter
+    // above, but a click on the taskbar, the desktop, or another application never
+    // reaches our Scene at all — only the OS-level window focus flips. Catch that
+    // case separately.
+    private final ChangeListener<Boolean> windowFocusListener = (obs, wasFocused, isFocused) -> {
+        if (!isFocused && this.getEditingCell() != null) {
+            Platform.runLater(this::endEditCleanly);
+        }
+    };
+
+    private void endEditCleanly() {
+        if (this.getEditingCell() == null) {
+            return;
+        }
+        this.requestFocus();
+        if (this.getEditingCell() != null) {
+            this.edit(-1, null);
+        }
+    }
+
+    private final ChangeListener<Window> windowChangeListener = (obs, oldWindow, newWindow) -> {
+        if (oldWindow != null) {
+            oldWindow.focusedProperty().removeListener(windowFocusListener);
+        }
+        if (newWindow != null) {
+            newWindow.focusedProperty().addListener(windowFocusListener);
+        }
+    };
 
     public ResultTable(PreparedStatement preparedStatement, long executionTime) throws SQLException {
         this.updateQueries = new ArrayList<QueryData>();
@@ -63,6 +116,27 @@ public class ResultTable extends TableView<TableRowData> {
         this.focusedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
                 this.getParent().getParent().requestFocus();
+            }
+        });
+
+        // Focus-loss alone misses clicks on non-focusable areas (blank panes,
+        // labels, ...), which is why the editor could get stuck open. Catch
+        // every press scene-wide and close the edit unless it landed on the
+        // cell currently being edited.
+        this.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null) {
+                oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideEditClickFilter);
+                oldScene.windowProperty().removeListener(windowChangeListener);
+                if (oldScene.getWindow() != null) {
+                    oldScene.getWindow().focusedProperty().removeListener(windowFocusListener);
+                }
+            }
+            if (newScene != null) {
+                newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideEditClickFilter);
+                newScene.windowProperty().addListener(windowChangeListener);
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().focusedProperty().addListener(windowFocusListener);
+                }
             }
         });
 
@@ -122,6 +196,25 @@ public class ResultTable extends TableView<TableRowData> {
                     // cancelEdit runs, so reading them there would hit the wrong row.
                     private TableRowData editingRowData;
                     private String editingOldValue;
+
+                    {
+                        // Both JavaFX's built-in :focus-within and :editing pseudo-classes
+                        // proved unreliable for driving the "is this cell being edited"
+                        // border on a recycled TableCell whose editor gets swapped out
+                        // programmatically. Own the style entirely instead: this listener
+                        // is the single source of truth, in sync with editingProperty
+                        // regardless of whether startEdit/cancelEdit/commitEdit is what
+                        // changed it.
+                        this.editingProperty().addListener((obs, wasEditing, editing) -> {
+                            if (editing) {
+                                if (!this.getStyleClass().contains("cell-editing")) {
+                                    this.getStyleClass().add("cell-editing");
+                                }
+                            } else {
+                                this.getStyleClass().remove("cell-editing");
+                            }
+                        });
+                    }
 
                     @Override
                     public void updateItem(String item, boolean empty) {

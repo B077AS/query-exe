@@ -21,6 +21,10 @@
 	-color-accent-7: #685ab3;
 	-color-accent-8: #52468c;
 	-color-accent-9: #3c3366;
+	/* Matches .styled-text-area .selection in sql-editor.css, so text-selection
+	   and row-selection colors read as one consistent, muted accent across the
+	   query editor and the results table. */
+	-color-selection-muted: #68637c;
 	-color-success-0: #e2ffdf;
 	-color-success-1: #d0ffcc;
 	-color-success-2: #bfffb9;
@@ -1007,6 +1011,8 @@ Text {
 	-fx-background-insets: 0;
 	-fx-background-radius: 0;
 	-fx-padding: 0;
+	-fx-highlight-fill: -color-selection-muted;
+	-fx-highlight-text-fill: -color-fg-default;
 }
 
 .cell .check-box {
@@ -1036,7 +1042,7 @@ Text {
 	-fx-background-radius: 0;
 }
 
-.table-view>.virtual-flow>.clipped-container>.sheet>.table-row-cell .text-field-table-cell:focus-within {
+.table-view>.virtual-flow>.clipped-container>.sheet>.table-row-cell .text-field-table-cell.cell-editing {
 	-fx-background-insets: 0, 1, 2;
 	-fx-background-color: -color-bg-default, -color-accent-emphasis,
 		-color-bg-default;
@@ -1102,9 +1108,9 @@ Text {
 .table-view {
 	-color-cell-bg: -color-bg-default;
 	-color-cell-fg: -color-fg-default;
-	-color-cell-bg-selected: -color-accent-subtle;
+	-color-cell-bg-selected: -color-accent-8;
 	-color-cell-fg-selected: -color-fg-default;
-	-color-cell-bg-selected-focused: -color-accent-subtle;
+	-color-cell-bg-selected-focused: -color-accent-8;
 	-color-cell-fg-selected-focused: -color-fg-default;
 	-color-cell-bg-odd: -color-bg-subtle;
 	-color-cell-border: -color-border-default;

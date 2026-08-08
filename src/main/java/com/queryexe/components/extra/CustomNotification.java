@@ -24,6 +24,8 @@ import com.queryexe.queryexe.App;
 
 public class CustomNotification {
 
+    private static final double NOTIFICATION_VIEW_ORDER = -1000;
+
     private final Notification notification;
     private final Timeline slideInAnimation;
     private final Timeline slideOutAnimation;
@@ -159,6 +161,7 @@ public class CustomNotification {
         double topMargin = overModal ? 10 + App.getHeaderBox().getHeight() : 10;
         StackPane.setMargin(notification, new Insets(topMargin, 10, 0, 0));
 
+        notification.setViewOrder(NOTIFICATION_VIEW_ORDER);
         notification.setTranslateX(300);
 
         pane.getChildren().remove(notification);

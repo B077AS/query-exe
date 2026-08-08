@@ -42,10 +42,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.platform.win32.User32;
-import com.sun.jna.platform.win32.WinDef.HWND;
+import com.queryexe.utils.WindowsThemeUtil;
 
 @Slf4j
 public class App extends Application {
@@ -123,76 +120,15 @@ public class App extends Application {
             }
         });
 
-        Platform.runLater(() -> {
-            if (com.sun.jna.Platform.isWindows()) {
-                enableDarkTitleBar(stage);
-            }
-
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-            }
-
-            stage.setOpacity(1);
-        });
-
-    }
-
-    private void enableDarkTitleBar(Stage stage) {
-        try {
-            HWND hwnd = User32.INSTANCE.FindWindow(null, stage.getTitle());
-
-            if (hwnd == null) {
-                log.error("Could not find window handle");
-                return;
-            }
-
-            final int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-            final int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-
-            boolean success = DwmSupport.DwmSetWindowAttribute(
-                    hwnd,
-                    DWMWA_USE_IMMERSIVE_DARK_MODE,
-                    true
-            );
-
-            if (!success) {
-                DwmSupport.DwmSetWindowAttribute(
-                        hwnd,
-                        DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1,
-                        true
-                );
-            }
-        } catch (Exception e) {
-            log.error("Failed to enable dark titlebar: " + e.getMessage());
-        }
-    }
-
-    private static class DwmSupport {
-        static {
-            if (com.sun.jna.Platform.isWindows()) {
-                Native.register("dwmapi");
-            }
+        if (com.sun.jna.Platform.isWindows()) {
+            Thread.ofVirtual().start(() -> {
+                WindowsThemeUtil.enableDarkTitleBar(stage.getTitle());
+                Platform.runLater(() -> stage.setOpacity(1));
+            });
+        } else {
+            Platform.runLater(() -> stage.setOpacity(1));
         }
 
-        public static native int DwmSetWindowAttribute(
-                HWND hwnd,
-                int dwAttribute,
-                Pointer pvAttribute,
-                int cbAttribute
-        );
-
-        public static boolean DwmSetWindowAttribute(HWND hwnd, int dwAttribute, boolean value) {
-            try {
-                int[] attrValue = new int[]{value ? 1 : 0};
-                Pointer ptr = new com.sun.jna.Memory(4);
-                ptr.setInt(0, attrValue[0]);
-                int result = DwmSetWindowAttribute(hwnd, dwAttribute, ptr, 4);
-                return result == 0;
-            } catch (Exception e) {
-                return false;
-            }
-        }
     }
 
     public static void connect() {
