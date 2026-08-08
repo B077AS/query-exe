@@ -18,6 +18,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import com.queryexe.model.data.QueryData;
 import com.queryexe.queryexe.App;
+import com.queryexe.utils.IconColorUtil;
 
 public class QueriesSummaryModal extends VBox {
 
@@ -55,7 +56,7 @@ public class QueriesSummaryModal extends VBox {
         titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         FontIcon fileIcon = new FontIcon(MaterialDesignC.CODE_TAGS_CHECK);
-        fileIcon.getStyleClass().add("custom-icon-30px");
+        IconColorUtil.apply(fileIcon, "-color-fg-default", 30);
 
         titleBox.getChildren().addAll(fileIcon, titleLabel);
 

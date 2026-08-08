@@ -18,6 +18,7 @@ import javafx.scene.layout.VBox;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ConnectionService;
+import com.queryexe.utils.IconColorUtil;
 
 public class InsertPasswordModal extends VBox {
 
@@ -91,7 +92,7 @@ public class InsertPasswordModal extends VBox {
         savePasswordCheckBox = new CheckBox("Save Password");
 
         FontIcon passwordIcon = new FontIcon(MaterialDesignL.LOCK_ALERT);
-        passwordIcon.getStyleClass().add("custom-alert-icon");
+        IconColorUtil.apply(passwordIcon, "-color-fg-default", 50);
 
         mainBox.getChildren().addAll(titleLabel, textLabel, passwordBox, savePasswordCheckBox);
 

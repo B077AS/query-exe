@@ -2,6 +2,7 @@ package com.queryexe.components.modals;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -52,7 +53,7 @@ public class ConfirmationModal extends VBox {
         textLabel.setWrapText(true);
         textBox.getChildren().addAll(titleLabel, textLabel);
 
-        icon.getStyleClass().add("custom-alert-icon");
+        IconColorUtil.apply(icon, "-color-fg-default", 50);
         upperBox.getChildren().addAll(icon, textBox);
 
         HBox buttonsBox = new HBox();

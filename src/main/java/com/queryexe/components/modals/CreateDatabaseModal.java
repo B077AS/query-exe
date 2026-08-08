@@ -3,6 +3,7 @@ package com.queryexe.components.modals;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -63,7 +64,7 @@ public class CreateDatabaseModal extends VBox {
         contentBox.getChildren().addAll(titleLabel, instructionLabel, databaseNameField);
 
         FontIcon databaseIcon = new FontIcon(MaterialDesignD.DATABASE_PLUS);
-        databaseIcon.getStyleClass().add("custom-alert-icon");
+        IconColorUtil.apply(databaseIcon, "-color-fg-default", 50);
 
         upperBox.getChildren().addAll(databaseIcon, contentBox);
 

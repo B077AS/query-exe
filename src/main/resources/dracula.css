@@ -5669,36 +5669,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);
 }
 
-.custom-icon {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 75px;
-}
-
-.custom-20-icon {
-	-fx-icon-color: -color-accent-emphasis;
-	-fx-fill: -color-accent-emphasis;
-	-fx-icon-size: 20px;
-}
-
-.custom-alert-icon {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 50px;
-}
-
-.custom-icon-30px {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 30px;
-}
-
-.custom-icon-25px {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 20px;
-}
-
 .connection-card {
 	-fx-cursor: hand;
 }
@@ -5723,16 +5693,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-border-color: -color-accent-emphasis;
 }
 
-.custom-tab-icon {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 17px;
-}
-
-.custom-tab-icon:hover {
-	-fx-cursor: hand;
-}
-
 .custom-results-button {
 	-fx-background-color: transparent;
 	-fx-text-fill: white;
@@ -5754,18 +5714,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .custom-results-button:focused {
 	-fx-background-color: transparent;
-}
-
-.custom-cursor-icon {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 10px;
-}
-
-.custom-card-icon {
-	-fx-icon-color: -color-fg-default;
-	-fx-fill: -color-fg-default;
-	-fx-icon-size: 14px;
 }
 
 .custom-table-view-dense .table-row-cell {

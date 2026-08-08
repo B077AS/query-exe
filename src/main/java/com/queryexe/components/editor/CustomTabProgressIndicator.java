@@ -7,6 +7,8 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import com.queryexe.components.extra.CustomNotification;
+import com.queryexe.utils.IconColorUtil;
+import javafx.scene.Cursor;
 
 import java.sql.SQLException;
 
@@ -24,7 +26,8 @@ public class CustomTabProgressIndicator extends StackPane {
         progressIndicator.setMaxSize(17, 17);
 
         cancelButton = new FontIcon(MaterialDesignS.STOP);
-        cancelButton.getStyleClass().add("custom-tab-icon");
+        IconColorUtil.apply(cancelButton, "-color-fg-default", 17);
+        cancelButton.setCursor(Cursor.HAND);
         cancelButton.setVisible(false);
 
         cancelButton.setOnMouseClicked(event -> {

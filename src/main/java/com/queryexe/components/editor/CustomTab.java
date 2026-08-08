@@ -4,8 +4,10 @@ import javafx.scene.control.*;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import com.queryexe.utils.IconColorUtil;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -62,7 +64,8 @@ public class CustomTab<T extends Node> extends Tab {
         graphicBox.setAlignment(Pos.CENTER_LEFT);
 
         icon = new FontIcon(MaterialDesignC.CLOSE);
-        icon.getStyleClass().add("custom-tab-icon");
+        IconColorUtil.apply(icon, "-color-fg-default", 17);
+        icon.setCursor(Cursor.HAND);
         icon.setOnMouseClicked(event -> {
             tabPane.getTabs().remove(this);
             if (content instanceof VirtualizedScrollPane) {

@@ -17,6 +17,7 @@ import org.kordamp.ikonli.materialdesign2.MaterialDesignK;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignM;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.application.Platform;
 import javafx.concurrent.Service;
@@ -355,7 +356,7 @@ public class CustomTree extends VBox {
         normalHeaderBox.setAlignment(Pos.CENTER_LEFT);
 
         FontIcon databaseViewIcon = new FontIcon(MaterialDesignD.DATABASE);
-        databaseViewIcon.getStyleClass().add("custom-icon-25px");
+        IconColorUtil.apply(databaseViewIcon, "-color-fg-default", 20);
         Button databaseViewButton = new Button("Databases", databaseViewIcon);
         databaseViewButton.getStyleClass().addAll(Styles.FLAT);
         databaseViewButton.setPadding(new Insets(5, 5, 5, 5));
@@ -365,7 +366,7 @@ public class CustomTree extends VBox {
         databaseViewButton.setOnAction(event -> switchToDatabaseView());
 
         FontIcon usersViewIcon = new FontIcon(MaterialDesignA.ACCOUNT_MULTIPLE);
-        usersViewIcon.getStyleClass().add("custom-icon-25px");
+        IconColorUtil.apply(usersViewIcon, "-color-fg-default", 20);
         Button usersViewButton = new Button("Users", usersViewIcon);
         usersViewButton.getStyleClass().addAll(Styles.FLAT);
         usersViewButton.setPadding(new Insets(5, 5, 5, 5));
@@ -378,7 +379,7 @@ public class CustomTree extends VBox {
         HBox.setHgrow(headerFillerRegion, Priority.ALWAYS);
 
         FontIcon refreshIcon = new FontIcon(MaterialDesignR.REFRESH);
-        refreshIcon.getStyleClass().add("custom-icon-25px");
+        IconColorUtil.apply(refreshIcon, "-color-fg-default", 20);
         Button refresh = new Button(null, refreshIcon);
         refresh.getStyleClass().addAll(Styles.FLAT);
         refresh.setPadding(new Insets(5, 5, 5, 5));
@@ -388,7 +389,7 @@ public class CustomTree extends VBox {
         });
 
         FontIcon searchIcon = new FontIcon(MaterialDesignM.MAGNIFY);
-        searchIcon.getStyleClass().add("custom-icon-25px");
+        IconColorUtil.apply(searchIcon, "-color-fg-default", 20);
         searchButton = new Button(null, searchIcon);
         searchButton.getStyleClass().addAll(Styles.FLAT);
         searchButton.setPadding(new Insets(5, 5, 5, 5));

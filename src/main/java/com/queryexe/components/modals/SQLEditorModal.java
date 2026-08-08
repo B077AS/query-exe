@@ -11,6 +11,7 @@ import org.fxmisc.richtext.CodeArea;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -62,7 +63,7 @@ public class SQLEditorModal extends VBox {
         titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         FontIcon fileIcon = new FontIcon(MaterialDesignC.CODE_TAGS_CHECK);
-        fileIcon.getStyleClass().add("custom-icon-30px");
+        IconColorUtil.apply(fileIcon, "-color-fg-default", 30);
 
         titleBox.getChildren().addAll(fileIcon, titleLabel);
 
