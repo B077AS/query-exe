@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -232,7 +233,7 @@ public class ResultBox extends VBox {
             }
         });
 
-        String[] queries = query.split(";");
+        List<String> queries = splitSqlStatements(query);
         boolean hasErrors = false;
 
         for (String singleQuery : queries) {
@@ -358,6 +359,121 @@ public class ResultBox extends VBox {
 
         this.getChildren().addAll(tableHeader, tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
+    }
+
+    /**
+     * Splits a SQL script into individual statements on top-level semicolons,
+     * ignoring semicolons found inside single-quoted strings, double-quoted
+     * identifiers, line/block comments, and dollar-quoted blocks (e.g. {@code $$ ... $$}
+     * or {@code $tag$ ... $tag$} used by PL/pgSQL function bodies).
+     */
+    private static List<String> splitSqlStatements(String sql) {
+        List<String> statements = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int len = sql.length();
+        int i = 0;
+
+        while (i < len) {
+            char c = sql.charAt(i);
+
+            if (c == '\'' || c == '"') {
+                int end = skipQuotedLiteral(sql, i, c);
+                current.append(sql, i, end);
+                i = end;
+            } else if (c == '-' && i + 1 < len && sql.charAt(i + 1) == '-') {
+                int end = sql.indexOf('\n', i);
+                if (end == -1) {
+                    end = len;
+                }
+                current.append(sql, i, end);
+                i = end;
+            } else if (c == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
+                int end = skipBlockComment(sql, i);
+                current.append(sql, i, end);
+                i = end;
+            } else if (c == '$') {
+                int tagEnd = findDollarTagEnd(sql, i);
+                if (tagEnd != -1) {
+                    String tag = sql.substring(i, tagEnd);
+                    int closeIndex = sql.indexOf(tag, tagEnd);
+                    int end = (closeIndex == -1) ? len : closeIndex + tag.length();
+                    current.append(sql, i, end);
+                    i = end;
+                } else {
+                    current.append(c);
+                    i++;
+                }
+            } else if (c == ';') {
+                statements.add(current.toString());
+                current.setLength(0);
+                i++;
+            } else {
+                current.append(c);
+                i++;
+            }
+        }
+
+        if (!current.toString().trim().isEmpty()) {
+            statements.add(current.toString());
+        }
+
+        return statements;
+    }
+
+    private static int skipQuotedLiteral(String sql, int start, char quoteChar) {
+        int len = sql.length();
+        int i = start + 1;
+        while (i < len) {
+            if (sql.charAt(i) == quoteChar) {
+                if (i + 1 < len && sql.charAt(i + 1) == quoteChar) {
+                    i += 2;
+                } else {
+                    return i + 1;
+                }
+            } else {
+                i++;
+            }
+        }
+        return len;
+    }
+
+    private static int skipBlockComment(String sql, int start) {
+        int len = sql.length();
+        int i = start + 2;
+        int depth = 1;
+        while (i < len && depth > 0) {
+            if (sql.charAt(i) == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
+                depth++;
+                i += 2;
+            } else if (sql.charAt(i) == '*' && i + 1 < len && sql.charAt(i + 1) == '/') {
+                depth--;
+                i += 2;
+            } else {
+                i++;
+            }
+        }
+        return i;
+    }
+
+    private static int findDollarTagEnd(String sql, int start) {
+        int len = sql.length();
+        int i = start + 1;
+
+        if (i < len && sql.charAt(i) == '$') {
+            return i + 1;
+        }
+
+        if (i < len && (Character.isLetter(sql.charAt(i)) || sql.charAt(i) == '_')) {
+            i++;
+            while (i < len && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
+                i++;
+            }
+            if (i < len && sql.charAt(i) == '$') {
+                return i + 1;
+            }
+        }
+
+        return -1;
     }
 
     private void applyChanges(TabPane tabPane) {
