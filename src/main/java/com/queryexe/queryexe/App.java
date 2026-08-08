@@ -24,6 +24,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import com.queryexe.components.home.ConnectionsPane;
 import com.queryexe.components.menu.CustomMenuBar;
 import com.queryexe.components.editor.CustomTab;
@@ -32,7 +33,6 @@ import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.service.DatabaseConnection;
-import javafx.util.Duration;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import atlantafx.base.controls.ModalPane;
@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.queryexe.utils.WindowsThemeUtil;
+import com.queryexe.utils.TabScrollChevrons;
 
 @Slf4j
 public class App extends Application {
@@ -89,6 +90,7 @@ public class App extends Application {
 
         tabPane = new TabPane();
         tabPane.setTabDragPolicy(TabDragPolicy.REORDER);
+        TabScrollChevrons.install(tabPane);
 
         modalPane = new ModalPane();
         modalPane.setPersistent(false);

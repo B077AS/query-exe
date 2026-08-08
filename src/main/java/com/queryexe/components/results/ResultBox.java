@@ -50,6 +50,7 @@ import com.queryexe.model.data.QueryData;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ExportUtils;
+import com.queryexe.utils.TabScrollChevrons;
 
 @Slf4j
 public class ResultBox extends VBox {
@@ -71,6 +72,7 @@ public class ResultBox extends VBox {
 
         TabPane tabPane = new TabPane();
         tabPane.setTabDragPolicy(TabDragPolicy.REORDER);
+        TabScrollChevrons.install(tabPane);
 
         revertButton = new Button("Revert");
         revertButton.setGraphic(new FontIcon(MaterialDesignR.RESTORE));

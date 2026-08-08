@@ -2960,6 +2960,9 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tab-pane>.tab-header-area>.control-buttons-tab>.container>.tab-down-button {
 	/*-fx-padding: 1em;*/
 	-fx-padding: 0;
+	-fx-pref-width: 52px;
+	-fx-pref-height: 26px;
+	-fx-cursor: default;
 }
 
 .tab-pane>.tab-header-area>.control-buttons-tab>.container>.tab-down-button:disabled {
@@ -2971,6 +2974,43 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-scale-shape: false;
 	-fx-background-color: -color-fg-default;*/
 	-fx-padding: 0;
+	-fx-pref-width: 0;
+	-fx-pref-height: 0;
+}
+
+/* custom prev/next chevron pair that replaces the native tab overflow arrow */
+.tab-nav-box {
+	-fx-spacing: 2px;
+}
+
+.tab-nav-chevron-btn {
+	-fx-background-color: transparent;
+	-fx-background-radius: 5px;
+	-fx-padding: 2px 3px 2px 3px;
+	-fx-alignment: CENTER;
+	-fx-cursor: hand;
+}
+
+.tab-nav-chevron-btn:hover {
+	-fx-background-color: -color-bg-subtle;
+}
+
+.tab-nav-chevron-btn:pressed {
+	-fx-background-color: -color-border-default;
+}
+
+.tab-nav-chevron-btn:disabled {
+	-fx-opacity: 0.35;
+	-fx-cursor: default;
+}
+
+.tab-nav-chevron {
+	-fx-icon-color: -color-fg-muted;
+	-fx-icon-size: 15px;
+}
+
+.tab-nav-chevron-btn:hover>.tab-nav-chevron {
+	-fx-icon-color: -color-fg-default;
 }
 
 .tab-pane.dense>.tab-header-area>.headers-region>.tab {
