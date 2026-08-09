@@ -33,6 +33,8 @@
 	   row-selection colors read as one consistent, muted accent across the
 	   query editor and the results table. */
 	-color-selection-muted: #68637c;
+	/* SQL keyword syntax-highlight color, see .paragraph-box .text.keyword below. */
+	-color-syntax-keyword: #ac80ea;
 	-color-success-0: #e2ffdf;
 	-color-success-1: #d0ffcc;
 	-color-success-2: #bfffb9;
@@ -2467,7 +2469,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .slider {
 	-color-slider-thumb: -color-fg-default;
 	-color-slider-thumb-border: -color-fg-default;
-	-color-slider-track: #52468c;
+	-color-slider-track: -color-accent-8;
 	-color-slider-track-progress: -color-accent-emphasis;
 	-color-slider-tick: -color-fg-muted;
 }
@@ -2844,8 +2846,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-background-insets: 0 0 0 0, 0 0 2px 0;
 	-fx-background-color: transparent, transparent;
 	-fx-padding: 0.3em 0.6em 0.3em 0.6em;
-	/*-fx-border-width: 0 1 0 0;
-	-fx-border-color: #9580ff;*/
 }
 
 .tab-pane>.tab-header-area>.headers-region>.tab>.tab-container>.tab-label {
@@ -3143,7 +3143,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-color-input-bg-focused: -color-bg-default;
 	-color-input-border-focused: -color-accent-emphasis;
 	-color-input-bg-readonly: -color-bg-subtle;
-	-color-input-bg-highlight: #44475a;
+	-color-input-bg-highlight: -color-selection-muted;
 	-color-input-fg-highlight: -color-fg-default;
 	-fx-background-color: -color-input-border, -color-input-bg;
 	-fx-background-insets: 0, 1px;
@@ -3350,7 +3350,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .toggle-button:selected,
 .toggle-button:selected:focused {
-	-fx-background-color: #7f6dd9, -color-button-bg-selected;
+	-fx-background-color: -color-accent-6, -color-button-bg-selected;
 	-fx-text-fill: -color-button-fg-selected;
 	-fx-background-insets: 0;
 }
@@ -5725,31 +5725,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-padding: 0;
 }
 
-.custom-check-box>.box {
-	-fx-background-color: #282a36;
-}
-
-.custom-check-box:selected>.box {
-	-fx-background-color: #282a36;
-}
-
-.custom-check-box:selected>.box>.mark {
-	-fx-background-color: white;
-}
-
-.custom-check-box>.box:hover {
-	-fx-background-color: #52545e;
-}
-
-.custom-check-box>.box:hover>.mark {
-	-fx-background-color: #52545e;
-	/* Ensure mark is transparent when hovering over box */
-}
-
-.custom-check-box:selected>.box:hover>.mark {
-	-fx-background-color: white;
-}
-
 .custom-query {
 	-fx-font-size: 16px;
 	-fx-background-color: -color-bg-default;
@@ -5819,7 +5794,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .paragraph-box .text.keyword {
-    -fx-fill: #ac80ea;
+    -fx-fill: -color-syntax-keyword;
     -fx-font-weight: bold;
 }
 
@@ -5830,7 +5805,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .lineno {
     -fx-opacity: 1;
-    -fx-background-color: #3d3f4a;
+    -fx-background-color: -color-bg-subtle;
     -fx-text-fill: #666;
     -fx-font-size: 17px;
     -fx-padding: 0 10 0 5;

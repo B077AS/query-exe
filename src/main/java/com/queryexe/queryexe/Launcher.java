@@ -48,6 +48,10 @@ public class Launcher {
         return getAppDataDirectory().resolve("logs");
     }
 
+    public static Path getConfigDirectory() {
+        return getAppDataDirectory().resolve("config");
+    }
+
     public static void main(String[] args) {
         // Must run before the first logger is created: logback resolves the log
         // directory from these properties. Launcher therefore has no @Slf4j
@@ -70,6 +74,7 @@ public class Launcher {
             createDirectory(getDataDirectory(), log);
             createDirectory(getJdbcDriversDirectory(), log);
             createDirectory(getLogsDirectory(), log);
+            createDirectory(getConfigDirectory(), log);
         } catch (Exception e) {
             log.error("Error creating application directories", e);
         }

@@ -33,6 +33,7 @@ import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.service.DatabaseConnection;
+import com.queryexe.theme.ThemeManager;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import atlantafx.base.controls.ModalPane;
@@ -79,7 +80,7 @@ public class App extends Application {
 
         menuBar = new CustomMenuBar();
         for (Menu menu : menuBar.getMenus()) {
-            if (!"About".equals(menu.getText())) {
+            if (!isAlwaysEnabledMenu(menu)) {
                 menu.setDisable(true);
             }
         }
@@ -105,6 +106,7 @@ public class App extends Application {
 
         scene = new Scene(mainStackPane, 1100, 500);
         Application.setUserAgentStylesheet(App.class.getClassLoader().getResource("style.css").toExternalForm());
+        ThemeManager.get().applyFromSettings(scene);
         stage.setTitle("QueryExe");
         stage.setScene(scene);
         stage.setMinWidth(1100);
@@ -300,7 +302,7 @@ public class App extends Application {
 
     public static void goHome() {
         for (Menu menu : menuBar.getMenus()) {
-            if (!"About".equals(menu.getText())) {
+            if (!isAlwaysEnabledMenu(menu)) {
                 menu.setDisable(true);
             }
         }
@@ -350,5 +352,9 @@ public class App extends Application {
 
     public static void appStart(String[] args) {
         launch();
+    }
+
+    private static boolean isAlwaysEnabledMenu(Menu menu) {
+        return "About".equals(menu.getText()) || "Settings".equals(menu.getText());
     }
 }
