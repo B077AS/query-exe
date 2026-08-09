@@ -50,9 +50,6 @@ public class SettingsModal extends VBox {
         content.setPadding(new Insets(0, 30, 30, 30));
         content.setAlignment(Pos.TOP_CENTER);
 
-        Label titleLabel = new Label("Settings");
-        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold;");
-
         VBox sectionBox = new VBox(10);
         sectionBox.setAlignment(Pos.TOP_LEFT);
         sectionBox.setMaxWidth(480);
@@ -72,7 +69,7 @@ public class SettingsModal extends VBox {
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-        content.getChildren().addAll(titleLabel, scrollPane);
+        content.getChildren().addAll(scrollPane);
 
         this.getChildren().addAll(headerBox, content);
     }

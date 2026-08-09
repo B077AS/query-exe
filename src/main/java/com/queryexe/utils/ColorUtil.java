@@ -33,7 +33,19 @@ public final class ColorUtil {
         }
         double[] hsl = rgbToHsl(r, g, b);
         double h = normalizeHue(hsl[0] + hueShiftDeg);
-        return hslToRgb(h, hsl[1], hsl[2]);
+        double s = hsl[1] * perceptualSaturationScale(h);
+        return hslToRgb(h, s, hsl[2]);
+    }
+
+    private static double perceptualSaturationScale(double hue) {
+        double distance = Math.abs(hue - 120);
+        if (distance > 180) {
+            distance = 360 - distance;
+        }
+        if (distance >= 60) {
+            return 1.0;
+        }
+        return 1.0 - 0.5 * (1.0 - distance / 60.0);
     }
 
     public static int[] hexToRgb(String hex) {

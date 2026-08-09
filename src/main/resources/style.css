@@ -1900,12 +1900,12 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .menu-item {
 	-fx-background-color: -color-bg-default;
-	-fx-padding: 8px 12px 8px 12px;
+	-fx-padding: 7px 10px 7px 10px;
 	-fx-background-radius: 5px;
 }
 
 .menu-item>.graphic-container {
-	-fx-padding: 0 6px 0 0;
+	-fx-padding: 0 5px 0 0;
 }
 
 .menu-item>.label {
@@ -1978,11 +1978,10 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .context-menu {
 	-fx-background-color: -color-border-muted, -color-bg-default;
 	-fx-background-insets: 0, 1;
-	-fx-padding: 5px 5px 5px 5px;
+	-fx-padding: 4px 4px 4px 4px;
 	-fx-background-radius: 6px, 5px;
 	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 4px, 0.3, 0, 1);
-	-fx-scale-x: 0.85;
-	-fx-scale-y: 0.85;
+	-fx-font-size: 12px;
 }
 
 .context-menu>.scroll-arrow {
@@ -3227,7 +3226,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .text-input .context-menu {
-	-fx-font-size: 14px;
+	-fx-font-size: 12px;
 	-fx-font-weight: normal;
 }
 

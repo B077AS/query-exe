@@ -15,7 +15,7 @@ public enum AppTheme {
 
     RED("Red",
             "#ffe5ea", "#ffccd5", "#ffb3bf", "#ff99aa", "#ff6680",
-            "#ff3355", "#d92244", "#b31133", "#8c0022", "#660011"),
+            "#ff5c78", "#d92244", "#b31133", "#8c0022", "#660011"),
 
     ORANGE("Orange",
             "#fff0e5", "#ffe2cc", "#ffd4b3", "#ffc699", "#ffb880",
