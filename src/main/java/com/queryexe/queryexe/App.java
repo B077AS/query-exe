@@ -104,7 +104,7 @@ public class App extends Application {
         mainStackPane.getChildren().addAll(borderPane, modalPane);
 
         scene = new Scene(mainStackPane, 1100, 500);
-        Application.setUserAgentStylesheet(App.class.getClassLoader().getResource("dracula.css").toExternalForm());
+        Application.setUserAgentStylesheet(App.class.getClassLoader().getResource("style.css").toExternalForm());
         stage.setTitle("QueryExe");
         stage.setScene(scene);
         stage.setMinWidth(1100);

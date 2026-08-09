@@ -1,10 +1,14 @@
 package com.queryexe.components.editor;
 
 import javafx.geometry.Bounds;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Label;
 import org.fxmisc.richtext.CodeArea;
-import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
+import org.reactfx.collection.LiveList;
+import org.reactfx.value.Val;
 import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -30,6 +34,7 @@ import com.queryexe.queryexe.App;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.function.IntFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -121,12 +126,36 @@ public class SQLEditor extends CodeArea {
         autocompletePopup = new AutocompletePopup(this);
         findPopup = new FindPopup(this);
 
-        this.setParagraphGraphicFactory(LineNumberFactory.get(this));
+        this.setParagraphGraphicFactory(lineNumberFactory(this));
         this.multiPlainChanges()
                 .successionEnds(Duration.ofMillis(100))
                 .subscribe(ignore -> this.setStyleSpans(0, computeHighlighting(this.getText())));
-        this.getStylesheets().add(SQLEditor.class.getClassLoader().getResource("sql-editor.css").toExternalForm());
         this.setStyle("-fx-font-family: 'Consolas'; -fx-background-color: -color-bg-default; ");
+    }
+
+    /**
+     * RichTextFX's stock LineNumberFactory sets the gutter's background, text
+     * fill and font via imperative setters (setBackground/setTextFill/setFont),
+     * which permanently marks those properties as user-set and makes them immune
+     * to CSS overrides. This factory leaves all styling to the ".lineno" rule in
+     * style.css instead.
+     */
+    private static IntFunction<Node> lineNumberFactory(CodeArea area) {
+        Val<Integer> nParagraphs = LiveList.sizeOf(area.getParagraphs());
+        return idx -> {
+            Label lineNo = new Label();
+            lineNo.getStyleClass().add("lineno");
+            lineNo.setAlignment(Pos.CENTER_RIGHT);
+            lineNo.setMaxHeight(Double.MAX_VALUE);
+            Val<String> formatted = nParagraphs.map(n -> formatLineNumber(idx + 1, n));
+            lineNo.textProperty().bind(formatted.conditionOnShowing(lineNo));
+            return lineNo;
+        };
+    }
+
+    private static String formatLineNumber(int line, int total) {
+        int digits = Math.max(2, (int) Math.floor(Math.log10(Math.max(1, total))) + 1);
+        return String.format("%" + digits + "d", line);
     }
 
     private void setupEventHandlers() {

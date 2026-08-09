@@ -29,8 +29,8 @@
 	-color-accent-9-alpha30: rgba(60, 51, 102, 0.3);
 	-color-accent-9-alpha40: rgba(60, 51, 102, 0.4);
 	-color-accent-7-alpha10: rgba(104, 90, 179, 0.1);
-	/* Matches .styled-text-area .selection in sql-editor.css, so text-selection
-	   and row-selection colors read as one consistent, muted accent across the
+	/* Matches .styled-text-area .selection below, so text-selection and
+	   row-selection colors read as one consistent, muted accent across the
 	   query editor and the results table. */
 	-color-selection-muted: #68637c;
 	-color-success-0: #e2ffdf;
@@ -5789,4 +5789,71 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-background-radius: 12px;
     -fx-border-color: -color-border-default;
     -fx-border-width: 1px;
+}
+
+/* SQL editor (CodeArea) */
+
+.styled-text-area {
+    -fx-font-size: 18px;
+}
+
+.styled-text-area .selection {
+    -fx-highlight-fill: -color-selection-muted;
+}
+
+.paragraph-box .text {
+    -fx-fill: white;
+}
+
+.paragraph-box .text.string {
+    -fx-fill: #f8a027;
+}
+
+.paragraph-box .text.comment {
+    -fx-fill: #808080;
+    -fx-font-style: italic;
+}
+
+.paragraph-box .text.number {
+    -fx-fill: #6fa8dc;
+}
+
+.paragraph-box .text.keyword {
+    -fx-fill: #ac80ea;
+    -fx-font-weight: bold;
+}
+
+.caret {
+    -fx-stroke: white;
+    -fx-scale-y: 0.85;
+}
+
+.lineno {
+    -fx-opacity: 1;
+    -fx-background-color: #3d3f4a;
+    -fx-text-fill: #666;
+    -fx-font-size: 17px;
+    -fx-padding: 0 10 0 5;
+}
+
+.autocomplete-list {
+    -fx-background-color: -color-bg-default;
+    -fx-border-color: -color-border-default;
+    -fx-border-width: 1px;
+}
+
+.autocomplete-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-default;
+    -fx-padding: 3px 8px;
+    -fx-font-size: 14px;
+}
+
+.autocomplete-list .list-cell:hover {
+    -fx-background-color: -color-accent-subtle;
+}
+
+.autocomplete-list .list-cell:selected {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-text-fill: -color-fg-emphasis;
 }
