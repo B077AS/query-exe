@@ -5,9 +5,18 @@ import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
+import org.kordamp.ikonli.Ikon;
+import org.kordamp.ikonli.feather.Feather;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import javafx.application.Platform;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.input.Clipboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import com.queryexe.components.tree.CustomTree;
@@ -60,6 +69,7 @@ public class SQLEditor extends CodeArea {
         initializePatterns();
         initializeEditor();
         setupEventHandlers();
+        setupContextMenu();
     }
 
     private void setupSuggestionService() {
@@ -177,6 +187,53 @@ public class SQLEditor extends CodeArea {
                 this.requestFocus();
             }
         });
+    }
+
+    private void setupContextMenu() {
+        MenuItem undoItem = new MenuItem("Undo", menuIcon(Feather.CORNER_DOWN_LEFT));
+        undoItem.setOnAction(event -> this.undo());
+
+        MenuItem redoItem = new MenuItem("Redo", menuIcon(Feather.CORNER_DOWN_RIGHT));
+        redoItem.setOnAction(event -> this.redo());
+
+        MenuItem cutItem = new MenuItem("Cut", menuIcon(Feather.SCISSORS));
+        cutItem.setOnAction(event -> this.cut());
+
+        MenuItem copyItem = new MenuItem("Copy", menuIcon(MaterialDesignC.CONTENT_COPY));
+        copyItem.setOnAction(event -> this.copy());
+
+        MenuItem pasteItem = new MenuItem("Paste", menuIcon(MaterialDesignC.CONTENT_PASTE));
+        pasteItem.setOnAction(event -> this.paste());
+
+        MenuItem selectAllItem = new MenuItem("Select All", menuIcon(MaterialDesignS.SELECT_ALL));
+        selectAllItem.setOnAction(event -> this.selectAll());
+
+        ContextMenu editorContextMenu = new ContextMenu(
+                undoItem, redoItem,
+                new SeparatorMenuItem(),
+                cutItem, copyItem, pasteItem,
+                new SeparatorMenuItem(),
+                selectAllItem
+        );
+
+        editorContextMenu.setOnShowing(event -> {
+            undoItem.setDisable(!this.isUndoAvailable());
+            redoItem.setDisable(!this.isRedoAvailable());
+
+            boolean hasSelection = !this.getSelectedText().isEmpty();
+            cutItem.setDisable(!hasSelection);
+            copyItem.setDisable(!hasSelection);
+
+            pasteItem.setDisable(!Clipboard.getSystemClipboard().hasString());
+        });
+
+        this.setContextMenu(editorContextMenu);
+    }
+
+    private static FontIcon menuIcon(Ikon ikon) {
+        FontIcon icon = new FontIcon(ikon);
+        icon.setIconSize(14);
+        return icon;
     }
 
     private void handleCtrlSpace(KeyEvent event) {

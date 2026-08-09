@@ -5785,16 +5785,3 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-border-color: -color-border-default;
     -fx-border-width: 1px;
 }
-
-/*.table-view .virtual-flow .cell {
-    -fx-background-color: transparent;
-}*/
-
-/*.table-view .column-header-background .filler {
-    -fx-background-color: transparent;
-    -fx-border-width: 0;
-    -fx-border-color: transparent;
-}*/
-/*.table-view .column-header-background {
-    -fx-background-color: transparent;
-}*/
