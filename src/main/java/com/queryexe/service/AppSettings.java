@@ -25,6 +25,7 @@ import com.queryexe.queryexe.Launcher;
 public class AppSettings {
 
     private static final String THEME_KEY = "theme";
+    private static final String CONNECTIONS_VIEW_MODE_KEY = "connectionsViewMode";
 
     private static volatile AppSettings instance;
 
@@ -55,6 +56,17 @@ public class AppSettings {
     public void setTheme(String themeName) {
         JsonObject settings = read();
         settings.addProperty(THEME_KEY, themeName);
+        write(settings);
+    }
+
+    public String getConnectionsViewMode() {
+        JsonObject settings = read();
+        return settings.has(CONNECTIONS_VIEW_MODE_KEY) ? settings.get(CONNECTIONS_VIEW_MODE_KEY).getAsString() : null;
+    }
+
+    public void setConnectionsViewMode(String viewMode) {
+        JsonObject settings = read();
+        settings.addProperty(CONNECTIONS_VIEW_MODE_KEY, viewMode);
         write(settings);
     }
 

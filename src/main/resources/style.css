@@ -5685,8 +5685,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .connection-lineitem-card:hover {
-    -fx-background-color: -color-border-subtle;
-    -fx-border-color: -color-accent-emphasis;
+    -fx-background-color: -color-accent-subtle;
+    -fx-border-color: -color-accent-muted;
 }
 
 .custom-results-button {

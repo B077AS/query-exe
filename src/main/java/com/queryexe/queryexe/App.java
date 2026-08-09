@@ -76,7 +76,6 @@ public class App extends Application {
         headerBox.setAlignment(Pos.CENTER);
 
         toolbar = new CustomToolBar();
-        toolbar.setDisable(true);
 
         menuBar = new CustomMenuBar();
         for (Menu menu : menuBar.getMenus()) {
@@ -84,10 +83,6 @@ public class App extends Application {
                 menu.setDisable(true);
             }
         }
-
-        headerBox.getChildren().addAll(menuBar, toolbar);
-
-        borderPane.setTop(headerBox);
 
         tabPane = new TabPane();
         tabPane.setTabDragPolicy(TabDragPolicy.REORDER);
@@ -98,6 +93,15 @@ public class App extends Application {
         setupTransitions(modalPane);
 
         connectionsPane = new ConnectionsPane();
+
+        // The header's second row is a single shared slot: the connections
+        // toolbar (search/new/refresh/view) while on the home page, swapped for
+        // CustomToolBar (New/Open/Save/Run) once a connection is active. See
+        // connect() and goHome().
+        headerBox.getChildren().addAll(menuBar, connectionsPane.getToolbar());
+
+        borderPane.setTop(headerBox);
+
         stackPane.getChildren().add(connectionsPane);
         borderPane.setCenter(stackPane);
 
@@ -180,7 +184,7 @@ public class App extends Application {
             for (Menu menu : menuBar.getMenus()) {
                 menu.setDisable(false);
             }
-            toolbar.setDisable(false);
+            headerBox.getChildren().set(1, toolbar);
             stackPane.getChildren().clear();
             stackPane.getChildren().add(splitpane);
             codeArea.layout();
@@ -306,11 +310,12 @@ public class App extends Application {
                 menu.setDisable(true);
             }
         }
-        toolbar.setDisable(true);
 
         if (connectionsPane == null) {
             connectionsPane = new ConnectionsPane();
         }
+
+        headerBox.getChildren().set(1, connectionsPane.getToolbar());
 
         if (!stackPane.getChildren().contains(connectionsPane)) {
             stackPane.getChildren().clear();
