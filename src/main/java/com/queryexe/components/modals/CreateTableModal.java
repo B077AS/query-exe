@@ -192,13 +192,7 @@ public class CreateTableModal extends VBox {
         addButton = new Button("Add", new FontIcon(MaterialDesignP.PLUS));
         addButton.setFocusTraversable(false);
         addButton.getStyleClass().addAll(Styles.SMALL, "hover-opac");
-        addButton.setStyle("""
-                -fx-background-color: transparent;
-                -fx-border-color: #666666;
-                -fx-border-width: 1px;
-                -fx-background-radius: 6px;
-                -fx-border-radius: 6px;
-                """);
+        addButton.setStyle("-fx-background-color: transparent;");
 
         Button columnsTabButton = createTabHeader("Columns", columnsTab, new FontIcon(MaterialDesignT.TABLE_COLUMN),
                 () -> {
@@ -328,7 +322,7 @@ public class CreateTableModal extends VBox {
                 -fx-background-color: -color-bg-default;
                 -fx-background-radius: 8px;
                 -fx-border-radius: 8px;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 -fx-border-width: 1px;
                 -fx-padding: 10px;
                 """);

@@ -191,15 +191,15 @@ public class CustomMenuBar extends MenuBar {
     }
 
     private Menu aboutMenu() {
-        Menu menu = new Menu("About", new FontIcon(Feather.HELP_CIRCLE));
+        Menu menu = new Menu("About");
         menu.setMnemonicParsing(true);
 
-        MenuItem helpMenuItem = new MenuItem("Help");
+        MenuItem helpMenuItem = createItem("Help", Feather.HELP_CIRCLE, null);
         helpMenuItem.setOnAction(event -> {
             App.showModal(new HelpModal());
         });
 
-        MenuItem aboutMenuItem = new MenuItem("About");
+        MenuItem aboutMenuItem = createItem("About", MaterialDesignI.INFORMATION_OUTLINE, null);
         aboutMenuItem.setOnAction(event -> {
             App.showModal(new AboutModal());
         });

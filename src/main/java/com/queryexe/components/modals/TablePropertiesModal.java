@@ -143,7 +143,7 @@ public class TablePropertiesModal extends VBox {
                     -fx-background-color: -color-bg-default;
                     -fx-border-radius: 8px;
                     -fx-background-radius: 8px;
-                    -fx-border-color: #44475a;
+                    -fx-border-color: -color-accent-9;
                     -fx-border-width: 1px;
                     """);
 
@@ -174,9 +174,9 @@ public class TablePropertiesModal extends VBox {
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setPadding(new Insets(12, 15, 12, 15));
         headerRow.setStyle("""
-                -fx-background-color: rgba(68, 71, 90, 0.3);
+                -fx-background-color: -color-accent-9-alpha30;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 """);
 
         Label nameHeader = new Label("Column Name");
@@ -203,11 +203,11 @@ public class TablePropertiesModal extends VBox {
         dataRow.setPadding(new Insets(10, 15, 10, 15));
         dataRow.setSpacing(0);
 
-        String bgColor = alternate ? "rgba(68, 71, 90, 0.1)" : "transparent";
+        String bgColor = alternate ? "-color-accent-9-alpha10" : "transparent";
         dataRow.setStyle("""
                 -fx-background-color: %s;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: rgba(68, 71, 90, 0.3);
+                -fx-border-color: -color-accent-9-alpha30;
                 """.formatted(bgColor));
 
         HBox nameBox = new HBox(6);
@@ -273,7 +273,7 @@ public class TablePropertiesModal extends VBox {
                 -fx-font-size: 10px;
                 -fx-opacity: 0.85;
                 -fx-padding: 3 7 3 7;
-                -fx-background-color: rgba(68, 71, 90, 0.4);
+                -fx-background-color: -color-accent-9-alpha40;
                 -fx-background-radius: 3px;
                 -fx-font-weight: 600;
                 """);
@@ -297,7 +297,7 @@ public class TablePropertiesModal extends VBox {
                     -fx-background-color: -color-bg-default;
                     -fx-border-radius: 8px;
                     -fx-background-radius: 8px;
-                    -fx-border-color: #44475a;
+                    -fx-border-color: -color-accent-9;
                     -fx-border-width: 1px;
                     """);
 
@@ -329,9 +329,9 @@ public class TablePropertiesModal extends VBox {
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setPadding(new Insets(12, 15, 12, 15));
         headerRow.setStyle("""
-                -fx-background-color: rgba(68, 71, 90, 0.3);
+                -fx-background-color: -color-accent-9-alpha30;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 """);
 
         Label constraintHeader = new Label("Constraint Name");
@@ -363,11 +363,11 @@ public class TablePropertiesModal extends VBox {
         dataRow.setPadding(new Insets(10, 15, 10, 15));
         dataRow.setSpacing(0);
 
-        String bgColor = alternate ? "rgba(68, 71, 90, 0.1)" : "transparent";
+        String bgColor = alternate ? "-color-accent-9-alpha10" : "transparent";
         dataRow.setStyle("""
                 -fx-background-color: %s;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: rgba(68, 71, 90, 0.3);
+                -fx-border-color: -color-accent-9-alpha30;
                 """.formatted(bgColor));
 
         HBox constraintBox = new HBox(6);
@@ -437,7 +437,7 @@ public class TablePropertiesModal extends VBox {
                 -fx-font-size: 10px;
                 -fx-opacity: 0.85;
                 -fx-padding: 3 7 3 7;
-                -fx-background-color: rgba(68, 71, 90, 0.4);
+                -fx-background-color: -color-accent-9-alpha40;
                 -fx-background-radius: 3px;
                 -fx-font-weight: 600;
                 """);
@@ -506,7 +506,7 @@ public class TablePropertiesModal extends VBox {
                 -fx-background-color: -color-bg-default;
                 -fx-background-radius: 8px;
                 -fx-border-radius: 8px;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 -fx-border-width: 1px;
                 """);
 

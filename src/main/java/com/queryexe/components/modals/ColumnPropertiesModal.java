@@ -222,16 +222,16 @@ public class ColumnPropertiesModal extends VBox {
             for (Map<String, String> index : info.getIndexes()) {
                 HBox indexRow = new HBox(10);
                 indexRow.setAlignment(Pos.CENTER_LEFT);
-                indexRow.setStyle("-fx-padding: 8 12; -fx-background-color: rgba(68, 71, 90, 0.2); -fx-background-radius: 6px;");
+                indexRow.setStyle("-fx-padding: 8 12; -fx-background-color: -color-accent-9-alpha20; -fx-background-radius: 6px;");
 
                 Label indexName = new Label(index.get("INDEX_NAME"));
                 indexName.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
 
                 Label indexType = new Label(index.get("INDEX_TYPE").toUpperCase());
-                indexType.setStyle("-fx-font-size: 11px; -fx-opacity: 0.7; -fx-padding: 3 8; -fx-background-color: rgba(68, 71, 90, 0.3); -fx-background-radius: 3px;");
+                indexType.setStyle("-fx-font-size: 11px; -fx-opacity: 0.7; -fx-padding: 3 8; -fx-background-color: -color-accent-9-alpha30; -fx-background-radius: 3px;");
 
                 Label nonUnique = new Label(index.get("NON_UNIQUE").equals("0") ? "UNIQUE" : "NON-UNIQUE");
-                nonUnique.setStyle("-fx-font-size: 11px; -fx-opacity: 0.7; -fx-padding: 3 8; -fx-background-color: rgba(68, 71, 90, 0.3); -fx-background-radius: 3px;");
+                nonUnique.setStyle("-fx-font-size: 11px; -fx-opacity: 0.7; -fx-padding: 3 8; -fx-background-color: -color-accent-9-alpha30; -fx-background-radius: 3px;");
 
                 indexRow.getChildren().addAll(new FontIcon(MaterialDesignK.KEY), indexName, indexType, nonUnique);
                 indexBox.getChildren().add(indexRow);
@@ -249,7 +249,7 @@ public class ColumnPropertiesModal extends VBox {
             for (Map<String, String> fk : info.getForeignKeyReferences()) {
                 HBox fkRow = new HBox(10);
                 fkRow.setAlignment(Pos.CENTER_LEFT);
-                fkRow.setStyle("-fx-padding: 10 12; -fx-background-color: rgba(68, 71, 90, 0.2); -fx-background-radius: 6px;");
+                fkRow.setStyle("-fx-padding: 10 12; -fx-background-color: -color-accent-9-alpha20; -fx-background-radius: 6px;");
 
                 VBox fkDetails = new VBox(5);
 
@@ -276,7 +276,7 @@ public class ColumnPropertiesModal extends VBox {
             for (Map<String, String> refBy : info.getReferencedByForeignKeys()) {
                 HBox refByRow = new HBox(10);
                 refByRow.setAlignment(Pos.CENTER_LEFT);
-                refByRow.setStyle("-fx-padding: 10 12; -fx-background-color: rgba(68, 71, 90, 0.2); -fx-background-radius: 6px;");
+                refByRow.setStyle("-fx-padding: 10 12; -fx-background-color: -color-accent-9-alpha20; -fx-background-radius: 6px;");
 
                 VBox refByDetails = new VBox(5);
 
@@ -318,7 +318,7 @@ public class ColumnPropertiesModal extends VBox {
                 -fx-background-color: -color-bg-default;
                 -fx-background-radius: 8px;
                 -fx-border-radius: 8px;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 -fx-border-width: 1px;
                 """);
 

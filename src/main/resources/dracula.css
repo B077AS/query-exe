@@ -21,6 +21,14 @@
 	-color-accent-7: #685ab3;
 	-color-accent-8: #52468c;
 	-color-accent-9: #3c3366;
+	/* Translucent tints of -color-accent-9/-color-accent-7, for panel/row
+	   backgrounds that need a subtle accent wash instead of a solid fill.
+	   Named after the alpha-suffixed -color-chart-*-alphaNN tokens below. */
+	-color-accent-9-alpha10: rgba(60, 51, 102, 0.1);
+	-color-accent-9-alpha20: rgba(60, 51, 102, 0.2);
+	-color-accent-9-alpha30: rgba(60, 51, 102, 0.3);
+	-color-accent-9-alpha40: rgba(60, 51, 102, 0.4);
+	-color-accent-7-alpha10: rgba(104, 90, 179, 0.1);
 	/* Matches .styled-text-area .selection in sql-editor.css, so text-selection
 	   and row-selection colors read as one consistent, muted accent across the
 	   query editor and the results table. */

@@ -126,7 +126,7 @@ public class SQLEditor extends CodeArea {
                 .successionEnds(Duration.ofMillis(100))
                 .subscribe(ignore -> this.setStyleSpans(0, computeHighlighting(this.getText())));
         this.getStylesheets().add(SQLEditor.class.getClassLoader().getResource("sql-editor.css").toExternalForm());
-        this.setStyle("-fx-font-family: 'Consolas'; -fx-background-color:#282a36; ");
+        this.setStyle("-fx-font-family: 'Consolas'; -fx-background-color: -color-bg-default; ");
     }
 
     private void setupEventHandlers() {

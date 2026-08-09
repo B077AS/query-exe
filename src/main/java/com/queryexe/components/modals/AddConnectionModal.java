@@ -652,7 +652,7 @@ public class AddConnectionModal extends VBox {
             driversTab.setSpacing(15);
 
             VBox currentDriverBox = new VBox(8);
-            currentDriverBox.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-background-radius: 5px; -fx-padding: 15px; -fx-background-color: rgba(104, 90, 179, 0.1);");
+            currentDriverBox.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-background-radius: 5px; -fx-padding: 15px; -fx-background-color: -color-accent-7-alpha10;");
 
             Label currentDriverTitle = new Label("Current Driver:");
             currentDriverTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
