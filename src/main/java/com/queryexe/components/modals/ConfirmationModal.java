@@ -62,6 +62,7 @@ public class ConfirmationModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button confirmButton = new Button("Confirm");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
             if (onConfirmAction != null) {
@@ -70,6 +71,7 @@ public class ConfirmationModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setOnAction(event -> {
             App.closeModal();
         });

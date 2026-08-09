@@ -191,7 +191,7 @@ public class CreateTableModal extends VBox {
 
         addButton = new Button("Add", new FontIcon(MaterialDesignP.PLUS));
         addButton.setFocusTraversable(false);
-        addButton.getStyleClass().add("hover-opac");
+        addButton.getStyleClass().addAll(Styles.SMALL, "hover-opac");
         addButton.setStyle("""
                 -fx-background-color: transparent;
                 -fx-border-color: #666666;
@@ -220,6 +220,7 @@ public class CreateTableModal extends VBox {
         buttonsBox.setPadding(new Insets(10, 20, 10, 20));
 
         Button confirmButton = new Button(isEditMode ? "Update Table" : "Create Table");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setPrefWidth(125);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
@@ -227,6 +228,7 @@ public class CreateTableModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setPrefWidth(125);
         cancelButton.setOnAction(event -> {
             App.closeModal();

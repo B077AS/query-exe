@@ -87,6 +87,7 @@ public class SQLEditorModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button confirmButton = new Button("Confirm");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setPrefWidth(75);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
@@ -140,6 +141,7 @@ public class SQLEditorModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setPrefWidth(75);
         cancelButton.setOnAction(event -> {
             App.closeModal();

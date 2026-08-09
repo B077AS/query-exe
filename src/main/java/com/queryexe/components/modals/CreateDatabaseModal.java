@@ -74,6 +74,7 @@ public class CreateDatabaseModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button createButton = new Button("Create");
+        createButton.getStyleClass().add(Styles.SMALL);
         createButton.setDefaultButton(true);
         createButton.setOnAction(event -> {
             String dbName = databaseNameField.getText().trim();
@@ -84,6 +85,7 @@ public class CreateDatabaseModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setOnAction(event -> {
             App.closeModal();
         });

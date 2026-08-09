@@ -438,6 +438,7 @@ Text {
 	-fx-alignment: CENTER;
 	-fx-padding: 8px 12px 8px 12px;
 	-fx-cursor: hand;
+	-fx-focus-traversable: false;
 }
 
 .button .font-icon,
@@ -855,10 +856,8 @@ Text {
 }
 
 .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:hover {
-	-fx-background-color: -color-accent-emphasis;
-	-fx-text-fill: -color-fg-emphasis;
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
 	-fx-background-insets: 2 0 2 0;
-	/*todo combobox*/
 }
 
 .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:hover .font-icon,
@@ -869,10 +868,8 @@ Text {
 
 .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected,
 .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected:hover {
-	-fx-background-color: -color-accent-emphasis;
-	-fx-text-fill: -color-fg-emphasis;
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
 	-fx-background-insets: 2 0 2 0;
-	/*todo combobox*/
 }
 
 .combo-box-popup>.list-view>.virtual-flow>.clipped-container>.sheet>.list-cell:filled:selected .font-icon,

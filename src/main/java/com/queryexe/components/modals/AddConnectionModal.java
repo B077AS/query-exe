@@ -128,6 +128,7 @@ public class AddConnectionModal extends VBox {
 
         Button saveConnection = new Button();
         saveConnection.setText("Save");
+        saveConnection.getStyleClass().add(Styles.SMALL);
         saveConnection.setDefaultButton(true);
         saveConnection.setOnAction(event -> {
             saveConnectionAction();
@@ -135,6 +136,7 @@ public class AddConnectionModal extends VBox {
 
         Button testConnection = new Button();
         testConnection.setText("Test Connection");
+        testConnection.getStyleClass().add(Styles.SMALL);
         testConnection.addEventFilter(ActionEvent.ACTION, event -> {
             testConnectionAction();
             event.consume();
@@ -694,12 +696,12 @@ public class AddConnectionModal extends VBox {
                         String status = isDownloaded ? " ✓" : "";
                         setText(item.getVersion() + status);
 
-                        String defaultStyle = isDownloaded ? "-fx-text-fill: -color-accent-emphasis;" : "-fx-text-fill: white;";
-                        String selectedStyle = "-fx-text-fill: white; -fx-background-color: -color-accent-emphasis;";
+                        String defaultStyle = isDownloaded ? "-fx-text-fill: -color-accent-emphasis;" : "-fx-text-fill: -color-fg-default;";
+                        String selectedStyle = "-fx-text-fill: -color-fg-default; -fx-background-color: -color-accent-subtle;";
 
                         setStyle(defaultStyle);
 
-                        setOnMouseEntered(e -> setStyle(selectedOrHoverStyle()));
+                        setOnMouseEntered(e -> setStyle(selectedStyle));
                         setOnMouseExited(e -> setStyle(isSelected() ? selectedStyle : defaultStyle));
 
                         selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
@@ -710,10 +712,6 @@ public class AddConnectionModal extends VBox {
                             }
                         });
                     }
-                }
-
-                private String selectedOrHoverStyle() {
-                    return "-fx-text-fill: white; -fx-background-color: -color-accent-emphasis;";
                 }
             });
 
