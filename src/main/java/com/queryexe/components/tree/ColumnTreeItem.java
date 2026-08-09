@@ -1,6 +1,8 @@
 package com.queryexe.components.tree;
 
 import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignI;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.input.Clipboard;
@@ -18,7 +20,7 @@ public class ColumnTreeItem extends CustomTreeItem {
     private void setupContextMenu() {
         contextMenu = new ContextMenu();
 
-        MenuItem copyColumnName = new MenuItem("Copy Name");
+        MenuItem copyColumnName = new MenuItem("Copy Name", menuIcon(MaterialDesignC.CONTENT_COPY));
         copyColumnName.setOnAction(event -> {
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
@@ -26,7 +28,7 @@ public class ColumnTreeItem extends CustomTreeItem {
             clipboard.setContent(content);
         });
 
-        MenuItem propertiesMenuItem = new MenuItem("Properties");
+        MenuItem propertiesMenuItem = new MenuItem("Properties", menuIcon(MaterialDesignI.INFORMATION_OUTLINE));
         propertiesMenuItem.setOnAction(event -> {
             TableTreeItem parentItem = (TableTreeItem) this.getParent();
             App.showModal(new ColumnPropertiesModal(

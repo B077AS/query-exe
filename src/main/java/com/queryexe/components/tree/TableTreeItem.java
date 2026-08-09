@@ -8,7 +8,11 @@ import java.util.ArrayList;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignI;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignK;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
 import javafx.application.Platform;
 import javafx.scene.control.ContextMenu;
@@ -39,7 +43,7 @@ public class TableTreeItem extends CustomTreeItem {
     private void setupContextMenu() {
         contextMenu = new ContextMenu();
 
-        MenuItem copyTableName = new MenuItem("Copy Name");
+        MenuItem copyTableName = new MenuItem("Copy Name", menuIcon(MaterialDesignC.CONTENT_COPY));
         copyTableName.setOnAction(event -> {
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
@@ -47,12 +51,12 @@ public class TableTreeItem extends CustomTreeItem {
             clipboard.setContent(content);
         });
 
-        MenuItem alterTableMenuItem = new MenuItem("Alter Table");
+        MenuItem alterTableMenuItem = new MenuItem("Alter Table", menuIcon(MaterialDesignT.TABLE_EDIT));
         alterTableMenuItem.setOnAction(event -> {
             App.showModal(new CreateTableModal(this.databaseName, this.titleLabel.getText(), this::refreshTable));
         });
 
-        MenuItem insertScriptMenuItem = new MenuItem("Insert Script");
+        MenuItem insertScriptMenuItem = new MenuItem("Insert Script", menuIcon(MaterialDesignS.SCRIPT_TEXT_PLAY_OUTLINE));
         insertScriptMenuItem.setOnAction(event -> {
             SQLEditor codeArea = new SQLEditor();
             VirtualizedScrollPane<CodeArea> scroll = new VirtualizedScrollPane<>(codeArea);
@@ -74,7 +78,7 @@ public class TableTreeItem extends CustomTreeItem {
             });
         });
 
-        MenuItem createScriptMenuItem = new MenuItem("Create Script");
+        MenuItem createScriptMenuItem = new MenuItem("Create Script", menuIcon(MaterialDesignS.SCRIPT_TEXT_OUTLINE));
         createScriptMenuItem.setOnAction(event -> {
             SQLEditor codeArea = new SQLEditor();
             VirtualizedScrollPane<CodeArea> scroll = new VirtualizedScrollPane<>(codeArea);
@@ -96,16 +100,16 @@ public class TableTreeItem extends CustomTreeItem {
             });
         });
 
-        MenuItem deleteTableMenuItem = new MenuItem("Delete Table");
+        MenuItem deleteTableMenuItem = new MenuItem("Delete Table", menuIcon(MaterialDesignT.TABLE_REMOVE));
         deleteTableMenuItem.setOnAction(event -> {
             App.showModal(new ConfirmationModal("Delete Table", "Do you want to delete this table?",
                     new FontIcon(MaterialDesignT.TABLE_ALERT), this::deleteTable));
         });
 
-        MenuItem refreshTableItem = new MenuItem("Refresh Table");
+        MenuItem refreshTableItem = new MenuItem("Refresh Table", menuIcon(MaterialDesignR.REFRESH));
         refreshTableItem.setOnAction(event -> refreshTable());
 
-        MenuItem propertiesTableItem = new MenuItem("Properties");
+        MenuItem propertiesTableItem = new MenuItem("Properties", menuIcon(MaterialDesignI.INFORMATION_OUTLINE));
         propertiesTableItem.setOnAction(event -> {
             App.showModal(new TablePropertiesModal(this.databaseName, this.titleLabel.getText()));
         });

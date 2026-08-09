@@ -2,6 +2,7 @@ package com.queryexe.components.tree;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.javafx.FontIcon;
 import javafx.geometry.Pos;
 import javafx.scene.control.ContextMenu;
@@ -38,5 +39,11 @@ public class CustomTreeItem extends TreeItem<String> {
 
     public void setUnSelected() {
         titleLabel.setStyle("-fx-font-weight: normal;");
+    }
+
+    protected static FontIcon menuIcon(Ikon ikon) {
+        FontIcon icon = new FontIcon(ikon);
+        icon.setIconSize(14);
+        return icon;
     }
 }

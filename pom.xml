@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.queryexe</groupId>
-    <artifactId>queryexe</artifactId>
+    <artifactId>query-exe</artifactId>
     <version>1.0.1</version>
     <name>QueryExe</name>
     <description>Universal Database Management Tool</description>

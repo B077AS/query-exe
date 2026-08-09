@@ -5,7 +5,10 @@ import java.util.ArrayList;
 import java.util.Map;
 
 import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
 import javafx.application.Platform;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
@@ -32,7 +35,7 @@ public class DatabaseTreeItem extends CustomTreeItem {
     private void setupContextMenu() {
         contextMenu = new ContextMenu();
 
-        MenuItem copyDatabaseName = new MenuItem("Copy Name");
+        MenuItem copyDatabaseName = new MenuItem("Copy Name", menuIcon(MaterialDesignC.CONTENT_COPY));
         copyDatabaseName.setOnAction(event -> {
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
@@ -40,7 +43,7 @@ public class DatabaseTreeItem extends CustomTreeItem {
             clipboard.setContent(content);
         });
 
-        MenuItem useMenuItem = new MenuItem("Use");
+        MenuItem useMenuItem = new MenuItem("Use", menuIcon(MaterialDesignD.DATABASE_CHECK));
         useMenuItem.setOnAction(event -> {
             try {
                 DatabaseConnection.getInstance().getConnectionObject().useDatabase(this.titleLabel.getText());
@@ -53,21 +56,21 @@ public class DatabaseTreeItem extends CustomTreeItem {
 
         MenuItem deleteDatabaseMenuItem;
         if (DatabaseConnection.getInstance().getCurrentConnectionObject().getDbType().equals(ConnectionTypes.PostgreSQL.toString())) {
-            deleteDatabaseMenuItem = new MenuItem("Delete Schema");
+            deleteDatabaseMenuItem = new MenuItem("Delete Schema", menuIcon(MaterialDesignD.DATABASE_REMOVE));
             deleteDatabaseMenuItem.setOnAction(event -> {
                 App.showModal(new ConfirmationModal("Drop Schema", "Do you want to delete this schema? (" + this.titleLabel.getText() + ")", new FontIcon(MaterialDesignD.DATABASE_ALERT), () -> this.deleteDatabase(false)));
             });
         } else {
-            deleteDatabaseMenuItem = new MenuItem("Delete Database");
+            deleteDatabaseMenuItem = new MenuItem("Delete Database", menuIcon(MaterialDesignD.DATABASE_REMOVE));
             deleteDatabaseMenuItem.setOnAction(event -> {
                 App.showModal(new ConfirmationModal("Drop Database", "Do you want to delete this database? (" + this.titleLabel.getText() + ")", new FontIcon(MaterialDesignD.DATABASE_ALERT), () -> this.deleteDatabase(true)));
             });
         }
 
-        MenuItem refreshMenuItem = new MenuItem("Refresh");
+        MenuItem refreshMenuItem = new MenuItem("Refresh", menuIcon(MaterialDesignR.REFRESH));
         refreshMenuItem.setOnAction(event -> refreshDatabase());
 
-        MenuItem createTableMenuItem = new MenuItem("Create Table");
+        MenuItem createTableMenuItem = new MenuItem("Create Table", menuIcon(MaterialDesignT.TABLE_PLUS));
         createTableMenuItem.setOnAction(event -> {
             App.showModal(new CreateTableModal(this.databaseName, this::refreshDatabase));
         });

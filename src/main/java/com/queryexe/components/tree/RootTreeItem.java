@@ -2,6 +2,7 @@ package com.queryexe.components.tree;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import javafx.application.Platform;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
@@ -22,14 +23,14 @@ public class RootTreeItem extends CustomTreeItem {
     private void setupContextMenu() {
         contextMenu = new ContextMenu();
 
-        MenuItem createDatabaseMenuItem = new MenuItem("Create Database");
+        MenuItem createDatabaseMenuItem = new MenuItem("Create Database", menuIcon(MaterialDesignD.DATABASE_PLUS));
         createDatabaseMenuItem.setOnAction(event -> {
             App.showModal(new CreateDatabaseModal(dbName -> {
                 createDatabase(dbName, true);
             }, true));
         });
 
-        MenuItem refreshDatabasesMenuItem = new MenuItem("Refresh");
+        MenuItem refreshDatabasesMenuItem = new MenuItem("Refresh", menuIcon(MaterialDesignR.REFRESH));
         refreshDatabasesMenuItem.setOnAction(event -> {
             App.getDatabaseTree().initialize();
         });

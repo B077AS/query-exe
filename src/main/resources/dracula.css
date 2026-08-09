@@ -1915,21 +1915,11 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .menu-item:focused {
-	-fx-background-color: -color-accent-emphasis, -color-accent-emphasis;
-}
-
-.menu-item:focused>.label {
-	-fx-text-fill: -color-fg-emphasis;
+	-fx-background-color: -color-accent-subtle, -color-accent-subtle;
 }
 
 .menu-item:focused>.right-container>.arrow {
 	-fx-background-color: -color-fg-emphasis;
-}
-
-.menu-item:focused .font-icon,
-.menu-item:focused .ikonli-font-icon {
-	-fx-icon-color: -color-fg-emphasis;
-	-fx-fill: -color-fg-emphasis;
 }
 
 .menu-item:disabled {
@@ -1983,7 +1973,9 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-background-insets: 0, 1;
 	-fx-padding: 5px 5px 5px 5px;
 	-fx-background-radius: 6px, 5px;
-	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 8px, 0.6, 0, 2);
+	-fx-effect: dropshadow(three-pass-box, -color-shadow-default, 4px, 0.3, 0, 1);
+	-fx-scale-x: 0.85;
+	-fx-scale-y: 0.85;
 }
 
 .context-menu>.scroll-arrow {
