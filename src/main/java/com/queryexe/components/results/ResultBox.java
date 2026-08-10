@@ -1,9 +1,12 @@
 package com.queryexe.components.results;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -48,7 +51,9 @@ import com.queryexe.model.data.QueryData;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ExportUtils;
+import com.queryexe.utils.TabScrollChevrons;
 
+@Slf4j
 public class ResultBox extends VBox {
 
     private Button revertButton;
@@ -68,6 +73,7 @@ public class ResultBox extends VBox {
 
         TabPane tabPane = new TabPane();
         tabPane.setTabDragPolicy(TabDragPolicy.REORDER);
+        TabScrollChevrons.install(tabPane);
 
         revertButton = new Button("Revert");
         revertButton.setGraphic(new FontIcon(MaterialDesignR.RESTORE));
@@ -126,7 +132,7 @@ public class ResultBox extends VBox {
         removeRow.setOnAction(event -> {
             ObservableList<Integer> rows = ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getSelectionModel().getSelectedIndices();
             if (rows.isEmpty()) {
-                CustomNotification errorRemoveNotification = new CustomNotification("Error: no row selected", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification errorRemoveNotification = new CustomNotification("No Row Selected", "Select a row to remove first.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 errorRemoveNotification.showNotification();
             } else {
                 ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).deleteDatabaseRows(rows);
@@ -227,7 +233,7 @@ public class ResultBox extends VBox {
             }
         });
 
-        String[] queries = query.split(";");
+        List<String> queries = splitSqlStatements(query);
         boolean hasErrors = false;
 
         for (String singleQuery : queries) {
@@ -281,10 +287,14 @@ public class ResultBox extends VBox {
                     long executionTime = endTime - startTime;
 
                     if (hasResultSet) {
-                        customTableView = new ResultTable(preparedStatement, executionTime, () -> {
-                            applyButton.setDisable(false);
-                            revertButton.setDisable(false);
+                        ResultTable resultTable = new ResultTable(preparedStatement, executionTime);
+                        resultTable.setOnCellUpdate(() -> {
+                            boolean hasChanges = resultTable.hasPendingChanges();
+                            applyButton.setDisable(!hasChanges);
+                            revertButton.setDisable(!hasChanges);
+                            rowsLabel.setText("Rows: " + resultTable.getItems().size());
                         });
+                        customTableView = resultTable;
 
                         if (customTableView != null) {
                             CustomTab<ResultTable> tableTab = new CustomTab<>(customTableView, tabPane);
@@ -321,7 +331,7 @@ public class ResultBox extends VBox {
                         preparedStatement.close();
                     }
                 } catch (SQLException e) {
-                    //e.printStackTrace();
+                    log.warn("Query failed: {}", e.getMessage());
                     hasErrors = true;
 
                     try {
@@ -329,7 +339,7 @@ public class ResultBox extends VBox {
                             preparedStatement.close();
                         }
                     } catch (SQLException closeException) {
-                        closeException.printStackTrace();
+                        log.error("ResultBox failed", closeException);
                     }
 
                     ResultErrorBox errorBox = new ResultErrorBox(singleQuery, e);
@@ -343,12 +353,127 @@ public class ResultBox extends VBox {
             }
         }
         if (hasErrors) {
-            CustomNotification errorNotification = new CustomNotification("Some queries failed to execute.", new FontIcon(MaterialDesignC.CLOSE_CIRCLE));
+            CustomNotification errorNotification = new CustomNotification("Execution Errors", "Some queries failed to execute.", new FontIcon(MaterialDesignC.CLOSE_CIRCLE));
             errorNotification.showNotification();
         }
 
         this.getChildren().addAll(tableHeader, tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
+    }
+
+    /**
+     * Splits a SQL script into individual statements on top-level semicolons,
+     * ignoring semicolons found inside single-quoted strings, double-quoted
+     * identifiers, line/block comments, and dollar-quoted blocks (e.g. {@code $$ ... $$}
+     * or {@code $tag$ ... $tag$} used by PL/pgSQL function bodies).
+     */
+    private static List<String> splitSqlStatements(String sql) {
+        List<String> statements = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        int len = sql.length();
+        int i = 0;
+
+        while (i < len) {
+            char c = sql.charAt(i);
+
+            if (c == '\'' || c == '"') {
+                int end = skipQuotedLiteral(sql, i, c);
+                current.append(sql, i, end);
+                i = end;
+            } else if (c == '-' && i + 1 < len && sql.charAt(i + 1) == '-') {
+                int end = sql.indexOf('\n', i);
+                if (end == -1) {
+                    end = len;
+                }
+                current.append(sql, i, end);
+                i = end;
+            } else if (c == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
+                int end = skipBlockComment(sql, i);
+                current.append(sql, i, end);
+                i = end;
+            } else if (c == '$') {
+                int tagEnd = findDollarTagEnd(sql, i);
+                if (tagEnd != -1) {
+                    String tag = sql.substring(i, tagEnd);
+                    int closeIndex = sql.indexOf(tag, tagEnd);
+                    int end = (closeIndex == -1) ? len : closeIndex + tag.length();
+                    current.append(sql, i, end);
+                    i = end;
+                } else {
+                    current.append(c);
+                    i++;
+                }
+            } else if (c == ';') {
+                statements.add(current.toString());
+                current.setLength(0);
+                i++;
+            } else {
+                current.append(c);
+                i++;
+            }
+        }
+
+        if (!current.toString().trim().isEmpty()) {
+            statements.add(current.toString());
+        }
+
+        return statements;
+    }
+
+    private static int skipQuotedLiteral(String sql, int start, char quoteChar) {
+        int len = sql.length();
+        int i = start + 1;
+        while (i < len) {
+            if (sql.charAt(i) == quoteChar) {
+                if (i + 1 < len && sql.charAt(i + 1) == quoteChar) {
+                    i += 2;
+                } else {
+                    return i + 1;
+                }
+            } else {
+                i++;
+            }
+        }
+        return len;
+    }
+
+    private static int skipBlockComment(String sql, int start) {
+        int len = sql.length();
+        int i = start + 2;
+        int depth = 1;
+        while (i < len && depth > 0) {
+            if (sql.charAt(i) == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
+                depth++;
+                i += 2;
+            } else if (sql.charAt(i) == '*' && i + 1 < len && sql.charAt(i + 1) == '/') {
+                depth--;
+                i += 2;
+            } else {
+                i++;
+            }
+        }
+        return i;
+    }
+
+    private static int findDollarTagEnd(String sql, int start) {
+        int len = sql.length();
+        int i = start + 1;
+
+        if (i < len && sql.charAt(i) == '$') {
+            return i + 1;
+        }
+
+        if (i < len && (Character.isLetter(sql.charAt(i)) || sql.charAt(i) == '_')) {
+            i++;
+            while (i < len && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
+                i++;
+            }
+            if (i < len && sql.charAt(i) == '$') {
+                return i + 1;
+            }
+        }
+
+        return -1;
     }
 
     private void applyChanges(TabPane tabPane) {
@@ -371,6 +496,8 @@ public class ResultBox extends VBox {
                             } else {
                                 stmt.setObject(i + 1, param);
                             }
+                        } else if (param instanceof Boolean) {
+                            stmt.setBoolean(i + 1, (Boolean) param);
                         } else {
                             stmt.setObject(i + 1, param);
                         }
@@ -390,7 +517,7 @@ public class ResultBox extends VBox {
             ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).clearUpdateTracking();
 
             App.closeModal();
-            CustomNotification customNotification = new CustomNotification("Changes saved", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
+            CustomNotification customNotification = new CustomNotification("Changes Saved", "Your edits were committed to the database.", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
             customNotification.showNotification();
 
         } catch (SQLException e) {
@@ -400,11 +527,11 @@ public class ResultBox extends VBox {
                     connection.setAutoCommit(true);
                 }
             } catch (SQLException e1) {
-                e1.printStackTrace();
+                log.error("applyChanges failed", e1);
             }
-            e.printStackTrace();
+            log.error("applyChanges failed", e);
 
-            CustomNotification customNotification = new CustomNotification("Error Saving Changes " + e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
+            CustomNotification customNotification = new CustomNotification("Save Failed", e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
             customNotification.showNotification();
         }
     }
@@ -432,7 +559,7 @@ public class ResultBox extends VBox {
         applyButton.setDisable(true);
         App.closeModal();
 
-        CustomNotification customNotification = new CustomNotification("Changes reverted successfully.", new FontIcon(MaterialDesignC.CHECKBOX_MARKED_CIRCLE_OUTLINE));
+        CustomNotification customNotification = new CustomNotification("Changes Reverted", "Your unsaved edits were discarded.", new FontIcon(MaterialDesignC.CHECKBOX_MARKED_CIRCLE_OUTLINE));
         customNotification.showNotification();
     }
 }

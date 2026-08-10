@@ -4,8 +4,10 @@ import javafx.scene.control.*;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import com.queryexe.utils.IconColorUtil;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -18,7 +20,8 @@ import com.queryexe.components.results.ResultBox;
 
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.concurrent.ExecutorService;
+
+import javafx.concurrent.Task;
 
 public class CustomTab<T extends Node> extends Tab {
 
@@ -29,7 +32,7 @@ public class CustomTab<T extends Node> extends Tab {
     private HBox graphicBox;
     private CustomTabProgressIndicator progressIndicator;
     private boolean error = false;
-    private ExecutorService executor;
+    private Task<ResultBox> runningQueryTask;
     private ResultBox resultBox;
     private T content;
     private TabPane tabPane;
@@ -61,7 +64,8 @@ public class CustomTab<T extends Node> extends Tab {
         graphicBox.setAlignment(Pos.CENTER_LEFT);
 
         icon = new FontIcon(MaterialDesignC.CLOSE);
-        icon.getStyleClass().add("custom-tab-icon");
+        IconColorUtil.apply(icon, "-color-fg-default", 17);
+        icon.setCursor(Cursor.HAND);
         icon.setOnMouseClicked(event -> {
             tabPane.getTabs().remove(this);
             if (content instanceof VirtualizedScrollPane) {
@@ -153,7 +157,7 @@ public class CustomTab<T extends Node> extends Tab {
 
     public void setErrorHeader() {
         tabLabel.setText("Error");
-        tabLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #c84164;");
+        tabLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: -color-chart-7;");
         error = true;
     }
 
@@ -210,13 +214,18 @@ public class CustomTab<T extends Node> extends Tab {
         return tabLabel;
     }
 
-    public void setExecutor(ExecutorService executor) {
-        this.progressIndicator.setExecutor(executor);
-        this.executor = executor;
+    public void setRunningQueryTask(Task<ResultBox> task) {
+        this.runningQueryTask = task;
     }
 
-    public ExecutorService getExecutor() {
-        return executor;
+    public boolean isQueryRunning() {
+        return runningQueryTask != null && runningQueryTask.isRunning();
+    }
+
+    public void cancelRunningQuery() {
+        if (runningQueryTask != null) {
+            runningQueryTask.cancel(true);
+        }
     }
 
     public ConnectionObject getConnectionObject() {

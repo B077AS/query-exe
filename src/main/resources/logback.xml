@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <conversionRule conversionWord="customLevel" class="com.queryexe.utils.CustomDebugConfig" />
+
+    <!-- Resolve AppData path via system property set in Launcher -->
+    <property name="LOG_DIR" value="${queryexe.logDir:-logs}" />
+
+    <!-- Console -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %customLevel(%-5level) %cyan(%logger{30}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Single app log -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/queryexe.log</file>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/queryexe.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>15</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Your app packages -->
+    <logger name="com.queryexe" level="DEBUG" />
+
+    <!-- Silence noisy third-party libs -->
+    <logger name="com.microsoft.credentialstorage" level="WARN" />
+    <logger name="com.microsoft.sqlserver" level="WARN" />
+    <logger name="org.mariadb.jdbc" level="WARN" />
+    <logger name="org.postgresql" level="WARN" />
+
+    <!-- Root -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="FILE" />
+    </root>
+
+</configuration>

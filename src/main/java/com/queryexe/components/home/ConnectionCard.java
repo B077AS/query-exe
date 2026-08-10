@@ -1,6 +1,5 @@
 package com.queryexe.components.home;
 
-import javafx.scene.control.TextField;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
@@ -45,96 +44,6 @@ public class ConnectionCard extends Card {
         this.setBody(createDetailsSection());
         this.getStyleClass().add("connection-card");
         setupInteractions();
-    }
-
-    public ConnectionCard() {
-        this.getStyleClass().add("connection-card");
-        this.setStyle("-fx-cursor: pointer;");
-        setupInteractions();
-
-        VBox contentBox = new VBox(15);
-        contentBox.setAlignment(Pos.CENTER);
-        contentBox.setPadding(new Insets(20));
-
-        // Top Section - Title and Actions
-        HBox topSection = new HBox(15);
-        topSection.setAlignment(Pos.CENTER);
-
-        Label mainLabel = new Label("Connection Manager");
-        mainLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        Button addButton = new Button("New");
-        addButton.setGraphic(new FontIcon(Feather.PLUS));
-        addButton.getStyleClass().addAll(Styles.BUTTON_OUTLINED);
-        addButton.setOnAction(e -> {
-            StackPane tempPane = new StackPane();
-            tempPane.setOnMouseClicked(eventStack -> {
-                App.closeModal();
-            });
-
-            AddConnectionModal modal = new AddConnectionModal();
-            modal.addEventFilter(MouseEvent.MOUSE_CLICKED, eventModal -> {
-                eventModal.consume();
-            });
-
-            tempPane.getChildren().add(modal);
-
-            App.showModal(tempPane);
-            modal.requestFocus();
-        });
-
-        Button refreshButton = new Button("Refresh");
-        refreshButton.setGraphic(new FontIcon(MaterialDesignR.REFRESH));
-        refreshButton.getStyleClass().addAll(Styles.BUTTON_OUTLINED);
-        refreshButton.setOnAction(e -> {
-            App.goHome();
-        });
-
-        topSection.getChildren().addAll(mainLabel, spacer, addButton, refreshButton);
-
-        HBox searchBox = new HBox(10);
-        searchBox.setAlignment(Pos.CENTER_LEFT);
-        searchBox.setPadding(new Insets(10, 15, 10, 15));
-        searchBox.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 6;");
-
-        FontIcon searchIcon = new FontIcon(Feather.SEARCH);
-        searchIcon.getStyleClass().add(Styles.TEXT_MUTED);
-
-        TextField searchField = new TextField();
-        searchField.setPromptText("Search connections by name...");
-        searchField.setStyle("-fx-background-color: transparent; -fx-border-width: 0;");
-        HBox.setHgrow(searchField, Priority.ALWAYS);
-
-        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
-            filterConnections(newVal);
-        });
-
-        searchBox.getChildren().addAll(searchIcon, searchField);
-
-        contentBox.getChildren().addAll(topSection, searchBox);
-        this.setBody(contentBox);
-    }
-
-    private void filterConnections(String searchText) {
-        if (this.getParent() == null) return;
-
-        ConnectionsPane connectionsPane = findConnectionsPane(this.getParent());
-        if (connectionsPane != null) {
-            connectionsPane.filterCards(searchText);
-        }
-    }
-
-    private ConnectionsPane findConnectionsPane(javafx.scene.Parent parent) {
-        if (parent instanceof ConnectionsPane) {
-            return (ConnectionsPane) parent;
-        }
-        if (parent.getParent() != null) {
-            return findConnectionsPane(parent.getParent());
-        }
-        return null;
     }
 
     private void setupCard() {
@@ -286,18 +195,29 @@ public class ConnectionCard extends Card {
     }
 
     public void cloneConnection() {
-        ConnectionService.getInstance().cloneConnection(this.connection.getId(), this.connection.getConnectionName() + " (copy)");
-        App.closeConnection();
-        CustomNotification customNotification = new CustomNotification("Connection duplicated successfully.", new FontIcon(MaterialDesignC.CONTENT_COPY));
-        customNotification.showNotification();
+        String newId = ConnectionService.getInstance().cloneConnection(
+                this.connection.getId(), this.connection.getConnectionName() + " (copy)");
+
+        ConnectionsPane connectionsPane = App.getConnectionsPane();
+        if (connectionsPane != null) {
+            connectionsPane.addConnection(newId);
+        }
+
+        new CustomNotification("Connection Duplicated", "A copy of the connection was created.", new FontIcon(MaterialDesignC.CONTENT_COPY))
+                .showNotification();
     }
 
     public void deleteConnection() {
         if (ConnectionService.getInstance().deleteConnection(connection.getId())) {
             App.closeModal();
-            CustomNotification customNotification = new CustomNotification("Connection deleted successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE));
-            customNotification.showNotification();
-            App.closeConnection();
+
+            ConnectionsPane connectionsPane = App.getConnectionsPane();
+            if (connectionsPane != null) {
+                connectionsPane.removeConnection(connection.getId());
+            }
+
+            new CustomNotification("Connection Deleted", "The connection was removed successfully.", new FontIcon(MaterialDesignD.DELETE_EMPTY_OUTLINE))
+                    .showNotification();
         }
     }
 

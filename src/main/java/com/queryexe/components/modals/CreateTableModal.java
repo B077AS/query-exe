@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -27,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class CreateTableModal extends VBox {
 
     private ObservableList<String> localColumnsList;
@@ -123,7 +126,7 @@ public class CreateTableModal extends VBox {
     }
 
     private void initializeUI() {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(950, 550);
         this.setMinSize(950, 550);
         this.setPrefSize(950, 550);
@@ -188,14 +191,8 @@ public class CreateTableModal extends VBox {
 
         addButton = new Button("Add", new FontIcon(MaterialDesignP.PLUS));
         addButton.setFocusTraversable(false);
-        addButton.getStyleClass().add("hover-opac");
-        addButton.setStyle("""
-                -fx-background-color: transparent;
-                -fx-border-color: #666666;
-                -fx-border-width: 1px;
-                -fx-background-radius: 6px;
-                -fx-border-radius: 6px;
-                """);
+        addButton.getStyleClass().addAll(Styles.SMALL, "hover-opac");
+        addButton.setStyle("-fx-background-color: transparent;");
 
         Button columnsTabButton = createTabHeader("Columns", columnsTab, new FontIcon(MaterialDesignT.TABLE_COLUMN),
                 () -> {
@@ -217,6 +214,7 @@ public class CreateTableModal extends VBox {
         buttonsBox.setPadding(new Insets(10, 20, 10, 20));
 
         Button confirmButton = new Button(isEditMode ? "Update Table" : "Create Table");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setPrefWidth(125);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
@@ -224,6 +222,7 @@ public class CreateTableModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setPrefWidth(125);
         cancelButton.setOnAction(event -> {
             App.closeModal();
@@ -272,9 +271,9 @@ public class CreateTableModal extends VBox {
             }
 
         } catch (SQLException e) {
-            CustomNotification notification = new CustomNotification("Failed to load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
-            e.printStackTrace();
+            log.error("loadTableData failed", e);
         }
     }
 
@@ -323,7 +322,7 @@ public class CreateTableModal extends VBox {
                 -fx-background-color: -color-bg-default;
                 -fx-background-radius: 8px;
                 -fx-border-radius: 8px;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 -fx-border-width: 1px;
                 -fx-padding: 10px;
                 """);
@@ -630,7 +629,7 @@ public class CreateTableModal extends VBox {
 
     private void handleCreateTable(String tableName) {
         if (tableName == null || tableName.trim().isEmpty()) {
-            CustomNotification notification = new CustomNotification("Table name cannot be empty", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Invalid Table", "The table name cannot be empty.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
             return;
         }
@@ -641,13 +640,13 @@ public class CreateTableModal extends VBox {
             String dataType = comp.dataTypeCombo.getValue();
 
             if (name == null || name.trim().isEmpty()) {
-                CustomNotification notification = new CustomNotification("Column name cannot be empty", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification notification = new CustomNotification("Invalid Column", "A column name cannot be empty.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
                 return;
             }
 
             if (dataType == null || dataType.trim().isEmpty()) {
-                CustomNotification notification = new CustomNotification("Data type for column '" + name + "' cannot be empty", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification notification = new CustomNotification("Invalid Column", "The data type for column '" + name + "' cannot be empty.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
                 return;
             }
@@ -663,7 +662,7 @@ public class CreateTableModal extends VBox {
         }
 
         if (columns.isEmpty()) {
-            CustomNotification notification = new CustomNotification("At least one column is required", new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Invalid Table", "At least one column is required.", new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
             return;
         }
@@ -711,7 +710,7 @@ public class CreateTableModal extends VBox {
                         .generateAlterTableSQL(databaseName, originalTableName, tableName.trim(),
                                 oldColumns, columns, oldForeignKeys, foreignKeys, columnRenames);
             } catch (SQLException e) {
-                CustomNotification notification = new CustomNotification("Failed to generate ALTER script: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+                CustomNotification notification = new CustomNotification("Script Generation Failed", "Could not generate the ALTER script: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
                 return;
             }

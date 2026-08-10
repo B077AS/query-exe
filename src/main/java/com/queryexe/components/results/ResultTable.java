@@ -1,5 +1,7 @@
 package com.queryexe.components.results;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -12,23 +14,32 @@ import atlantafx.base.theme.Styles;
 import atlantafx.base.theme.Tweaks;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Orientation;
+import javafx.scene.Node;
 import javafx.scene.control.ScrollBar;
 import javafx.scene.control.SelectionMode;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TablePosition;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
+import javafx.stage.Window;
 import javafx.util.StringConverter;
 import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.data.QueryData;
 
+@Slf4j
 public class ResultTable extends TableView<TableRowData> {
 
     private String tableName;
@@ -39,11 +50,59 @@ public class ResultTable extends TableView<TableRowData> {
     private Runnable onCellUpdate;
     private final int minColumnWidth = 150;
     private static final int MAX_CELL_LENGTH = 200;
-    private Map<String, Integer> rowUpdateQueryIndex = new HashMap<>();
+    private Map<String, QueryData> rowUpdateQueries = new HashMap<>();
+    private List<Integer> columnSqlTypes = new ArrayList<>();
+    private final javafx.event.EventHandler<MouseEvent> outsideEditClickFilter = event -> {
+        TablePosition<TableRowData, ?> editingCell = this.getEditingCell();
+        if (editingCell == null) {
+            return;
+        }
 
-    public ResultTable(PreparedStatement preparedStatement, long executionTime, Runnable onCellUpdate) throws SQLException {
+        Node target = (Node) event.getTarget();
+        while (target != null) {
+            if (target instanceof TableCell<?, ?> cell
+                    && cell.getTableView() == this
+                    && cell.getIndex() == editingCell.getRow()
+                    && this.getColumns().indexOf(cell.getTableColumn()) == editingCell.getColumn()) {
+                return;
+            }
+            target = target.getParent();
+        }
+
+        Platform.runLater(this::endEditCleanly);
+    };
+
+    // A click on another node in the same window is caught by outsideEditClickFilter
+    // above, but a click on the taskbar, the desktop, or another application never
+    // reaches our Scene at all — only the OS-level window focus flips. Catch that
+    // case separately.
+    private final ChangeListener<Boolean> windowFocusListener = (obs, wasFocused, isFocused) -> {
+        if (!isFocused && this.getEditingCell() != null) {
+            Platform.runLater(this::endEditCleanly);
+        }
+    };
+
+    private void endEditCleanly() {
+        if (this.getEditingCell() == null) {
+            return;
+        }
+        this.requestFocus();
+        if (this.getEditingCell() != null) {
+            this.edit(-1, null);
+        }
+    }
+
+    private final ChangeListener<Window> windowChangeListener = (obs, oldWindow, newWindow) -> {
+        if (oldWindow != null) {
+            oldWindow.focusedProperty().removeListener(windowFocusListener);
+        }
+        if (newWindow != null) {
+            newWindow.focusedProperty().addListener(windowFocusListener);
+        }
+    };
+
+    public ResultTable(PreparedStatement preparedStatement, long executionTime) throws SQLException {
         this.updateQueries = new ArrayList<QueryData>();
-        this.onCellUpdate = onCellUpdate;
         this.executionTime = executionTime;
 
         Styles.toggleStyleClass(this, Styles.BORDERED);
@@ -57,6 +116,27 @@ public class ResultTable extends TableView<TableRowData> {
         this.focusedProperty().addListener((observable, oldValue, newValue) -> {
             if (newValue) {
                 this.getParent().getParent().requestFocus();
+            }
+        });
+
+        // Focus-loss alone misses clicks on non-focusable areas (blank panes,
+        // labels, ...), which is why the editor could get stuck open. Catch
+        // every press scene-wide and close the edit unless it landed on the
+        // cell currently being edited.
+        this.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null) {
+                oldScene.removeEventFilter(MouseEvent.MOUSE_PRESSED, outsideEditClickFilter);
+                oldScene.windowProperty().removeListener(windowChangeListener);
+                if (oldScene.getWindow() != null) {
+                    oldScene.getWindow().focusedProperty().removeListener(windowFocusListener);
+                }
+            }
+            if (newScene != null) {
+                newScene.addEventFilter(MouseEvent.MOUSE_PRESSED, outsideEditClickFilter);
+                newScene.windowProperty().addListener(windowChangeListener);
+                if (newScene.getWindow() != null) {
+                    newScene.getWindow().focusedProperty().addListener(windowFocusListener);
+                }
             }
         });
 
@@ -82,6 +162,7 @@ public class ResultTable extends TableView<TableRowData> {
             final int columnOffset = columnIndex - 1;
 
             int columnType = metaData.getColumnType(columnIndex);
+            columnSqlTypes.add(metaData.getColumnType(columnIndex));
 
             if (columnType == java.sql.Types.BLOB || columnType == java.sql.Types.LONGVARBINARY ||
                     columnType == java.sql.Types.VARBINARY || columnType == java.sql.Types.BINARY) {
@@ -108,6 +189,32 @@ public class ResultTable extends TableView<TableRowData> {
                         }) {
 
                     private String fullValue;
+                    private TextField editorField;
+                    private boolean escapePressed;
+                    // Captured at startEdit: when a cell is recycled while editing
+                    // (scrolling), updateItem swaps in another row's data before
+                    // cancelEdit runs, so reading them there would hit the wrong row.
+                    private TableRowData editingRowData;
+                    private String editingOldValue;
+
+                    {
+                        // Both JavaFX's built-in :focus-within and :editing pseudo-classes
+                        // proved unreliable for driving the "is this cell being edited"
+                        // border on a recycled TableCell whose editor gets swapped out
+                        // programmatically. Own the style entirely instead: this listener
+                        // is the single source of truth, in sync with editingProperty
+                        // regardless of whether startEdit/cancelEdit/commitEdit is what
+                        // changed it.
+                        this.editingProperty().addListener((obs, wasEditing, editing) -> {
+                            if (editing) {
+                                if (!this.getStyleClass().contains("cell-editing")) {
+                                    this.getStyleClass().add("cell-editing");
+                                }
+                            } else {
+                                this.getStyleClass().remove("cell-editing");
+                            }
+                        });
+                    }
 
                     @Override
                     public void updateItem(String item, boolean empty) {
@@ -123,11 +230,7 @@ public class ResultTable extends TableView<TableRowData> {
                             fullValue = null;
                             if (getContextMenu() == null && getTableView() != null && getIndex() >= 0) {
                                 try {
-                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(
-                                            item,
-                                            getTableView().getItems().get(getIndex()),
-                                            this
-                                    );
+                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(item, this);
                                     setContextMenu(contextMenu);
                                 } catch (Exception e) {
                                 }
@@ -142,11 +245,7 @@ public class ResultTable extends TableView<TableRowData> {
 
                             if (getContextMenu() == null && getTableView() != null && getIndex() >= 0) {
                                 try {
-                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(
-                                            item,
-                                            getTableView().getItems().get(getIndex()),
-                                            this
-                                    );
+                                    ResultCellsContextMenu contextMenu = new ResultCellsContextMenu(item, this);
                                     setContextMenu(contextMenu);
                                 } catch (Exception e) {
                                 }
@@ -162,10 +261,45 @@ public class ResultTable extends TableView<TableRowData> {
                         super.startEdit();
                         setText(null);
                         setStyle("");
+
+                        escapePressed = false;
+                        if (isEditing()) {
+                            editingRowData = getTableRow() != null ? getTableRow().getItem() : null;
+                            editingOldValue = getItem();
+                        }
+                        if (isEditing() && getGraphic() instanceof TextField textField && textField != editorField) {
+                            // TextFieldTableCell reuses one text field per cell, so the
+                            // listeners are attached exactly once.
+                            editorField = textField;
+                            textField.addEventFilter(KeyEvent.KEY_PRESSED, keyEvent -> {
+                                if (keyEvent.getCode() == KeyCode.ESCAPE) {
+                                    escapePressed = true;
+                                }
+                            });
+                            // Close the edit when the editor loses focus (e.g. a click
+                            // outside the table). Routed through cancelEdit rather than
+                            // commitEdit: cancelEdit reliably removes the text field, and
+                            // our override below still logs the typed value.
+                            textField.focusedProperty().addListener((obs, hadFocus, hasFocus) -> {
+                                if (!hasFocus && isEditing()) {
+                                    cancelEdit();
+                                }
+                            });
+                        }
                     }
 
                     @Override
                     public void cancelEdit() {
+                        // An edit interrupted by anything other than ESC (clicking another
+                        // cell, scrolling, ...) still counts: log the typed value as a
+                        // pending change instead of discarding it.
+                        boolean logPendingEdit = !escapePressed && editorField != null && isEditing();
+                        String editedValue = logPendingEdit ? editorField.getText() : null;
+                        String previousValue = editingOldValue;
+                        TableRowData rowData = editingRowData;
+                        editingRowData = null;
+                        editingOldValue = null;
+
                         super.cancelEdit();
                         String item = getItem();
                         if (item == null) {
@@ -177,6 +311,11 @@ public class ResultTable extends TableView<TableRowData> {
                                     : item;
                             setText(displayText);
                             setStyle("");
+                        }
+
+                        if (logPendingEdit && rowData != null && !Objects.equals(previousValue, editedValue)
+                                && !isUnchangedNull(previousValue, editedValue)) {
+                            updateDatabaseRow(rowData, columnOffset, previousValue, editedValue);
                         }
                     }
                 };
@@ -331,6 +470,10 @@ public class ResultTable extends TableView<TableRowData> {
         addTableResizeListener();
     }
 
+    private static boolean isUnchangedNull(String previousValue, String editedValue) {
+        return previousValue == null && (editedValue == null || editedValue.isEmpty());
+    }
+
     private UUID bytesToUUID(byte[] bytes) {
         if (bytes.length != 16) {
             throw new IllegalArgumentException("UUID must be 16 bytes");
@@ -379,12 +522,12 @@ public class ResultTable extends TableView<TableRowData> {
         }
 
         if (tableNames.size() > 1) {
-            System.out.println("Multiple tables detected - likely a JOIN query");
+            log.debug("Multiple tables detected - likely a JOIN query");
             return false;
         }
 
         if (tableNames.isEmpty()) {
-            System.out.println("No table names found in metadata");
+            log.debug("No table names found in metadata");
             return false;
         }
 
@@ -400,7 +543,7 @@ public class ResultTable extends TableView<TableRowData> {
         }
 
         if (primaryKeyColumns.isEmpty()) {
-            System.out.println("No primary keys or unique indexes found for table: " + tableName);
+            log.debug("No primary keys or unique indexes found for table: {}", tableName);
             return false;
         }
 
@@ -428,23 +571,23 @@ public class ResultTable extends TableView<TableRowData> {
     }
 
     public void updateDatabaseRow(TableRowData rowData, int updatedColumnIndex, String oldValue, String newValue) {
+        Object previousOriginal = rowData.getOriginalData().get(updatedColumnIndex);
         try {
-            Object typedValue = convertToOriginalType(rowData, updatedColumnIndex, newValue);
+            Object typedValue = convertToOriginalType(updatedColumnIndex, newValue);
 
             rowData.getStringData().set(updatedColumnIndex, newValue);
             rowData.getOriginalData().set(updatedColumnIndex, typedValue);
 
             if (rowData.isNewRow()) {
-                int queryIndex = rowData.getQueryIndex();
-                QueryData insertQuery = updateQueries.get(queryIndex);
-                insertQuery.getParameters().set(updatedColumnIndex, newValue.isEmpty() ? null : typedValue);
+                // typedValue is already null for null/empty input, which also avoids
+                // the NPE the old newValue.isEmpty() check caused on "Set NULL".
+                QueryData insertQuery = rowData.getPendingInsert();
+                insertQuery.getParameters().set(updatedColumnIndex, typedValue);
             } else {
                 String rowIdentifier = getRowIdentifier(rowData);
+                QueryData existingQuery = rowUpdateQueries.get(rowIdentifier);
 
-                if (rowUpdateQueryIndex.containsKey(rowIdentifier)) {
-                    int queryIndex = rowUpdateQueryIndex.get(rowIdentifier);
-                    QueryData existingQuery = updateQueries.get(queryIndex);
-
+                if (existingQuery != null) {
                     String columnName = this.getColumns().get(updatedColumnIndex).getText();
                     String currentQuery = existingQuery.getQuery();
                     int setIndex = currentQuery.indexOf("SET ") + 4;
@@ -452,7 +595,22 @@ public class ResultTable extends TableView<TableRowData> {
                     String setClause = currentQuery.substring(setIndex, whereIndex);
                     String whereClause = currentQuery.substring(whereIndex);
 
-                    if (!setClause.contains(columnName + " = ?")) {
+                    // Exact match against the SET columns: a contains() check would
+                    // confuse columns whose names are suffixes of one another
+                    // (e.g. "name" matches inside "username = ?").
+                    String[] setColumns = setClause.split(",");
+                    int existingParamIndex = -1;
+                    for (int i = 0; i < setColumns.length; i++) {
+                        String colName = setColumns[i].trim().split(" = ")[0];
+                        if (colName.equals(columnName)) {
+                            existingParamIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (existingParamIndex >= 0) {
+                        existingQuery.getParameters().set(existingParamIndex, typedValue);
+                    } else {
                         setClause += ", " + columnName + " = ?";
 
                         String updatedQuery = String.format("UPDATE %s SET %s%s", tableName, setClause, whereClause);
@@ -461,24 +619,13 @@ public class ResultTable extends TableView<TableRowData> {
                         List<Object> params = existingQuery.getParameters();
                         int whereParamIndex = params.size() - primaryKeyColumns.size();
                         params.add(whereParamIndex, typedValue);
-                    } else {
-                        String[] setColumns = setClause.split(",");
-                        int paramIndex = 0;
-                        for (String setColumn : setColumns) {
-                            String colName = setColumn.trim().split(" = ")[0];
-                            if (colName.equals(columnName)) {
-                                existingQuery.getParameters().set(paramIndex, typedValue);
-                                break;
-                            }
-                            paramIndex++;
-                        }
                     }
                 } else {
                     Map<String, Object> primaryKeyValues = new HashMap<>();
                     for (String primaryKeyColumn : primaryKeyColumns) {
                         int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
                         if (pkIndex == updatedColumnIndex) {
-                            Object oldTypedValue = convertToOriginalType(rowData, pkIndex, oldValue);
+                            Object oldTypedValue = convertToOriginalType(pkIndex, oldValue);
                             primaryKeyValues.put(primaryKeyColumn, oldTypedValue);
                         } else {
                             primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
@@ -510,7 +657,7 @@ public class ResultTable extends TableView<TableRowData> {
 
                         QueryData queryInfo = new QueryData(updateQuery, parameters);
                         updateQueries.add(queryInfo);
-                        rowUpdateQueryIndex.put(rowIdentifier, updateQueries.size() - 1);
+                        rowUpdateQueries.put(rowIdentifier, queryInfo);
                     }
                 }
             }
@@ -520,62 +667,59 @@ public class ResultTable extends TableView<TableRowData> {
             }
             this.refresh();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("updateDatabaseRow failed", e);
             rowData.getStringData().set(updatedColumnIndex, oldValue);
+            rowData.getOriginalData().set(updatedColumnIndex, previousOriginal);
             this.refresh();
         }
     }
 
-    private Object convertToOriginalType(TableRowData rowData, int columnIndex, String stringValue) {
+    private Object convertToOriginalType(int columnIndex, String stringValue) {
         if (stringValue == null || stringValue.isEmpty()) {
             return null;
         }
 
-        if (!backupData.isEmpty() && columnIndex < backupData.get(0).getOriginalData().size()) {
-            Object originalValue = null;
-
-            int rowIndex = this.getItems().indexOf(rowData);
-            if (rowIndex >= 0 && rowIndex < backupData.size()) {
-                originalValue = backupData.get(rowIndex).getOriginalData().get(columnIndex);
-            }
-
-            if (originalValue == null && rowData.getOriginalData().get(columnIndex) != null) {
-                originalValue = rowData.getOriginalData().get(columnIndex);
-            }
-
-            if (originalValue != null) {
-                try {
-                    if (originalValue instanceof UUID) {
-                        return UUID.fromString(stringValue);
-                    } else if (originalValue instanceof Integer) {
-                        return Integer.parseInt(stringValue);
-                    } else if (originalValue instanceof Long) {
-                        return Long.parseLong(stringValue);
-                    } else if (originalValue instanceof Double) {
-                        return Double.parseDouble(stringValue);
-                    } else if (originalValue instanceof Float) {
-                        return Float.parseFloat(stringValue);
-                    } else if (originalValue instanceof Short) {
-                        return Short.parseShort(stringValue);
-                    } else if (originalValue instanceof Byte) {
-                        return Byte.parseByte(stringValue);
-                    } else if (originalValue instanceof Boolean) {
-                        return Boolean.parseBoolean(stringValue) || stringValue.equals("1");
-                    } else if (originalValue instanceof java.sql.Date) {
-                        return java.sql.Date.valueOf(stringValue);
-                    } else if (originalValue instanceof java.sql.Time) {
-                        return java.sql.Time.valueOf(stringValue);
-                    } else if (originalValue instanceof java.sql.Timestamp) {
-                        return java.sql.Timestamp.valueOf(stringValue);
-                    } else if (originalValue instanceof java.math.BigDecimal) {
-                        return new java.math.BigDecimal(stringValue);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Failed to convert value to original type: " + e.getMessage());
-                }
-            }
+        if (columnIndex >= columnSqlTypes.size()) {
+            return stringValue;
         }
-        return stringValue;
+
+        try {
+            switch (columnSqlTypes.get(columnIndex)) {
+                case java.sql.Types.BOOLEAN:
+                case java.sql.Types.BIT: {
+                    String lower = stringValue.trim().toLowerCase();
+                    return lower.equals("true") || lower.equals("1") || lower.equals("yes");
+                }
+                case java.sql.Types.INTEGER:
+                case java.sql.Types.SMALLINT:
+                    return Integer.parseInt(stringValue);
+                case java.sql.Types.BIGINT:
+                    return Long.parseLong(stringValue);
+                case java.sql.Types.FLOAT:
+                case java.sql.Types.REAL:
+                    return Float.parseFloat(stringValue);
+                case java.sql.Types.DOUBLE:
+                    return Double.parseDouble(stringValue);
+                case java.sql.Types.NUMERIC:
+                case java.sql.Types.DECIMAL:
+                    return new java.math.BigDecimal(stringValue);
+                case java.sql.Types.DATE:
+                    return java.sql.Date.valueOf(stringValue);
+                case java.sql.Types.TIME:
+                    return java.sql.Time.valueOf(stringValue);
+                case java.sql.Types.TIMESTAMP:
+                    return java.sql.Timestamp.valueOf(stringValue);
+                case java.sql.Types.BINARY:
+                case java.sql.Types.VARBINARY:
+                case java.sql.Types.BLOB:
+                    return UUID.fromString(stringValue);
+                default:
+                    return stringValue;
+            }
+        } catch (Exception e) {
+            log.warn("Type conversion failed for column {}: {}", columnIndex, e.getMessage());
+            return stringValue;
+        }
     }
 
     public void addDatabaseRow() {
@@ -613,8 +757,7 @@ public class ResultTable extends TableView<TableRowData> {
 
         QueryData queryInfo = new QueryData(insertQuery, parameters);
         updateQueries.add(queryInfo);
-
-        newRow.setQueryIndex(updateQueries.size() - 1);
+        newRow.setPendingInsert(queryInfo);
 
         this.getItems().add(newRow);
 
@@ -627,8 +770,92 @@ public class ResultTable extends TableView<TableRowData> {
         }
     }
 
+    public void duplicateDatabaseRow(TableRowData sourceRow) {
+        List<Object> newOriginalData = new ArrayList<>(sourceRow.getOriginalData());
+        List<String> newStringData = new ArrayList<>(sourceRow.getStringData());
+
+        for (int i = 0; i < this.getColumns().size(); i++) {
+            String colName = this.getColumns().get(i).getText().toUpperCase();
+            if (primaryKeyColumns.contains(colName)) {
+                newOriginalData.set(i, null);
+                newStringData.set(i, "");
+            }
+        }
+
+        TableRowData newRow = new TableRowData(
+                FXCollections.observableArrayList(newOriginalData),
+                FXCollections.observableArrayList(newStringData)
+        );
+        newRow.setNewRow(true);
+
+        StringBuilder columnsClause = new StringBuilder();
+        StringBuilder valuesClause = new StringBuilder();
+        List<Object> parameters = new ArrayList<>();
+
+        for (int i = 0; i < this.getColumns().size(); i++) {
+            if (i > 0) {
+                columnsClause.append(", ");
+                valuesClause.append(", ");
+            }
+            columnsClause.append(this.getColumns().get(i).getText());
+            valuesClause.append("?");
+            parameters.add(newOriginalData.get(i));
+        }
+
+        String insertQuery = String.format(
+                "INSERT INTO %s (%s) VALUES (%s)",
+                tableName,
+                columnsClause.toString(),
+                valuesClause.toString()
+        );
+
+        QueryData queryInfo = new QueryData(insertQuery, parameters);
+        updateQueries.add(queryInfo);
+        newRow.setPendingInsert(queryInfo);
+
+        this.getItems().add(newRow);
+        this.scrollTo(newRow);
+        this.getSelectionModel().clearSelection();
+        this.getSelectionModel().select(newRow);
+
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+    }
+
     public void deleteDatabaseRow(int rowIndex) {
-        TableRowData rowData = this.getItems().get(rowIndex);
+        queueRowDeletion(this.getItems().get(rowIndex));
+        this.getItems().remove(rowIndex);
+
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+    }
+
+    public void deleteDatabaseRows(ObservableList<Integer> rows) {
+        List<Integer> sortedRows = new ArrayList<>(rows);
+        sortedRows.sort(Collections.reverseOrder());
+
+        for (Integer row : sortedRows) {
+            queueRowDeletion(this.getItems().get(row));
+            this.getItems().remove(row.intValue());
+        }
+
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+    }
+
+    private void queueRowDeletion(TableRowData rowData) {
+        if (rowData.isNewRow()) {
+            // The row never reached the database: dropping its pending INSERT is
+            // enough. Identity comparison, because two duplicated rows can hold
+            // equal-by-value insert queries.
+            QueryData pendingInsert = rowData.getPendingInsert();
+            updateQueries.removeIf(queryData -> queryData == pendingInsert);
+            return;
+        }
+
         Map<String, Object> primaryKeyValues = new HashMap<>();
         for (String primaryKeyColumn : primaryKeyColumns) {
             int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
@@ -654,52 +881,6 @@ public class ResultTable extends TableView<TableRowData> {
 
         QueryData queryInfo = new QueryData(deleteQuery, parameters);
         updateQueries.add(queryInfo);
-
-        this.getItems().remove(rowIndex);
-
-        if (onCellUpdate != null) {
-            onCellUpdate.run();
-        }
-    }
-
-    public void deleteDatabaseRows(ObservableList<Integer> rows) {
-        List<Integer> sortedRows = new ArrayList<>(rows);
-        sortedRows.sort(Collections.reverseOrder());
-
-        for (Integer row : sortedRows) {
-            TableRowData rowData = this.getItems().get(row);
-            Map<String, Object> primaryKeyValues = new HashMap<>();
-            for (String primaryKeyColumn : primaryKeyColumns) {
-                int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
-                if (pkIndex >= 0) {
-                    primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
-                }
-            }
-
-            StringBuilder whereClause = new StringBuilder();
-            List<Object> parameters = new ArrayList<>();
-
-            boolean isFirst = true;
-            for (Map.Entry<String, Object> entry : primaryKeyValues.entrySet()) {
-                if (!isFirst) {
-                    whereClause.append(" AND ");
-                }
-                whereClause.append(entry.getKey()).append(" = ?");
-                parameters.add(entry.getValue());
-                isFirst = false;
-            }
-
-            String deleteQuery = String.format("DELETE FROM %s WHERE %s", tableName, whereClause.toString());
-
-            QueryData queryInfo = new QueryData(deleteQuery, parameters);
-            updateQueries.add(queryInfo);
-
-            this.getItems().remove(row.intValue());
-        }
-
-        if (onCellUpdate != null) {
-            onCellUpdate.run();
-        }
     }
 
     private int getPrimaryKeyColumnIndex(TableRowData rowData, String primaryKeyColumnName) {
@@ -724,7 +905,7 @@ public class ResultTable extends TableView<TableRowData> {
             this.setItems(restoredData);
 
             this.updateQueries.clear();
-            this.rowUpdateQueryIndex.clear();
+            this.rowUpdateQueries.clear();
             this.refresh();
         });
     }
@@ -770,7 +951,15 @@ public class ResultTable extends TableView<TableRowData> {
 
     public void clearUpdateTracking() {
         this.updateQueries.clear();
-        this.rowUpdateQueryIndex.clear();
+        this.rowUpdateQueries.clear();
+    }
+
+    public boolean hasPendingChanges() {
+        return !updateQueries.isEmpty();
+    }
+
+    public void setOnCellUpdate(Runnable onCellUpdate) {
+        this.onCellUpdate = onCellUpdate;
     }
 
     public String getTableName() {

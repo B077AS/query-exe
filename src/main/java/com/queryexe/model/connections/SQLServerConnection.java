@@ -1,5 +1,7 @@
 package com.queryexe.model.connections;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -25,6 +27,7 @@ import com.queryexe.model.data.ForeignKeyData;
 
 import javafx.scene.control.TableColumn;
 
+@Slf4j
 public class SQLServerConnection extends ConnectionObject {
 
     private String[] KEYWORDS = new String[]{
@@ -105,7 +108,7 @@ public class SQLServerConnection extends ConnectionObject {
 
             return tablesMap;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getAllTablesAndColumns failed", e);
             throw new RuntimeException("Failed to fetch database schema for database: " + databaseName, e);
         }
     }
@@ -522,7 +525,7 @@ public class SQLServerConnection extends ConnectionObject {
             result.close();
             return databases;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getDatabases failed", e);
         }
         return databases;
     }
@@ -688,7 +691,7 @@ public class SQLServerConnection extends ConnectionObject {
 
             return script.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateCreateScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -784,7 +787,7 @@ public class SQLServerConnection extends ConnectionObject {
             columns.close();
 
             if (columnNames.isEmpty()) {
-                System.err.println("No columns found for table: " + tableName);
+                log.error("No columns found for table: " + tableName);
                 return "-- ERROR No columns found for table: " + tableName;
             }
 
@@ -814,7 +817,7 @@ public class SQLServerConnection extends ConnectionObject {
 
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -893,7 +896,7 @@ public class SQLServerConnection extends ConnectionObject {
             insertScript.append(");");
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateRowInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }

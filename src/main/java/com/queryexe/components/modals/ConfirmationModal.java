@@ -2,6 +2,7 @@ package com.queryexe.components.modals;
 
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,7 +17,7 @@ import com.queryexe.queryexe.App;
 public class ConfirmationModal extends VBox {
 
     public ConfirmationModal(String title, String message, FontIcon icon, Runnable onConfirmAction) {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(450, 200);
         this.setMinSize(450, 200);
         this.setPrefSize(450, 200);
@@ -52,7 +53,7 @@ public class ConfirmationModal extends VBox {
         textLabel.setWrapText(true);
         textBox.getChildren().addAll(titleLabel, textLabel);
 
-        icon.getStyleClass().add("custom-alert-icon");
+        IconColorUtil.apply(icon, "-color-fg-default", 50);
         upperBox.getChildren().addAll(icon, textBox);
 
         HBox buttonsBox = new HBox();
@@ -61,6 +62,7 @@ public class ConfirmationModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button confirmButton = new Button("Confirm");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
             if (onConfirmAction != null) {
@@ -69,6 +71,7 @@ public class ConfirmationModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setOnAction(event -> {
             App.closeModal();
         });

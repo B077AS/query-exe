@@ -93,14 +93,14 @@ public class FindPopup {
         navRow.setAlignment(Pos.CENTER_LEFT);
 
         caseSensitiveCheckBox = new CheckBox("Match case");
-        caseSensitiveCheckBox.setStyle("-fx-text-fill: #f8f8f2; -fx-font-size: 12px;");
+        caseSensitiveCheckBox.setStyle("-fx-text-fill: -color-fg-default; -fx-font-size: 12px;");
         caseSensitiveCheckBox.setSelected(false);
 
         HBox navSpacer = new HBox();
         HBox.setHgrow(navSpacer, Priority.ALWAYS);
 
         matchLabel = new Label("0/0");
-        matchLabel.setStyle("-fx-text-fill: #f8f8f2; -fx-font-size: 11px;");
+        matchLabel.setStyle("-fx-text-fill: -color-fg-default; -fx-font-size: 11px;");
         matchLabel.setMinWidth(50);
         matchLabel.setAlignment(Pos.CENTER);
 

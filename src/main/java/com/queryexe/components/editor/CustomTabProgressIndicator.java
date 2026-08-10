@@ -7,15 +7,15 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import com.queryexe.components.extra.CustomNotification;
+import com.queryexe.utils.IconColorUtil;
+import javafx.scene.Cursor;
 
 import java.sql.SQLException;
-import java.util.concurrent.ExecutorService;
 
 public class CustomTabProgressIndicator extends StackPane {
 
     private ProgressIndicator progressIndicator;
     private FontIcon cancelButton;
-    private ExecutorService executor;
     private CustomTab<?> parentTab;
 
     public CustomTabProgressIndicator(CustomTab<?> parentTab) {
@@ -26,7 +26,8 @@ public class CustomTabProgressIndicator extends StackPane {
         progressIndicator.setMaxSize(17, 17);
 
         cancelButton = new FontIcon(MaterialDesignS.STOP);
-        cancelButton.getStyleClass().add("custom-tab-icon");
+        IconColorUtil.apply(cancelButton, "-color-fg-default", 17);
+        cancelButton.setCursor(Cursor.HAND);
         cancelButton.setVisible(false);
 
         cancelButton.setOnMouseClicked(event -> {
@@ -34,11 +35,13 @@ public class CustomTabProgressIndicator extends StackPane {
                 try {
                     this.parentTab.getCurrentStatement().cancel();
                 } catch (SQLException e) {
-                    CustomNotification notification = new CustomNotification("Error cancelling statement:\n" + e.getMessage(), new FontIcon(MaterialDesignC.CANCEL));
+                    CustomNotification notification = new CustomNotification("Cancel Failed", e.getMessage(), new FontIcon(MaterialDesignC.CANCEL));
                     notification.showNotification();
                 }
             }
-            this.executor.shutdownNow();
+            if (this.parentTab != null) {
+                this.parentTab.cancelRunningQuery();
+            }
         });
 
         this.getChildren().addAll(progressIndicator, cancelButton);
@@ -52,9 +55,5 @@ public class CustomTabProgressIndicator extends StackPane {
             progressIndicator.setVisible(true);
             cancelButton.setVisible(false);
         });
-    }
-
-    public void setExecutor(ExecutorService executor) {
-        this.executor = executor;
     }
 }

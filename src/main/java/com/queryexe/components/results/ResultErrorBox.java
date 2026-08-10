@@ -35,22 +35,22 @@ public class ResultErrorBox extends HBox {
         scrollPane.setHbarPolicy(ScrollBarPolicy.NEVER);
 
         Text errorQueryLabel = new Text("Query: ");
-        errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: #c84164;");
+        errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-chart-7;");
 
         Text queryText = new Text(query.trim() + "\n\n");
-        queryText.setStyle("-fx-font-style: italic; -fx-fill: #d4d4d7;");
+        queryText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
 
         Text messageLabel = new Text("Message: ");
-        messageLabel.setStyle("-fx-font-weight: bold; -fx-fill: #c84164;");
+        messageLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-chart-7;");
 
         Text messageText = new Text(e.getMessage() + "\n\n");
-        messageText.setStyle("-fx-font-style: italic; -fx-fill: #d4d4d7;");
+        messageText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
 
         Text errorCodeLabel = new Text("Error Code: ");
-        errorCodeLabel.setStyle("-fx-font-weight: bold; -fx-fill: #c84164;");
+        errorCodeLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-chart-7;");
 
         Text errorCodeText = new Text(e.getErrorCode() + "\n");
-        errorCodeText.setStyle("-fx-font-style: italic; -fx-fill: #d4d4d7;");
+        errorCodeText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
 
         errorFlow.getChildren().addAll(
                 errorQueryLabel,
@@ -72,7 +72,7 @@ public class ResultErrorBox extends HBox {
             content.putString(query.trim() + " - " + e.getMessage() + " - " + e.getErrorCode());
             clipboard.setContent(content);
 
-            CustomNotification copiedNotification = new CustomNotification("Error Copied", new FontIcon(MaterialDesignC.CLIPBOARD_CHECK_MULTIPLE_OUTLINE));
+            CustomNotification copiedNotification = new CustomNotification("Error Copied", "The error details were copied to your clipboard.", new FontIcon(MaterialDesignC.CLIPBOARD_CHECK_MULTIPLE_OUTLINE));
             copiedNotification.showNotification();
         });
 

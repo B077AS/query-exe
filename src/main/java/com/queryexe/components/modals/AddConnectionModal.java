@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.io.*;
@@ -36,6 +38,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import com.queryexe.components.extra.CustomNotification;
+import com.queryexe.components.home.ConnectionsPane;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.drivers.DriverAPIs;
@@ -43,6 +46,7 @@ import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ConnectionService;
 
+@Slf4j
 public class AddConnectionModal extends VBox {
 
     private TextField portField;
@@ -124,6 +128,7 @@ public class AddConnectionModal extends VBox {
 
         Button saveConnection = new Button();
         saveConnection.setText("Save");
+        saveConnection.getStyleClass().add(Styles.SMALL);
         saveConnection.setDefaultButton(true);
         saveConnection.setOnAction(event -> {
             saveConnectionAction();
@@ -131,6 +136,7 @@ public class AddConnectionModal extends VBox {
 
         Button testConnection = new Button();
         testConnection.setText("Test Connection");
+        testConnection.getStyleClass().add(Styles.SMALL);
         testConnection.addEventFilter(ActionEvent.ACTION, event -> {
             testConnectionAction();
             event.consume();
@@ -537,13 +543,22 @@ public class AddConnectionModal extends VBox {
             connectionObj.remove("customDriver");
         }
 
-        String id = (connection == null) ? UUID.randomUUID().toString() : connection.getId();
+        boolean isNew = (connection == null);
+        String id = isNew ? UUID.randomUUID().toString() : connection.getId();
         ConnectionService.getInstance().saveConnection(id, connectionObj);
 
-        App.closeConnection();
         App.closeModal();
 
-        CustomNotification notification = new CustomNotification("Database Connection Saved", new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
+        ConnectionsPane connectionsPane = App.getConnectionsPane();
+        if (connectionsPane != null) {
+            if (isNew) {
+                connectionsPane.addConnection(id);
+            } else {
+                connectionsPane.updateConnection(id);
+            }
+        }
+
+        CustomNotification notification = new CustomNotification("Connection Saved", "Your database connection was saved.", new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
         notification.showNotification();
     }
 
@@ -569,14 +584,14 @@ public class AddConnectionModal extends VBox {
             Connection connection = DriverManager.getConnection(fullUrl, username, password);
             if (connection != null) {
                 connection.close();
-                CustomNotification notification = new CustomNotification("Connection established correctly!", new FontIcon(MaterialDesignC.CHECK_CIRCLE_OUTLINE));
+                CustomNotification notification = new CustomNotification("Connection Successful", "The database connection was established correctly.", new FontIcon(MaterialDesignC.CHECK_CIRCLE_OUTLINE));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
             } else {
-                CustomNotification notification = new CustomNotification("Connection failed!", new FontIcon(MaterialDesignL.LAN_DISCONNECT));
+                CustomNotification notification = new CustomNotification("Connection Failed", "Could not establish a connection.", new FontIcon(MaterialDesignL.LAN_DISCONNECT));
                 notification.showNotificationOnCustomPane((StackPane) this.getParent());
             }
         } catch (Exception e) {
-            CustomNotification notification = new CustomNotification("Connection failed!\n" + e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
+            CustomNotification notification = new CustomNotification("Connection Failed", e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
         }
     }
@@ -637,7 +652,7 @@ public class AddConnectionModal extends VBox {
             driversTab.setSpacing(15);
 
             VBox currentDriverBox = new VBox(8);
-            currentDriverBox.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-background-radius: 5px; -fx-padding: 15px; -fx-background-color: rgba(104, 90, 179, 0.1);");
+            currentDriverBox.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-background-radius: 5px; -fx-padding: 15px; -fx-background-color: -color-accent-7-alpha10;");
 
             Label currentDriverTitle = new Label("Current Driver:");
             currentDriverTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
@@ -681,12 +696,12 @@ public class AddConnectionModal extends VBox {
                         String status = isDownloaded ? " ✓" : "";
                         setText(item.getVersion() + status);
 
-                        String defaultStyle = isDownloaded ? "-fx-text-fill: -color-accent-emphasis;" : "-fx-text-fill: white;";
-                        String selectedStyle = "-fx-text-fill: white; -fx-background-color: -color-accent-emphasis;";
+                        String defaultStyle = isDownloaded ? "-fx-text-fill: -color-accent-emphasis;" : "-fx-text-fill: -color-fg-default;";
+                        String selectedStyle = "-fx-text-fill: -color-fg-default; -fx-background-color: -color-accent-subtle;";
 
                         setStyle(defaultStyle);
 
-                        setOnMouseEntered(e -> setStyle(selectedOrHoverStyle()));
+                        setOnMouseEntered(e -> setStyle(selectedStyle));
                         setOnMouseExited(e -> setStyle(isSelected() ? selectedStyle : defaultStyle));
 
                         selectedProperty().addListener((obs, wasSelected, isNowSelected) -> {
@@ -697,10 +712,6 @@ public class AddConnectionModal extends VBox {
                             }
                         });
                     }
-                }
-
-                private String selectedOrHoverStyle() {
-                    return "-fx-text-fill: white; -fx-background-color: -color-accent-emphasis;";
                 }
             });
 
@@ -719,28 +730,31 @@ public class AddConnectionModal extends VBox {
                 }
             });
 
-            HBox buttonBox = new HBox(10);
-            buttonBox.setAlignment(Pos.CENTER_LEFT);
+            GridPane buttonBox = new GridPane();
+            buttonBox.setHgap(10);
             buttonBox.setMaxWidth(Double.MAX_VALUE);
+            for (int i = 0; i < 3; i++) {
+                ColumnConstraints column = new ColumnConstraints();
+                column.setPercentWidth(100.0 / 3);
+                column.setHgrow(Priority.ALWAYS);
+                buttonBox.getColumnConstraints().add(column);
+            }
 
-            Button loadDriversButton = new Button("Load Available Drivers", new FontIcon(MaterialDesignU.UPLOAD));
-            HBox.setHgrow(loadDriversButton, Priority.ALWAYS);
+            Button loadDriversButton = new Button("Check Available Drivers", new FontIcon(MaterialDesignU.UPLOAD));
             loadDriversButton.setMaxWidth(Double.MAX_VALUE);
 
             Button downloadButton = new Button("Download Driver", new FontIcon(MaterialDesignD.DOWNLOAD));
-            HBox.setHgrow(downloadButton, Priority.ALWAYS);
             downloadButton.setMaxWidth(Double.MAX_VALUE);
             downloadButton.setDisable(true);
 
             Button applyDriverButton = new Button("Apply Driver", new FontIcon(MaterialDesignC.CHECK));
-            HBox.setHgrow(applyDriverButton, Priority.ALWAYS);
             applyDriverButton.setMaxWidth(Double.MAX_VALUE);
             applyDriverButton.setDisable(true);
             applyDriverButton.setStyle("-fx-background-color: -color-border-default;");
 
-            buttonBox.getChildren().addAll(loadDriversButton, downloadButton, applyDriverButton);
+            buttonBox.addRow(0, loadDriversButton, downloadButton, applyDriverButton);
 
-            Label statusLabel = new Label("Click 'Load Available Drivers' to see available versions");
+            Label statusLabel = new Label("Click 'Check Available Drivers' to see available versions");
             statusLabel.setWrapText(true);
             statusLabel.setStyle("-fx-text-fill: gray;");
 
@@ -851,7 +865,7 @@ public class AddConnectionModal extends VBox {
 
             driversTab.getChildren().addAll(scrollPane);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("updateItem failed", e);
         }
     }
 }

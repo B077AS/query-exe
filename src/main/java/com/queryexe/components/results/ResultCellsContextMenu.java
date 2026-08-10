@@ -17,7 +17,7 @@ import com.queryexe.queryexe.App;
 
 public class ResultCellsContextMenu extends ContextMenu {
 
-    public ResultCellsContextMenu(String item, TableRowData row, TableCell<TableRowData, String> cell) {
+    public ResultCellsContextMenu(String item, TableCell<TableRowData, String> cell) {
         TableRowData rowData = cell.getTableView().getItems().get(cell.getIndex());
         ObservableList<String> stringRow = rowData.getStringData();
         int columnIndex = cell.getTableColumn().getTableView().getColumns().indexOf(cell.getTableColumn());
@@ -38,6 +38,12 @@ public class ResultCellsContextMenu extends ContextMenu {
                 content.putString(rowString);
                 clipboard.setContent(content);
             }
+        });
+
+        MenuItem duplicateRow = new MenuItem("Duplicate Row");
+        duplicateRow.setOnAction(event -> {
+            ResultTable table = (ResultTable) cell.getTableView();
+            table.duplicateDatabaseRow(rowData);
         });
 
         MenuItem insertScriptItem = new MenuItem("Insert Script");
@@ -79,9 +85,9 @@ public class ResultCellsContextMenu extends ContextMenu {
         if (cell.getTableView().isEditable()) {
             ResultTable table = (ResultTable) cell.getTableView();
             if (table.getPrimaryKeyColumns().contains(cell.getTableColumn().getText().toUpperCase())) {
-                this.getItems().addAll(copyCellItem, copyRowItem, insertScriptItem, new SeparatorMenuItem(), deleteRow);
+                this.getItems().addAll(copyCellItem, copyRowItem, duplicateRow, insertScriptItem, new SeparatorMenuItem(), deleteRow);
             } else {
-                this.getItems().addAll(copyCellItem, copyRowItem, insertScriptItem, new SeparatorMenuItem(), setNullItem, deleteRow);
+                this.getItems().addAll(copyCellItem, copyRowItem, duplicateRow, insertScriptItem, new SeparatorMenuItem(), setNullItem, deleteRow);
             }
 
             if (cell.getTableColumn().isEditable()) {

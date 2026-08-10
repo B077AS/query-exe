@@ -18,6 +18,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import com.queryexe.model.data.QueryData;
 import com.queryexe.queryexe.App;
+import com.queryexe.utils.IconColorUtil;
 
 public class QueriesSummaryModal extends VBox {
 
@@ -25,7 +26,7 @@ public class QueriesSummaryModal extends VBox {
     private List<QueryData> updateQueries;
 
     public QueriesSummaryModal(List<QueryData> updateQueries, Runnable onConfirmAction) {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(800, 400);
         this.setMinSize(800, 400);
         this.setPrefSize(800, 400);
@@ -55,7 +56,7 @@ public class QueriesSummaryModal extends VBox {
         titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         FontIcon fileIcon = new FontIcon(MaterialDesignC.CODE_TAGS_CHECK);
-        fileIcon.getStyleClass().add("custom-icon-30px");
+        IconColorUtil.apply(fileIcon, "-color-fg-default", 30);
 
         titleBox.getChildren().addAll(fileIcon, titleLabel);
 
@@ -80,6 +81,7 @@ public class QueriesSummaryModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button confirmButton = new Button("Confirm");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setPrefWidth(75);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
@@ -88,6 +90,7 @@ public class QueriesSummaryModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setPrefWidth(75);
         cancelButton.setOnAction(event -> {
             App.closeModal();

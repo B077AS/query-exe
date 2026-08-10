@@ -17,6 +17,7 @@ import javafx.util.Duration;
 import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import com.queryexe.queryexe.App;
 
@@ -27,7 +28,7 @@ public class HelpModal extends VBox {
 
     public HelpModal() {
         this.setAlignment(Pos.TOP_CENTER);
-        this.setStyle("-fx-background-color: -color-bg-overlay; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(1000, 550);
         this.setMinSize(1000, 550);
         this.setPrefSize(1000, 550);
@@ -175,7 +176,7 @@ public class HelpModal extends VBox {
         headerBox.setAlignment(Pos.CENTER_LEFT);
 
         FontIcon sectionIcon = new FontIcon(icon);
-        sectionIcon.getStyleClass().add("custom-20-icon");
+        IconColorUtil.apply(sectionIcon, "-color-accent-emphasis", 20);
 
         Label sectionTitle = new Label(title);
         sectionTitle.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");

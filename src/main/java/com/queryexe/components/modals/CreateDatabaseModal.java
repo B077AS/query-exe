@@ -3,6 +3,7 @@ package com.queryexe.components.modals;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -22,7 +23,7 @@ public class CreateDatabaseModal extends VBox {
     private TextField databaseNameField;
 
     public CreateDatabaseModal(Consumer<String> onCreateDatabase, boolean isDatabase) {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(450, 220);
         this.setMinSize(450, 220);
         this.setPrefSize(450, 220);
@@ -63,7 +64,7 @@ public class CreateDatabaseModal extends VBox {
         contentBox.getChildren().addAll(titleLabel, instructionLabel, databaseNameField);
 
         FontIcon databaseIcon = new FontIcon(MaterialDesignD.DATABASE_PLUS);
-        databaseIcon.getStyleClass().add("custom-alert-icon");
+        IconColorUtil.apply(databaseIcon, "-color-fg-default", 50);
 
         upperBox.getChildren().addAll(databaseIcon, contentBox);
 
@@ -73,6 +74,7 @@ public class CreateDatabaseModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button createButton = new Button("Create");
+        createButton.getStyleClass().add(Styles.SMALL);
         createButton.setDefaultButton(true);
         createButton.setOnAction(event -> {
             String dbName = databaseNameField.getText().trim();
@@ -83,6 +85,7 @@ public class CreateDatabaseModal extends VBox {
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setOnAction(event -> {
             App.closeModal();
         });

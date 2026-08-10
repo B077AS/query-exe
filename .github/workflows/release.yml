@@ -1,0 +1,299 @@
+# Release pipeline for the query-exe client.
+#
+# Release flow (create a GitHub release with tag e.g. 0.0.3):
+#   1. jar        — sets the Maven version from the release tag (the tag is the
+#                   single source of truth; app.properties' app.version is
+#                   filtered from it; a leading "v" is tolerated and stripped),
+#                   builds the fat jar and a .sha256 sidecar, attaches both to
+#                   the release.
+#   2. installer / appimage — check out query-exe-launcher@main's latest RELEASE
+#                   tag, bundle the exact jar built in step 1 as the seed, and
+#                   attach the resulting QueryExe-Setup-<v>.exe /
+#                   QueryExe-<v>-x86_64.AppImage (+ .sha256 sidecars) to the
+#                   SAME release.
+#
+# Manual flow (Actions tab -> Run workflow, tag = existing release e.g. 0.0.3):
+#   Skips the jar build; rebuilds only the installers from the CURRENT
+#   query-exe-launcher latest release against that release's already-published
+#   jar and replaces the installer assets on it. Use this after launcher-only
+#   changes.
+#
+# No hub: there is nothing to deploy to. The release assets ARE the update
+# source — query-exe-launcher's UpdateManager and this client's own
+# LauncherUpdateService both query GitHub releases directly.
+#
+# Secrets:
+#   LAUNCHER_REPO_TOKEN (optional) — only needed if query-exe-launcher is private.
+
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (e.g. 0.0.3) — rebuilds only the exe/AppImage from query-exe-launcher's latest release and replaces them on that release"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  LAUNCHER_REPO: B077AS/query-exe-launcher
+
+jobs:
+  jar:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve version from release tag
+        id: v
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build fat jar (version from tag)
+        run: |
+          mvn -B versions:set -DnewVersion="${{ steps.v.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B clean package -Ppackage
+
+      - name: Compute sha256 sidecar
+        run: |
+          cd target
+          sha256sum "query-exe-${{ steps.v.outputs.version }}.jar" | awk '{print $1}' \
+            > "query-exe-${{ steps.v.outputs.version }}.jar.sha256"
+
+      # Hands the exact released jar (+ sidecar) to the installer/appimage jobs of this run.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-jar
+          path: |
+            target/query-exe-${{ steps.v.outputs.version }}.jar
+            target/query-exe-${{ steps.v.outputs.version }}.jar.sha256
+          if-no-files-found: error
+
+      - name: Attach jar to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ steps.v.outputs.tag }}" \
+            "target/query-exe-${{ steps.v.outputs.version }}.jar" \
+            "target/query-exe-${{ steps.v.outputs.version }}.jar.sha256" \
+            --clobber -R "$GITHUB_REPOSITORY"
+
+  installer:
+    name: Windows installer
+    needs: jar
+    # Runs after a successful jar build (release flow) or standalone when the jar
+    # job was skipped (manual installers-only flow).
+    if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Bootstrap escape hatch: on a brand-new pair of repos, query-exe-launcher
+      # won't have a release yet the very first time this runs (its own AppImage
+      # self-update step needs THIS repo's latest release, so the two can't both
+      # go first). Rather than hard-fail, skip this job cleanly and let the jar
+      # job's own release stand alone until a launcher release exists to build
+      # against — then re-run this workflow via workflow_dispatch to backfill it.
+      - name: Resolve launcher release tag
+        id: launcher-v
+        run: |
+          if ! TAG=$(gh release view --repo "$LAUNCHER_REPO" --json tagName -q .tagName 2>/dev/null); then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No query-exe-launcher release exists yet — skipping the Windows installer for this run. Once query-exe-launcher has published a release, re-run this workflow (Actions tab -> Run workflow, tag: ${{ github.event.release.tag_name || inputs.tag }}) to backfill it."
+            exit 0
+          fi
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Pinned to the launcher's own latest release (not a moving `main` HEAD) so
+      # every installer/AppImage build is reproducible and bundles a launcher jar
+      # that's already correctly self-versioned (see the version-set step below).
+      - name: Check out query-exe-launcher (latest release)
+        if: steps.launcher-v.outputs.exists == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LAUNCHER_REPO }}
+          ref: ${{ steps.launcher-v.outputs.tag }}
+          token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
+
+      - uses: actions/setup-java@v4
+        if: steps.launcher-v.outputs.exists == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Set launcher Maven version from its release tag
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: mvn -B versions:set -DnewVersion="${{ steps.launcher-v.outputs.version }}" -DgenerateBackupPoms=false
+
+      - name: Resolve version
+        id: v
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Get client jar (from this run)
+        if: steps.launcher-v.outputs.exists == 'true' && github.event_name == 'release'
+        uses: actions/download-artifact@v4
+        with:
+          name: client-jar
+          path: client-jar
+
+      - name: Get client jar (from existing release)
+        if: steps.launcher-v.outputs.exists == 'true' && github.event_name == 'workflow_dispatch'
+        run: |
+          gh release download "${{ steps.v.outputs.tag }}" \
+            --pattern "query-exe-${{ steps.v.outputs.version }}.jar*" \
+            --dir client-jar -R "$GITHUB_REPOSITORY"
+
+      - name: Build installer
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          echo "Building installer from query-exe-launcher@$(git rev-parse HEAD)"
+          mvn -B clean package -Pinstaller \
+            "-Dclient.version=${{ steps.v.outputs.version }}" \
+            "-Dclient.jar=${{ github.workspace }}\client-jar\query-exe-${{ steps.v.outputs.version }}.jar" \
+            "-Discc.path=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+
+      - name: Compute sha256 sidecar
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          cd target/installer
+          sha256sum "QueryExe-Setup-$V.exe" | awk '{print $1}' > "QueryExe-Setup-$V.exe.sha256"
+
+      - name: Upload installer to the client release
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          gh release upload "${{ steps.v.outputs.tag }}" \
+            "target/installer/QueryExe-Setup-$V.exe" \
+            "target/installer/QueryExe-Setup-$V.exe.sha256" \
+            --clobber -R "$GITHUB_REPOSITORY"
+
+  appimage:
+    name: Linux AppImage
+    needs: jar
+    if: ${{ !cancelled() && (needs.jar.result == 'success' || needs.jar.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # Same bootstrap escape hatch as the installer job above — skip cleanly
+      # instead of hard-failing when query-exe-launcher has no release yet.
+      - name: Resolve launcher release tag
+        id: launcher-v
+        run: |
+          if ! TAG=$(gh release view --repo "$LAUNCHER_REPO" --json tagName -q .tagName 2>/dev/null); then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No query-exe-launcher release exists yet — skipping the Linux AppImage for this run. Once query-exe-launcher has published a release, re-run this workflow (Actions tab -> Run workflow, tag: ${{ github.event.release.tag_name || inputs.tag }}) to backfill it."
+            exit 0
+          fi
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Pinned to the launcher's own latest release (not a moving `main` HEAD) so
+      # every installer/AppImage build is reproducible and bundles a launcher jar
+      # that's already correctly self-versioned (see the version-set step below).
+      - name: Check out query-exe-launcher (latest release)
+        if: steps.launcher-v.outputs.exists == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LAUNCHER_REPO }}
+          ref: ${{ steps.launcher-v.outputs.tag }}
+          token: ${{ secrets.LAUNCHER_REPO_TOKEN || github.token }}
+
+      - uses: actions/setup-java@v4
+        if: steps.launcher-v.outputs.exists == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Set launcher Maven version from its release tag
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: mvn -B versions:set -DnewVersion="${{ steps.launcher-v.outputs.version }}" -DgenerateBackupPoms=false
+
+      - name: Resolve version
+        id: v
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Get client jar (from this run)
+        if: steps.launcher-v.outputs.exists == 'true' && github.event_name == 'release'
+        uses: actions/download-artifact@v4
+        with:
+          name: client-jar
+          path: client-jar
+
+      - name: Get client jar (from existing release)
+        if: steps.launcher-v.outputs.exists == 'true' && github.event_name == 'workflow_dispatch'
+        run: |
+          gh release download "${{ steps.v.outputs.tag }}" \
+            --pattern "query-exe-${{ steps.v.outputs.version }}.jar*" \
+            --dir client-jar -R "$GITHUB_REPOSITORY"
+
+      - name: Install appimagetool
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          mkdir -p ~/.local/bin
+          curl -Lo ~/.local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x ~/.local/bin/appimagetool
+
+      - name: Build AppImage
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          echo "Building AppImage from query-exe-launcher@$(git rev-parse HEAD)"
+          mvn -B clean package -Pappimage \
+            "-Dclient.version=${{ steps.v.outputs.version }}" \
+            "-Dclient.jar=$GITHUB_WORKSPACE/client-jar/query-exe-${{ steps.v.outputs.version }}.jar"
+
+      - name: Compute sha256 sidecar
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          cd target/appimage
+          sha256sum "QueryExe-$V-x86_64.AppImage" | awk '{print $1}' > "QueryExe-$V-x86_64.AppImage.sha256"
+
+      - name: Upload AppImage to the client release
+        if: steps.launcher-v.outputs.exists == 'true'
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          gh release upload "${{ steps.v.outputs.tag }}" \
+            "target/appimage/QueryExe-$V-x86_64.AppImage" \
+            "target/appimage/QueryExe-$V-x86_64.AppImage.sha256" \
+            --clobber -R "$GITHUB_REPOSITORY"

@@ -18,6 +18,7 @@ import javafx.scene.layout.VBox;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.ConnectionService;
+import com.queryexe.utils.IconColorUtil;
 
 public class InsertPasswordModal extends VBox {
 
@@ -35,7 +36,7 @@ public class InsertPasswordModal extends VBox {
     }
 
     private void initialize() {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(525, 275);
         this.setMinSize(525, 275);
         this.setPrefSize(525, 275);
@@ -91,7 +92,7 @@ public class InsertPasswordModal extends VBox {
         savePasswordCheckBox = new CheckBox("Save Password");
 
         FontIcon passwordIcon = new FontIcon(MaterialDesignL.LOCK_ALERT);
-        passwordIcon.getStyleClass().add("custom-alert-icon");
+        IconColorUtil.apply(passwordIcon, "-color-fg-default", 50);
 
         mainBox.getChildren().addAll(titleLabel, textLabel, passwordBox, savePasswordCheckBox);
 
@@ -104,10 +105,12 @@ public class InsertPasswordModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         confirmButton = new Button("Confirm");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setPrefWidth(75);
         confirmButton.setDefaultButton(true);
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setPrefWidth(75);
         cancelButton.setOnAction(event -> {
             App.closeModal();

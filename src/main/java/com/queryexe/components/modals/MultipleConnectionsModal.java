@@ -1,166 +1,218 @@
 package com.queryexe.components.modals;
 
 import atlantafx.base.theme.Styles;
-import com.google.gson.*;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.Label;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.text.TextAlignment;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
+import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
 import com.queryexe.components.extra.CustomProgressIndicator;
 import com.queryexe.components.editor.CustomTab;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.service.ConnectionService;
 import com.queryexe.service.QueryService;
 import com.queryexe.queryexe.App;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+
 import java.util.List;
 
 public class MultipleConnectionsModal extends VBox {
 
     private Button closeButton;
+    private VBox connectionsList;
 
     public MultipleConnectionsModal() {
-        this.setAlignment(Pos.CENTER);
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
-        this.setMaxSize(600, 540);
-        this.setMinSize(600, 540);
-        this.setPrefSize(600, 540);
+        this.setAlignment(Pos.TOP_CENTER);
+        this.getStyleClass().add("modal-container");
+        this.setMaxSize(720, 560);
+        this.setMinSize(720, 560);
+        this.setPrefSize(720, 560);
 
-        VBox titleSection = new VBox();
-        titleSection.setPadding(new Insets(0, 0, 10, 0));
+        VBox header = buildHeader();
 
-        HBox headerBox = new HBox();
-        headerBox.setAlignment(Pos.CENTER_RIGHT);
-        headerBox.setPadding(new Insets(20, 10, 0, 10));
-        headerBox.setMinHeight(40);
-        headerBox.setMaxHeight(40);
+        HBox searchRow = buildSearchBar();
 
-        Region headerFillerRegion = new Region();
-        Region headerSecondFillerRegion = new Region();
+        Separator separator = new Separator();
+        separator.setPadding(new Insets(0));
 
-        closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
-        closeButton.setOnAction(event -> {
-            App.closeModal();
-        });
-
-        Button fakeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        fakeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
-        fakeButton.setVisible(false);
-
-        HBox.setHgrow(headerFillerRegion, Priority.ALWAYS);
-        HBox.setHgrow(headerSecondFillerRegion, Priority.ALWAYS);
-
-        Label title = new Label("Open Additional Connection");
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
-        title.setAlignment(Pos.CENTER);
-
-        headerBox.getChildren().addAll(fakeButton, headerFillerRegion, title, headerSecondFillerRegion, closeButton);
-
-        Label subtitle = new Label("Create a new query tab for any saved connection");
-        subtitle.getStyleClass().addAll(Styles.TEXT_MUTED);
-        subtitle.setStyle("-fx-font-size: 13px;");
-        subtitle.setAlignment(Pos.CENTER);
-        subtitle.setMaxWidth(Double.MAX_VALUE);
-        subtitle.setPadding(new Insets(5, 20, 0, 20));
-
-        titleSection.getChildren().addAll(headerBox, subtitle);
-
-        VBox connectionsList = new VBox(8);
-        connectionsList.setPadding(new Insets(0, 10, 0, 10));
+        connectionsList = new VBox(6);
+        connectionsList.setPadding(new Insets(12, 16, 12, 16));
 
         List<ConnectionObject> connections = ConnectionService.getInstance().loadConnections();
-
-        for (ConnectionObject connection : connections) {
-            connectionsList.getChildren().add(createConnectionListItem(connection));
+        for (ConnectionObject conn : connections) {
+            connectionsList.getChildren().add(createConnectionCard(conn));
         }
 
         ScrollPane scrollPane = new ScrollPane(connectionsList);
         scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setStyle("-fx-background-color: transparent; -fx-background: transparent;");
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-        VBox scrollContainer = new VBox();
-        scrollContainer.setPadding(new Insets(10));
-        scrollContainer.getChildren().add(scrollPane);
+        HBox footer = buildFooter(connections.size());
 
-        this.getChildren().addAll(titleSection, scrollContainer);
+        this.getChildren().addAll(header, searchRow, separator, scrollPane, footer);
     }
 
-    private HBox createConnectionListItem(ConnectionObject connection) {
-        HBox listItem = new HBox();
-        listItem.setAlignment(Pos.CENTER_LEFT);
-        listItem.setPadding(new Insets(10, 15, 10, 15));
-        listItem.setSpacing(10);
-        listItem.getStyleClass().add("connection-list-item");
-        listItem.setStyle("-fx-background-radius: 8px; " +
-                "-fx-border-color: -color-border-default; " +
-                "-fx-border-width: 1px; " +
-                "-fx-border-radius: 8px;" +
-                "-fx-cursor: hand");
+    private VBox buildHeader() {
+        VBox header = new VBox(4);
+        header.setPadding(new Insets(18, 16, 12, 16));
 
-        VBox infoSection = new VBox(4);
-        infoSection.setAlignment(Pos.CENTER_LEFT);
+        HBox topRow = new HBox();
+        topRow.setAlignment(Pos.CENTER);
 
-        Label connectionName = new Label(connection.getConnectionName());
-        connectionName.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
-        connectionName.setGraphic(new FontIcon(MaterialDesignD.DATABASE));
+        Button phantom = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
+        phantom.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        phantom.setVisible(false);
 
-        Label dbTypeBadge = new Label(connection.getDbType().toUpperCase());
-        dbTypeBadge.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
-        dbTypeBadge.setStyle("-fx-background-color: -color-border-muted; " +
-                "-fx-padding: 2 6 2 6; " +
-                "-fx-background-radius: 10; " +
-                "-fx-font-size: 9px; " +
-                "-fx-font-weight: bold;");
+        Region spacerLeft  = new Region();
+        Region spacerRight = new Region();
+        HBox.setHgrow(spacerLeft,  Priority.ALWAYS);
+        HBox.setHgrow(spacerRight, Priority.ALWAYS);
 
-        Label details = new Label();
-        if (connection.getHost() == null || connection.getHost().isBlank()) {
-            details.setText(connection.getFullUrl());
-        } else {
-            details.setText(connection.getSimpleURL());
-        }
-        details.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
-        details.setStyle("-fx-font-size: 11px;");
+        Label title = new Label("Open Additional Connection");
+        title.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
 
-        infoSection.getChildren().addAll(connectionName, dbTypeBadge, details);
+        closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
+        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
+        closeButton.setOnAction(e -> App.closeModal());
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        topRow.getChildren().addAll(phantom, spacerLeft, title, spacerRight, closeButton);
 
-        CustomProgressIndicator progressIndicator = new CustomProgressIndicator(20, 20);
-        progressIndicator.setVisible(false);
+        Label subtitle = new Label("Select a saved connection to open a new query tab");
+        subtitle.getStyleClass().add(Styles.TEXT_MUTED);
+        subtitle.setStyle("-fx-font-size: 12px;");
+        subtitle.setMaxWidth(Double.MAX_VALUE);
+        subtitle.setTextAlignment(TextAlignment.CENTER);
+        subtitle.setAlignment(Pos.CENTER);
 
-        listItem.getChildren().addAll(infoSection, spacer, progressIndicator, new FontIcon(MaterialDesignC.CHEVRON_RIGHT));
+        header.getChildren().addAll(topRow, subtitle);
+        return header;
+    }
 
-        listItem.setOnMouseClicked(event -> {
-            connectToDatabase(connection, progressIndicator);
+    private HBox buildSearchBar() {
+        HBox row = new HBox();
+        row.setPadding(new Insets(0, 16, 12, 16));
+
+        HBox searchBox = new HBox(8);
+        searchBox.setAlignment(Pos.CENTER_LEFT);
+        searchBox.setPadding(new Insets(6, 12, 6, 12));
+        searchBox.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 6;");
+        HBox.setHgrow(searchBox, Priority.ALWAYS);
+
+        FontIcon searchIcon = new FontIcon(Feather.SEARCH);
+        searchIcon.setIconSize(14);
+        searchIcon.getStyleClass().add(Styles.TEXT_MUTED);
+
+        TextField searchField = new TextField();
+        searchField.setPromptText("Search connections…");
+        searchField.setStyle("-fx-background-color: transparent; -fx-border-width: 0;");
+        HBox.setHgrow(searchField, Priority.ALWAYS);
+
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            filterConnections(newVal.trim().toLowerCase());
         });
 
-        return listItem;
+        searchBox.getChildren().addAll(searchIcon, searchField);
+        row.getChildren().add(searchBox);
+        return row;
     }
 
-    private void connectToDatabase(ConnectionObject connection, CustomProgressIndicator progressIndicator) {
+    private void filterConnections(String query) {
+        connectionsList.getChildren().forEach(node -> {
+            if (node instanceof HBox card) {
+                Object tag = card.getUserData();
+                if (tag instanceof ConnectionObject conn) {
+                    boolean matches = query.isEmpty()
+                            || conn.getConnectionName().toLowerCase().contains(query)
+                            || conn.getDbType().toLowerCase().contains(query)
+                            || getDisplayUrl(conn).toLowerCase().contains(query);
+                    card.setVisible(matches);
+                    card.setManaged(matches);
+                }
+            }
+        });
+    }
 
+    private HBox createConnectionCard(ConnectionObject connection) {
+        HBox card = new HBox(14);
+        card.setAlignment(Pos.CENTER_LEFT);
+        card.setPadding(new Insets(12, 14, 12, 14));
+        card.setUserData(connection);
+        card.getStyleClass().add("connection-lineitem-card");
+
+        VBox info = new VBox(3);
+        info.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(info, Priority.ALWAYS);
+
+        Label nameLabel = new Label(connection.getConnectionName());
+        nameLabel.setGraphic(new FontIcon(MaterialDesignD.DATABASE));
+        nameLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+
+        HBox metaRow = new HBox(8);
+        metaRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label dbBadge = new Label(connection.getDbType().toUpperCase());
+        dbBadge.setStyle("""
+                -fx-font-size: 9px;
+                -fx-font-weight: bold;
+                -fx-background-color: -color-border-muted;
+                -fx-background-radius: 4px;
+                -fx-padding: 2 6 2 6;
+                -fx-text-fill: -color-fg-muted;
+                """);
+
+        Label urlLabel = new Label(getDisplayUrl(connection));
+        urlLabel.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+        urlLabel.setStyle("-fx-font-size: 11px;");
+        urlLabel.setMaxWidth(440);
+
+        metaRow.getChildren().addAll(dbBadge, urlLabel);
+        info.getChildren().addAll(nameLabel, metaRow);
+
+        CustomProgressIndicator progress = new CustomProgressIndicator(18, 18);
+        progress.setVisible(false);
+
+        FontIcon chevron = new FontIcon(MaterialDesignC.CHEVRON_RIGHT);
+        chevron.getStyleClass().add(Styles.TEXT_MUTED);
+
+        card.getChildren().addAll(info, progress, chevron);
+        card.setOnMouseClicked(e -> connectToDatabase(connection, progress));
+
+        return card;
+    }
+
+    private HBox buildFooter(int count) {
+        HBox footer = new HBox();
+        footer.setAlignment(Pos.CENTER_LEFT);
+        footer.setPadding(new Insets(10, 16, 12, 16));
+        footer.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px 0 0 0;");
+
+        Label hint = new Label(count + " saved connection" + (count != 1 ? "s" : ""));
+        hint.getStyleClass().add(Styles.TEXT_MUTED);
+        hint.setStyle("-fx-font-size: 11px;");
+
+        footer.getChildren().add(hint);
+        return footer;
+    }
+
+    private void connectToDatabase(ConnectionObject connection, CustomProgressIndicator progress) {
         ConnectionService.getInstance().connect(
                 connection,
                 () -> {
-                    progressIndicator.setVisible(true);
+                    progress.setVisible(true);
                     closeButton.setDisable(true);
                     App.getModalPane().setPersistent(true);
                 },
                 () -> {
-                    progressIndicator.setVisible(false);
+                    progress.setVisible(false);
                     closeButton.setDisable(false);
                     App.getModalPane().setPersistent(false);
                 },
@@ -174,9 +226,14 @@ public class MultipleConnectionsModal extends VBox {
                         App.closeModal();
                     });
                 },
-                e -> {
-                    App.removeDatabaseTreeForConnection(connection);
-                }
+                e -> App.removeDatabaseTreeForConnection(connection)
         );
+    }
+
+    private String getDisplayUrl(ConnectionObject connection) {
+        if (connection.getHost() == null || connection.getHost().isBlank()) {
+            return connection.getFullUrl();
+        }
+        return connection.getSimpleURL();
     }
 }

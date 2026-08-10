@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
@@ -22,16 +24,39 @@ import com.queryexe.queryexe.App;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Year;
+import java.util.Properties;
 
+@Slf4j
 public class AboutModal extends VBox {
 
-    private static final String APP_NAME = "QueryExe";
-    private static final String VERSION = "1.0.0";
-    private static final String TAGLINE = "Universal Database Management Tool";
+    private static final Properties props = new Properties();
+    private static final String APP_NAME;
+    private static final String VERSION;
+    private static final String TAGLINE;
+    private static final String URL_GITHUB;
+    private static final String URL_DOCS;
+    private static final String URL_ISSUES;
+    private static final String URL_WEBSITE;
+
+    static {
+        try (InputStream is = AboutModal.class.getResourceAsStream("/app.properties")) {
+            if (is != null) props.load(is);
+        } catch (IOException e) {
+            log.error("Could not load app.properties: " + e.getMessage());
+        }
+        APP_NAME = props.getProperty("app.name", "QueryExe");
+        VERSION = props.getProperty("app.version", "Unknown");
+        TAGLINE = props.getProperty("app.description", "");
+        URL_GITHUB = props.getProperty("app.url.github", "");
+        URL_DOCS = props.getProperty("app.url.docs", "");
+        URL_ISSUES = props.getProperty("app.url.issues", "");
+        URL_WEBSITE = props.getProperty("app.url.website", "");
+    }
 
     public AboutModal() {
         this.setAlignment(Pos.TOP_CENTER);
-        this.setStyle("-fx-background-color: -color-bg-overlay; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(650, 550);
         this.setMinSize(650, 550);
         this.setPrefSize(650, 550);
@@ -61,10 +86,10 @@ public class AboutModal extends VBox {
                 Image icon = new Image(iconStream, 80, 80, true, true);
                 appIcon.setImage(icon);
             } else {
-                System.err.println("Could not find icon.png in resources");
+                log.error("Could not find icon.png in resources");
             }
         } catch (Exception e) {
-            System.err.println("Error loading icon: " + e.getMessage());
+            log.error("Error loading icon: " + e.getMessage());
         }
 
         Label appNameLabel = new Label(APP_NAME);
@@ -83,7 +108,8 @@ public class AboutModal extends VBox {
         VBox linksBox = createLinksSection();
         Region separator3 = createSeparator();
 
-        Label copyrightLabel = new Label("© 2025 QueryExe");
+        int currentYear = Year.now().getValue();
+        Label copyrightLabel = new Label("© " + currentYear + " QueryExe");
         copyrightLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
         copyrightLabel.setTextAlignment(TextAlignment.CENTER);
         copyrightLabel.setPadding(new Insets(0, 0, 10, 0));
@@ -160,10 +186,10 @@ public class AboutModal extends VBox {
         linksRow.setAlignment(Pos.CENTER_LEFT);
         linksRow.setPadding(new Insets(5, 0, 0, 20));
 
-        Hyperlink githubLink = createHyperlink("GitHub", MaterialDesignG.GITHUB, "https://github.com/B077AS/query-exe");
-        Hyperlink docsLink = createHyperlink("Documentation", MaterialDesignB.BOOK_OPEN_PAGE_VARIANT, "");
-        Hyperlink issuesLink = createHyperlink("Report Issue", MaterialDesignB.BUG, "");
-        Hyperlink websiteLink = createHyperlink("Website", MaterialDesignW.WEB, "https://queryexe.com");
+        Hyperlink githubLink = createHyperlink("GitHub", MaterialDesignG.GITHUB, URL_GITHUB);
+        Hyperlink docsLink = createHyperlink("Documentation", MaterialDesignB.BOOK_OPEN_PAGE_VARIANT, URL_DOCS);
+        Hyperlink issuesLink = createHyperlink("Report Issue", MaterialDesignB.BUG, URL_ISSUES);
+        Hyperlink websiteLink = createHyperlink("Website", MaterialDesignW.WEB, URL_WEBSITE);
 
         linksRow.getChildren().addAll(githubLink, docsLink, issuesLink, websiteLink);
 
@@ -178,7 +204,7 @@ public class AboutModal extends VBox {
             try {
                 java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
             } catch (IOException ex) {
-                System.err.println("Failed to open browser: " + ex.getMessage());
+                log.error("Failed to open browser: " + ex.getMessage());
             }
         });
         return link;

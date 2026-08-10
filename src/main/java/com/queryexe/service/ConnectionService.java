@@ -2,7 +2,9 @@ package com.queryexe.service;
 
 import com.google.gson.*;
 import javafx.application.Platform;
+import javafx.concurrent.Task;
 import javafx.scene.layout.StackPane;
+import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
 import com.queryexe.components.extra.CustomNotification;
@@ -28,9 +30,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+@Slf4j
 public class ConnectionService {
 
     private static volatile ConnectionService instance;
+    private Task<Void> connectTask;
     private final Path connectionsPath;
     private final Gson gson;
     private final SecretStore<StoredCredential> credentialStore;
@@ -43,9 +47,9 @@ public class ConnectionService {
         this.credentialStore = StorageProvider.getCredentialStorage(true, SecureOption.REQUIRED);
 
         if (credentialStore == null) {
-            System.err.println("WARNING: No secure credential storage available!");
+            log.warn("No secure credential storage available!");
         } else {
-            System.out.println("Secure credential storage initialized successfully");
+            log.info("Secure credential storage initialized successfully");
         }
 
         migratePasswordsIfNeeded();
@@ -80,17 +84,17 @@ public class ConnectionService {
             }
 
             if (needsMigration) {
-                System.out.println("Migrating passwords to secure storage...");
+                log.info("Migrating passwords to secure storage...");
                 migratePasswordsToSecureStorage();
             }
         } catch (Exception e) {
-            System.err.println("Error checking for password migration: " + e.getMessage());
+            log.error("Error checking for password migration", e);
         }
     }
 
     private void migratePasswordsToSecureStorage() {
         if (credentialStore == null) {
-            System.err.println("Cannot migrate passwords: credential store not available");
+            log.error("Cannot migrate passwords: credential store not available");
             return;
         }
 
@@ -111,7 +115,7 @@ public class ConnectionService {
                     conn.remove("password");
                     modified = true;
 
-                    System.out.println("Migrated password for connection: " + connectionId);
+                    log.info("Migrated password for connection: {}", connectionId);
                 }
             }
         }
@@ -119,9 +123,9 @@ public class ConnectionService {
         if (modified) {
             try {
                 writeConnections(connections);
-                System.out.println("Password migration completed successfully");
+                log.info("Password migration completed successfully");
             } catch (IOException e) {
-                System.err.println("Error saving connections after migration: " + e.getMessage());
+                log.error("Error saving connections after migration", e);
             }
         }
     }
@@ -135,7 +139,7 @@ public class ConnectionService {
             StoredCredential credential = new StoredCredential(username, password.toCharArray());
             credentialStore.add(getCredentialKey(connectionId), credential);
         } catch (Exception e) {
-            System.err.println("Error storing password for connection " + connectionId + ": " + e.getMessage());
+            log.error("Error storing password for connection {}", connectionId, e);
         }
     }
 
@@ -151,7 +155,7 @@ public class ConnectionService {
                 return passwordChars != null ? new String(passwordChars) : null;
             }
         } catch (Exception e) {
-            System.err.println("Error retrieving password for connection " + connectionId + ": " + e.getMessage());
+            log.error("Error retrieving password for connection {}", connectionId, e);
         }
 
         return null;
@@ -165,7 +169,7 @@ public class ConnectionService {
         try {
             credentialStore.delete(getCredentialKey(connectionId));
         } catch (Exception e) {
-            System.err.println("Error deleting password for connection " + connectionId + ": " + e.getMessage());
+            log.error("Error deleting password for connection {}", connectionId, e);
         }
     }
 
@@ -192,7 +196,8 @@ public class ConnectionService {
 
     private void attemptConnection(ConnectionObject connection, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError, boolean isUserInserted) {
 
-        if (!SingleExecutorService.tryStartRunning()) {
+        // Only one connection attempt at a time; it can be relaunched once it finished.
+        if (connectTask != null && connectTask.isRunning()) {
             return;
         }
 
@@ -200,25 +205,38 @@ public class ConnectionService {
             Platform.runLater(onConnectionStart);
         }
 
-        SingleExecutorService.getExecutor().execute(() -> {
-            try {
+        connectTask = new Task<>() {
+            @Override
+            protected Void call() throws Exception {
                 DatabaseConnection.getInstance().initialize(connection);
+                // The success callback stays on the background thread: callers build
+                // the database tree here, which performs blocking JDBC metadata calls.
                 if (onSuccess != null) {
                     onSuccess.run();
                 }
-            } catch (Exception e) {
-                handleConnectionError(e, connection, isUserInserted, onConnectionStart, onConnectionEnd, onSuccess, onError);
-            } finally {
-                SingleExecutorService.finishRunning();
-                if (onConnectionEnd != null) {
-                    Platform.runLater(onConnectionEnd);
-                }
+                return null;
+            }
+        };
+
+        connectTask.setOnFailed(event -> {
+            Throwable e = connectTask.getException();
+            handleConnectionError(e instanceof Exception ex ? ex : new Exception(e),
+                    connection, isUserInserted, onConnectionStart, onConnectionEnd, onSuccess, onError);
+            if (onConnectionEnd != null) {
+                onConnectionEnd.run();
             }
         });
+        connectTask.setOnSucceeded(event -> {
+            if (onConnectionEnd != null) {
+                onConnectionEnd.run();
+            }
+        });
+
+        Async.run(connectTask);
     }
 
     private void handleConnectionError(Exception e, ConnectionObject connection, boolean isUserInserted, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError) {
-        e.printStackTrace();
+        log.error("Connection attempt failed for '{}'", connection.getConnectionName(), e);
 
         Platform.runLater(() -> {
 
@@ -237,7 +255,7 @@ public class ConnectionService {
                 }
             }
 
-            CustomNotification customNotification = new CustomNotification("Connection failed!\n" + e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
+            CustomNotification customNotification = new CustomNotification("Connection Failed", e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
 
             if (insertPasswordModal != null) {
                 customNotification.showNotificationOnCustomPane((StackPane) insertPasswordModal.getParent());
@@ -256,7 +274,7 @@ public class ConnectionService {
             JsonElement element = JsonParser.parseReader(reader);
             return element.isJsonObject() ? element.getAsJsonObject() : new JsonObject();
         } catch (IOException e) {
-            System.err.println("Error reading connections file: " + e.getMessage());
+            log.error("Error reading connections file", e);
             return new JsonObject();
         }
     }
@@ -274,7 +292,7 @@ public class ConnectionService {
             modifier.accept(connections);
             writeConnections(connections);
         } catch (IOException e) {
-            System.err.println("Error saving connections: " + e.getMessage());
+            log.error("Error saving connections", e);
             throw new RuntimeException("Failed to save connections", e);
         }
     }
@@ -283,7 +301,7 @@ public class ConnectionService {
         List<ConnectionObject> connections = new ArrayList<>();
 
         if (!Files.exists(connectionsPath)) {
-            System.out.println("No connections file found at: " + connectionsPath);
+            log.debug("No connections file found at: {}", connectionsPath);
             return connections;
         }
 
@@ -310,10 +328,29 @@ public class ConnectionService {
                 connections.add(connection);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error loading connections", e);
         }
 
         return connections;
+    }
+
+    public ConnectionObject loadConnection(String connectionId) {
+        JsonObject element = getConnection(connectionId);
+        if (element == null) {
+            return null;
+        }
+
+        element.addProperty("id", connectionId);
+
+        try {
+            Gson gsonWithDeserializer = new GsonBuilder()
+                    .registerTypeAdapter(ConnectionObject.class, new ConnectionObjectDeserializer())
+                    .create();
+            return gsonWithDeserializer.fromJson(element, ConnectionObject.class);
+        } catch (Exception e) {
+            log.error("Error loading connection {}", connectionId, e);
+            return null;
+        }
     }
 
     public void saveConnection(String connectionId, JsonObject connectionData) {
@@ -410,10 +447,10 @@ public class ConnectionService {
                 return true;
             }
 
-            System.out.println("Connection ID not found: " + connectionId);
+            log.warn("Connection ID not found: {}", connectionId);
             return false;
         } catch (IOException e) {
-            System.err.println("Error deleting connection: " + e.getMessage());
+            log.error("Error deleting connection", e);
             return false;
         }
     }

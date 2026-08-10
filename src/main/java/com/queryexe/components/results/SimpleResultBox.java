@@ -27,13 +27,13 @@ public class SimpleResultBox extends VBox {
         errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: #42C841;");
 
         Text queryText = new Text(query.trim() + "\n\n");
-        queryText.setStyle("-fx-font-style: italic; -fx-fill: #d4d4d7;");
+        queryText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
 
         Text rowsAffectedText = new Text("Rows Affected: ");
         rowsAffectedText.setStyle("-fx-font-weight: bold; -fx-fill: #42C841;");
 
         Text rowsText = new Text(updateCount + "\n\n");
-        rowsText.setStyle("-fx-font-style: italic; -fx-fill: #d4d4d7;");
+        rowsText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
 
         errorFlow.getChildren().addAll(
                 errorQueryLabel,

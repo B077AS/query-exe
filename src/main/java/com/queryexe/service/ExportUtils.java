@@ -1,5 +1,7 @@
 package com.queryexe.service;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -12,6 +14,7 @@ import javafx.stage.FileChooser;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.model.data.TableRowData;
 
+@Slf4j
 public class ExportUtils {
 	
 	public static void exportToCSV(TableView<TableRowData> tableView) {
@@ -42,11 +45,11 @@ public class ExportUtils {
 
 				csvWriter.flush();
 
-				CustomNotification notification = new CustomNotification("Results Exported Successfully", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
+				CustomNotification notification = new CustomNotification("Export Complete", "Your results were exported successfully.", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
 				notification.showNotification();
 
 			} catch (IOException e) {
-				e.printStackTrace();
+				log.error("exportToCSV failed", e);
 			}
 		}
 	}
@@ -108,13 +111,14 @@ public class ExportUtils {
 	            jsonWriter.flush();
 
 	            CustomNotification notification = new CustomNotification(
-	                "Results Exported Successfully",
+	                "Export Complete",
+	                "Your results were exported successfully.",
 	                new FontIcon(MaterialDesignD.DATABASE_EXPORT)
 	            );
 	            notification.showNotification();
 
 	        } catch (IOException e) {
-	            e.printStackTrace();
+	            log.error("exportToJSON failed", e);
 	        }
 	    }
 	}
@@ -162,11 +166,11 @@ public class ExportUtils {
 	            xmlWriter.write("</Table>\n");
 	            xmlWriter.flush();
 
-	            CustomNotification notification = new CustomNotification("Results Exported Successfully", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
+	            CustomNotification notification = new CustomNotification("Export Complete", "Your results were exported successfully.", new FontIcon(MaterialDesignD.DATABASE_EXPORT));
 	            notification.showNotification();
 
 	        } catch (IOException e) {
-	            e.printStackTrace();
+	            log.error("exportToXML failed", e);
 	        }
 	    }
 	}

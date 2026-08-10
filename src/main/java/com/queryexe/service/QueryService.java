@@ -1,14 +1,15 @@
 package com.queryexe.service;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
-import javafx.application.Platform;
+import javafx.concurrent.Task;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import org.kordamp.ikonli.javafx.FontIcon;
@@ -25,6 +26,7 @@ import com.queryexe.components.results.ResultBox;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.queryexe.App;
 
+@Slf4j
 public class QueryService {
 
     private static volatile QueryService instance;
@@ -168,7 +170,7 @@ public class QueryService {
                 openFileInTab(selectedFile);
             }
         } catch (IOException e) {
-            System.err.println("Error reading file: " + e.getMessage());
+            log.error("Error reading file: " + e.getMessage());
         }
     }
 
@@ -177,7 +179,8 @@ public class QueryService {
             openFileInTab(file);
         } catch (IOException e) {
             CustomNotification errorNotification = new CustomNotification(
-                    "Error opening file: " + e.getMessage(),
+                    "Open Failed",
+                    "Could not open the file: " + e.getMessage(),
                     new FontIcon(MaterialDesignC.CLOSE_CIRCLE_OUTLINE)
             );
             errorNotification.showNotification();
@@ -226,14 +229,16 @@ public class QueryService {
             RecentFilesManager.getInstance().addRecentFile(associatedFile);
 
             CustomNotification fileSavedNotification = new CustomNotification(
-                    "File saved successfully to: " + associatedFile.getAbsolutePath(),
+                    "File Saved",
+                    "Saved to " + associatedFile.getAbsolutePath(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE)
             );
             fileSavedNotification.showNotification();
 
         } catch (IOException e) {
             CustomNotification errorNotification = new CustomNotification(
-                    "Error saving file: " + e.getMessage(),
+                    "Save Failed",
+                    "Could not save the file: " + e.getMessage(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE_ALERT)
             );
             errorNotification.showNotification();
@@ -271,14 +276,16 @@ public class QueryService {
             RecentFilesManager.getInstance().addRecentFile(newFile);
 
             CustomNotification fileSavedNotification = new CustomNotification(
-                    "File saved successfully to: " + newFile.getAbsolutePath(),
+                    "File Saved",
+                    "Saved to " + newFile.getAbsolutePath(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE)
             );
             fileSavedNotification.showNotification();
 
         } catch (IOException e) {
             CustomNotification errorNotification = new CustomNotification(
-                    "Error saving file: " + e.getMessage(),
+                    "Save Failed",
+                    "Could not save the file: " + e.getMessage(),
                     new FontIcon(MaterialDesignC.CONTENT_SAVE_ALERT)
             );
             errorNotification.showNotification();
@@ -288,74 +295,61 @@ public class QueryService {
     public void runQuery() {
         @SuppressWarnings("unchecked")
         CustomTab<VirtualizedScrollPane<CodeArea>> tab = (CustomTab<VirtualizedScrollPane<CodeArea>>) App.getTabPane().getSelectionModel().getSelectedItem();
-        tab.setLoading();
         @SuppressWarnings("unchecked")
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
+        CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        if (tab.getExecutor() == null) {
-            tab.setExecutor(Executors.newSingleThreadExecutor());
-            tab.getExecutor().execute(() -> {
-                try {
-                    String query = "";
-                    if (!((CodeArea) scroll.getContent()).getSelectedText().isEmpty()) {
-                        query = ((CodeArea) scroll.getContent()).getSelectedText();
-                    } else {
-                        query = ((CodeArea) scroll.getContent()).getText();
-                    }
+        String query = !codeArea.getSelectedText().isEmpty()
+                ? codeArea.getSelectedText()
+                : codeArea.getText();
 
-                    ResultBox customResultTable = new ResultBox(query, tab);
-
-                    Platform.runLater(() -> {
-                        tab.setResultBox(customResultTable);
-                    });
-                } finally {
-                    tab.setCurrentStatement(null);
-                    tab.getExecutor().shutdown();
-                    tab.setExecutor(null);
-                    Platform.runLater(() -> {
-                        tab.stopLoading();
-                    });
-                }
-            });
-        }
+        executeQuery(tab, query);
     }
 
     public void runStatement() {
         @SuppressWarnings("unchecked")
         CustomTab<VirtualizedScrollPane<CodeArea>> tab = (CustomTab<VirtualizedScrollPane<CodeArea>>) App.getTabPane().getSelectionModel().getSelectedItem();
-        tab.setLoading();
-
         @SuppressWarnings("unchecked")
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
         CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        if (tab.getExecutor() == null) {
-            tab.setExecutor(Executors.newSingleThreadExecutor());
-            tab.getExecutor().execute(() -> {
-                try {
-                    String query = extractStatementAtCaret(codeArea);
+        executeQuery(tab, extractStatementAtCaret(codeArea));
+    }
 
-                    if (query == null || query.trim().isEmpty()) {
-                        Platform.runLater(() -> {
-                            tab.stopLoading();
-                        });
-                        return;
-                    }
-
-                    ResultBox customResultTable = new ResultBox(query, tab);
-                    Platform.runLater(() -> {
-                        tab.setResultBox(customResultTable);
-                    });
-                } finally {
-                    tab.setCurrentStatement(null);
-                    tab.getExecutor().shutdown();
-                    tab.setExecutor(null);
-                    Platform.runLater(() -> {
-                        tab.stopLoading();
-                    });
-                }
-            });
+    // One query at a time per tab; other tabs can run their own queries in parallel.
+    private void executeQuery(CustomTab<VirtualizedScrollPane<CodeArea>> tab, String query) {
+        if (tab.isQueryRunning()) {
+            return;
         }
+
+        if (query == null || query.trim().isEmpty()) {
+            return;
+        }
+
+        tab.setLoading();
+
+        Task<ResultBox> queryTask = new Task<>() {
+            @Override
+            protected ResultBox call() {
+                return new ResultBox(query, tab);
+            }
+        };
+
+        queryTask.setOnSucceeded(event -> {
+            tab.setResultBox(queryTask.getValue());
+            finishQuery(tab);
+        });
+        queryTask.setOnFailed(event -> finishQuery(tab));
+        queryTask.setOnCancelled(event -> finishQuery(tab));
+
+        tab.setRunningQueryTask(queryTask);
+        Async.run(queryTask);
+    }
+
+    private void finishQuery(CustomTab<VirtualizedScrollPane<CodeArea>> tab) {
+        tab.setCurrentStatement(null);
+        tab.setRunningQueryTask(null);
+        tab.stopLoading();
     }
 
     private String extractStatementAtCaret(CodeArea codeArea) {

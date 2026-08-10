@@ -1,5 +1,7 @@
 package com.queryexe.service;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -10,6 +12,7 @@ import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.drivers.DynamicDriverLoader;
 
+@Slf4j
 public class DatabaseConnection {
 
     private static DatabaseConnection instance;
@@ -55,7 +58,7 @@ public class DatabaseConnection {
             if (!customDriver.equals(type.getDefaultDriverInfo())) {
                 boolean loaded = driverLoader.loadCustomDriver(customDriver, type);
                 if (!loaded) {
-                    System.err.println("Failed to load custom driver, falling back to default");
+                    log.error("Failed to load custom driver, falling back to default");
                 }
             }
         }
@@ -206,7 +209,7 @@ public class DatabaseConnection {
                 currentConnectionId = null;
             }
         } catch (SQLException e) {
-            System.err.println("Error closing connection: " + e.getMessage());
+            log.error("Error closing connection: " + e.getMessage());
         }
     }
 

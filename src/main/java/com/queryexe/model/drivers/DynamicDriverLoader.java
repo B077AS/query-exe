@@ -2,6 +2,7 @@ package com.queryexe.model.drivers;
 
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.queryexe.Launcher;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.net.URL;
@@ -10,6 +11,7 @@ import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 public class DynamicDriverLoader {
 
     private static DynamicDriverLoader instance;
@@ -37,8 +39,7 @@ public class DynamicDriverLoader {
             }
 
         } catch (Exception e) {
-            System.err.println("Error loading default drivers: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error loading default drivers", e);
         }
     }
 
@@ -46,7 +47,7 @@ public class DynamicDriverLoader {
         Driver driverShim = new DriverShim(driver);
         DriverManager.registerDriver(driverShim);
         loadedDrivers.put(key, driverShim);
-        //System.out.println("Registered driver: " + key + " - " + driver.getClass().getName());
+        log.debug("Registered driver: {} - {}", key, driver.getClass().getName());
     }
 
     public boolean loadCustomDriver(DriverInfo driverInfo, ConnectionTypes connectionType) {
@@ -54,7 +55,7 @@ public class DynamicDriverLoader {
             File jarFile = Launcher.getJdbcDriversDirectory().resolve(driverInfo.getFileName()).toFile();
 
             if (!jarFile.exists()) {
-                System.err.println("Driver JAR file not found: " + jarFile.getAbsolutePath());
+                log.error("Driver JAR file not found: {}", jarFile.getAbsolutePath());
                 return false;
             }
 
@@ -86,14 +87,12 @@ public class DynamicDriverLoader {
             loadedDrivers.put(key, driver);
             driverClassLoaders.put(key, classLoader);
 
-            System.out.println("Successfully loaded custom driver: " + driverInfo.getVersion() +
-                    " for " + connectionType.name());
+            log.info("Successfully loaded custom driver: {} for {}", driverInfo.getVersion(), connectionType.name());
 
             return true;
 
         } catch (Exception e) {
-            System.err.println("Error loading custom driver: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error loading custom driver", e);
             return false;
         }
     }
@@ -115,14 +114,13 @@ public class DynamicDriverLoader {
                     driverClassLoaders.remove(customKey);
                 }
 
-                System.out.println("Unloaded custom driver for: " + key);
+                log.info("Unloaded custom driver for: {}", key);
 
                 // Re-register the default driver
                 reloadDefaultDriver(key);
             }
         } catch (Exception e) {
-            System.err.println("Error unloading driver: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error unloading driver", e);
         }
     }
 
@@ -136,8 +134,7 @@ public class DynamicDriverLoader {
                 DriverManager.registerDriver(defaultDriver);
             }
         } catch (Exception e) {
-            System.err.println("Error reloading default driver: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Error reloading default driver", e);
         }
     }
 
@@ -154,7 +151,7 @@ public class DynamicDriverLoader {
             try {
                 classLoader.close();
             } catch (Exception e) {
-                System.err.println("Error closing class loader: " + e.getMessage());
+                log.error("Error closing class loader", e);
             }
         }
         driverClassLoaders.clear();

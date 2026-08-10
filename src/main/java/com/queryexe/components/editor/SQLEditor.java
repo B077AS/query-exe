@@ -1,25 +1,40 @@
 package com.queryexe.components.editor;
 
 import javafx.geometry.Bounds;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Label;
 import org.fxmisc.richtext.CodeArea;
-import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
+import org.reactfx.collection.LiveList;
+import org.reactfx.value.Val;
+import org.kordamp.ikonli.Ikon;
+import org.kordamp.ikonli.feather.Feather;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import javafx.application.Platform;
+import javafx.concurrent.Service;
+import javafx.concurrent.Task;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.input.Clipboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.service.QueryService;
 import com.queryexe.queryexe.App;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.function.IntFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -35,17 +50,61 @@ public class SQLEditor extends CodeArea {
     private AutocompletePopup autocompletePopup;
     private final boolean[] isAutocompleteActive = {false};
     private final long[] lastUpdateTime = {0};
-    private ExecutorService suggestionExecutor = Executors.newSingleThreadExecutor(r -> {
-        Thread thread = new Thread(r);
-        thread.setDaemon(true);
-        return thread;
-    });
+
+    // Restartable suggestion lookup: a new keystroke cancels the previous
+    // computation, so only suggestions for the latest word reach the popup.
+    private String suggestionWord = "";
+    private boolean suggestionRequestedManually;
+    private final Service<List<String>> suggestionService = new Service<>() {
+        @Override
+        protected Task<List<String>> createTask() {
+            String word = suggestionWord;
+            return new Task<>() {
+                @Override
+                protected List<String> call() {
+                    return getSuggestions(word);
+                }
+            };
+        }
+    };
 
     public SQLEditor() {
         super();
+        setupSuggestionService();
         initializePatterns();
         initializeEditor();
         setupEventHandlers();
+        setupContextMenu();
+    }
+
+    private void setupSuggestionService() {
+        suggestionService.setExecutor(Async.VIRTUAL_EXECUTOR);
+        suggestionService.setOnSucceeded(event -> {
+            List<String> suggestions = suggestionService.getValue();
+            if (suggestionRequestedManually) {
+                if (!suggestions.isEmpty()) {
+                    Optional<Bounds> caretBounds = this.getCaretBounds();
+                    if (caretBounds.isPresent()) {
+                        Bounds bounds = caretBounds.get();
+                        autocompletePopup.show(suggestions, bounds.getMinX(), bounds.getMaxY() + 5);
+                        isAutocompleteActive[0] = true;
+                    }
+                }
+            } else if (isAutocompleteActive[0]) {
+                if (suggestions.isEmpty()) {
+                    autocompletePopup.hide();
+                    isAutocompleteActive[0] = false;
+                } else {
+                    autocompletePopup.updateSuggestions(suggestions);
+                }
+            }
+        });
+    }
+
+    private void requestSuggestions(String word, boolean manual) {
+        suggestionWord = word;
+        suggestionRequestedManually = manual;
+        suggestionService.restart();
     }
 
     private void initializePatterns() {
@@ -67,12 +126,36 @@ public class SQLEditor extends CodeArea {
         autocompletePopup = new AutocompletePopup(this);
         findPopup = new FindPopup(this);
 
-        this.setParagraphGraphicFactory(LineNumberFactory.get(this));
+        this.setParagraphGraphicFactory(lineNumberFactory(this));
         this.multiPlainChanges()
                 .successionEnds(Duration.ofMillis(100))
                 .subscribe(ignore -> this.setStyleSpans(0, computeHighlighting(this.getText())));
-        this.getStylesheets().add(SQLEditor.class.getClassLoader().getResource("sql-editor.css").toExternalForm());
-        this.setStyle("-fx-font-family: 'Consolas'; -fx-background-color:#282a36; ");
+        this.setStyle("-fx-font-family: 'Consolas'; -fx-background-color: -color-bg-default; ");
+    }
+
+    /**
+     * RichTextFX's stock LineNumberFactory sets the gutter's background, text
+     * fill and font via imperative setters (setBackground/setTextFill/setFont),
+     * which permanently marks those properties as user-set and makes them immune
+     * to CSS overrides. This factory leaves all styling to the ".lineno" rule in
+     * style.css instead.
+     */
+    private static IntFunction<Node> lineNumberFactory(CodeArea area) {
+        Val<Integer> nParagraphs = LiveList.sizeOf(area.getParagraphs());
+        return idx -> {
+            Label lineNo = new Label();
+            lineNo.getStyleClass().add("lineno");
+            lineNo.setAlignment(Pos.CENTER_RIGHT);
+            lineNo.setMaxHeight(Double.MAX_VALUE);
+            Val<String> formatted = nParagraphs.map(n -> formatLineNumber(idx + 1, n));
+            lineNo.textProperty().bind(formatted.conditionOnShowing(lineNo));
+            return lineNo;
+        };
+    }
+
+    private static String formatLineNumber(int line, int total) {
+        int digits = Math.max(2, (int) Math.floor(Math.log10(Math.max(1, total))) + 1);
+        return String.format("%" + digits + "d", line);
     }
 
     private void setupEventHandlers() {
@@ -95,19 +178,7 @@ public class SQLEditor extends CodeArea {
                 return;
             }
 
-            suggestionExecutor.submit(() -> {
-                List<String> suggestions = getSuggestions(currentWord);
-                Platform.runLater(() -> {
-                    if (isAutocompleteActive[0]) {
-                        if (suggestions.isEmpty()) {
-                            autocompletePopup.hide();
-                            isAutocompleteActive[0] = false;
-                        } else {
-                            autocompletePopup.updateSuggestions(suggestions);
-                        }
-                    }
-                });
-            });
+            requestSuggestions(currentWord, false);
         });
 
         // Keyboard event handler
@@ -147,23 +218,56 @@ public class SQLEditor extends CodeArea {
         });
     }
 
+    private void setupContextMenu() {
+        MenuItem undoItem = new MenuItem("Undo", menuIcon(Feather.CORNER_DOWN_LEFT));
+        undoItem.setOnAction(event -> this.undo());
+
+        MenuItem redoItem = new MenuItem("Redo", menuIcon(Feather.CORNER_DOWN_RIGHT));
+        redoItem.setOnAction(event -> this.redo());
+
+        MenuItem cutItem = new MenuItem("Cut", menuIcon(Feather.SCISSORS));
+        cutItem.setOnAction(event -> this.cut());
+
+        MenuItem copyItem = new MenuItem("Copy", menuIcon(MaterialDesignC.CONTENT_COPY));
+        copyItem.setOnAction(event -> this.copy());
+
+        MenuItem pasteItem = new MenuItem("Paste", menuIcon(MaterialDesignC.CONTENT_PASTE));
+        pasteItem.setOnAction(event -> this.paste());
+
+        MenuItem selectAllItem = new MenuItem("Select All", menuIcon(MaterialDesignS.SELECT_ALL));
+        selectAllItem.setOnAction(event -> this.selectAll());
+
+        ContextMenu editorContextMenu = new ContextMenu(
+                undoItem, redoItem,
+                new SeparatorMenuItem(),
+                cutItem, copyItem, pasteItem,
+                new SeparatorMenuItem(),
+                selectAllItem
+        );
+
+        editorContextMenu.setOnShowing(event -> {
+            undoItem.setDisable(!this.isUndoAvailable());
+            redoItem.setDisable(!this.isRedoAvailable());
+
+            boolean hasSelection = !this.getSelectedText().isEmpty();
+            cutItem.setDisable(!hasSelection);
+            copyItem.setDisable(!hasSelection);
+
+            pasteItem.setDisable(!Clipboard.getSystemClipboard().hasString());
+        });
+
+        this.setContextMenu(editorContextMenu);
+    }
+
+    private static FontIcon menuIcon(Ikon ikon) {
+        FontIcon icon = new FontIcon(ikon);
+        icon.setIconSize(14);
+        return icon;
+    }
+
     private void handleCtrlSpace(KeyEvent event) {
         event.consume();
-        String currentWord = getCurrentWord();
-
-        suggestionExecutor.submit(() -> {
-            List<String> suggestions = getSuggestions(currentWord);
-            Platform.runLater(() -> {
-                if (!suggestions.isEmpty()) {
-                    Optional<Bounds> caretBounds = this.getCaretBounds();
-                    if (caretBounds.isPresent()) {
-                        Bounds bounds = caretBounds.get();
-                        autocompletePopup.show(suggestions, bounds.getMinX(), bounds.getMaxY() + 5);
-                        isAutocompleteActive[0] = true;
-                    }
-                }
-            });
-        });
+        requestSuggestions(getCurrentWord(), true);
     }
 
     private void handleCtrlF(KeyEvent event) {
@@ -559,10 +663,9 @@ public class SQLEditor extends CodeArea {
     }
 
     public void shutdown() {
-        suggestionExecutor.shutdownNow();
+        suggestionService.cancel();
         if (findPopup != null && findPopup.isShowing()) {
             findPopup.hide();
         }
-        suggestionExecutor=null;
     }
 }

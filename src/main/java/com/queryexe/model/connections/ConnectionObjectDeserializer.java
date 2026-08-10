@@ -1,11 +1,14 @@
 package com.queryexe.model.connections;
 
+import lombok.extern.slf4j.Slf4j;
+
 import com.google.gson.*;
 import com.queryexe.model.drivers.DriverInfo;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Type;
 
+@Slf4j
 public class ConnectionObjectDeserializer implements JsonDeserializer<ConnectionObject> {
 
     @Override
@@ -74,7 +77,7 @@ public class ConnectionObjectDeserializer implements JsonDeserializer<Connection
 
             return databaseConnection;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("deserialize failed", e);
             return null;
         }
     }

@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -9,6 +11,7 @@ import org.fxmisc.richtext.CodeArea;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
+import com.queryexe.utils.IconColorUtil;
 import atlantafx.base.theme.Styles;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -24,13 +27,14 @@ import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 
+@Slf4j
 public class SQLEditorModal extends VBox {
 
     private CodeArea codeArea;
     private VirtualizedScrollPane<CodeArea> scroll;
 
     public SQLEditorModal(String initialQuery, Runnable onConfirmAction) {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(600, 500);
         this.setMinSize(600, 500);
         this.setPrefSize(600, 500);
@@ -59,7 +63,7 @@ public class SQLEditorModal extends VBox {
         titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         FontIcon fileIcon = new FontIcon(MaterialDesignC.CODE_TAGS_CHECK);
-        fileIcon.getStyleClass().add("custom-icon-30px");
+        IconColorUtil.apply(fileIcon, "-color-fg-default", 30);
 
         titleBox.getChildren().addAll(fileIcon, titleLabel);
 
@@ -83,6 +87,7 @@ public class SQLEditorModal extends VBox {
         buttonsBox.setPadding(new Insets(0, 10, 10, 0));
 
         Button confirmButton = new Button("Confirm");
+        confirmButton.getStyleClass().add(Styles.SMALL);
         confirmButton.setPrefWidth(75);
         confirmButton.setDefaultButton(true);
         confirmButton.setOnAction(event -> {
@@ -98,7 +103,7 @@ public class SQLEditorModal extends VBox {
                     for (String statement : queryText.split(";\\s*(\\r?\\n)?")) {
                         String trimmed = statement.trim();
                         if (!trimmed.isEmpty()) {
-                            System.out.println("Executing statement: " + trimmed);
+                            log.debug("Executing statement: {}", trimmed);
                             stmt.execute(trimmed);
                         }
                     }
@@ -106,17 +111,16 @@ public class SQLEditorModal extends VBox {
                     conn.commit();
 
                     App.closeAllModals();
-                    String message = "Table updated successfully!";
-                    new CustomNotification(message, new FontIcon(MaterialDesignT.TABLE_CHECK)).showNotification();
+                    new CustomNotification("Table Updated", "The table was updated successfully.", new FontIcon(MaterialDesignT.TABLE_CHECK)).showNotification();
                     onConfirmAction.run();
 
                 } catch (Exception e) {
                     if (conn != null) {
                         try {
                             conn.rollback();
-                            System.out.println("Transaction rolled back due to error: " + e.getMessage());
+                            log.warn("Transaction rolled back due to error: {}", e.getMessage());
                         } catch (SQLException rollbackEx) {
-                            rollbackEx.printStackTrace();
+                            log.error("SQLEditorModal failed", rollbackEx);
                         }
                     }
                     throw e;
@@ -125,18 +129,19 @@ public class SQLEditorModal extends VBox {
                         try {
                             conn.setAutoCommit(true);
                         } catch (SQLException ex) {
-                            ex.printStackTrace();
+                            log.error("SQLEditorModal failed", ex);
                         }
                     }
                 }
 
             } catch (Exception e) {
-                e.printStackTrace();
-                new CustomNotification("Failed to create/update table\n" + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL)).showNotificationOnCustomPane((StackPane) this.getParent());
+                log.error("SQLEditorModal failed", e);
+                new CustomNotification("Table Operation Failed", e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL)).showNotificationOnCustomPane((StackPane) this.getParent());
             }
         });
 
         Button cancelButton = new Button("Cancel");
+        cancelButton.getStyleClass().add(Styles.SMALL);
         cancelButton.setPrefWidth(75);
         cancelButton.setOnAction(event -> {
             App.closeModal();

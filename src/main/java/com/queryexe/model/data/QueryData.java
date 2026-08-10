@@ -18,7 +18,6 @@ public class QueryData {
 	@Override
 	public String toString() {
 		String formattedQuery = query;
-		System.out.println(formattedQuery);
         for (Object param : parameters) {
             // Handle null parameters
             String paramString = param == null ? "NULL" : param.toString();

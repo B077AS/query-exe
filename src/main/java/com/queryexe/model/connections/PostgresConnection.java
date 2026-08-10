@@ -1,5 +1,7 @@
 package com.queryexe.model.connections;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.*;
 import java.util.*;
 import java.util.stream.Stream;
@@ -15,6 +17,7 @@ import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
 import javafx.scene.control.TableColumn;
 
+@Slf4j
 public class PostgresConnection extends ConnectionObject {
 
     private String[] KEYWORDS = new String[]{
@@ -139,7 +142,7 @@ public class PostgresConnection extends ConnectionObject {
                     }
 
                 } catch (SQLException e) {
-                    System.err.println("Error accessing database '" + dbName + "': " + e.getMessage());
+                    log.error("Error accessing database '" + dbName + "': " + e.getMessage());
                 } finally {
                     if (!dbName.equals(currentDatabase)) {
                         try {
@@ -148,14 +151,14 @@ public class PostgresConnection extends ConnectionObject {
                                 currentConn.close();
                             }
                         } catch (SQLException e) {
-                            e.printStackTrace();
+                            log.error("getCompleteHierarchy failed", e);
                         }
                         DatabaseConnection.getInstance().setConnection(originalConnection);
                     }
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getCompleteHierarchy failed", e);
         }
 
         return hierarchy;
@@ -175,7 +178,7 @@ public class PostgresConnection extends ConnectionObject {
 
             return tablesMap;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getAllTablesAndColumns failed", e);
         }
         return null;
     }
@@ -547,7 +550,7 @@ public class PostgresConnection extends ConnectionObject {
             result.close();
             return databases;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getDatabases failed", e);
         }
         return databases;
     }
@@ -567,7 +570,7 @@ public class PostgresConnection extends ConnectionObject {
                 schemas.add(result.getString("schema_name"));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getSchemas failed", e);
         }
         return schemas;
     }
@@ -755,7 +758,7 @@ public class PostgresConnection extends ConnectionObject {
             return script.toString();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateCreateScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -949,7 +952,7 @@ public class PostgresConnection extends ConnectionObject {
             insertScript.append(");");
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -1024,7 +1027,7 @@ public class PostgresConnection extends ConnectionObject {
             insertScript.append(");");
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateRowInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }

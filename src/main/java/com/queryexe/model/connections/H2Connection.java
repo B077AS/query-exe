@@ -1,5 +1,7 @@
 package com.queryexe.model.connections;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -16,6 +18,7 @@ import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
 import javafx.scene.control.TableColumn;
 
+@Slf4j
 public class H2Connection extends ConnectionObject {
 
     private final String[] KEYWORDS = new String[]{
@@ -112,7 +115,7 @@ public class H2Connection extends ConnectionObject {
 
             return tablesMap;
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getAllTablesAndColumns failed", e);
         }
         return null;
     }
@@ -480,13 +483,13 @@ public class H2Connection extends ConnectionObject {
             result.close();
 
             if (name != null && !name.trim().isEmpty() && schemas.isEmpty()) {
-                System.out.println("Schema '" + name + "' not found.");
+                log.warn("Schema '{}' not found.", name);
             }
 
             return schemas;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("getDatabases failed", e);
         }
         return schemas;
     }
@@ -684,7 +687,7 @@ public class H2Connection extends ConnectionObject {
             return script.toString();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateCreateScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -878,7 +881,7 @@ public class H2Connection extends ConnectionObject {
 
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
@@ -953,7 +956,7 @@ public class H2Connection extends ConnectionObject {
 
             return insertScript.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("generateRowInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }

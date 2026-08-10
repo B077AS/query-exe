@@ -4,6 +4,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import com.queryexe.model.connections.ConnectionTypes;
+import com.queryexe.service.Async;
 import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
 
@@ -16,8 +17,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -33,15 +32,12 @@ public class DriverAPIs {
             Consumer<List<DriverInfo>> onSuccess,
             Consumer<Exception> onError) {
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(() -> {
+        Async.run(() -> {
             try {
                 List<DriverInfo> result = fetchAllDrivers(connectionType);
                 onSuccess.accept(result);
             } catch (Exception e) {
                 onError.accept(e);
-            } finally {
-                executor.shutdown();
             }
         });
     }
@@ -52,15 +48,12 @@ public class DriverAPIs {
             Runnable onSuccess,
             Consumer<Exception> onError) {
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(() -> {
+        Async.run(() -> {
             try {
                 downloadDriverInternal(driver, targetFile);
                 onSuccess.run();
             } catch (Exception e) {
                 onError.accept(e);
-            } finally {
-                executor.shutdown();
             }
         });
     }

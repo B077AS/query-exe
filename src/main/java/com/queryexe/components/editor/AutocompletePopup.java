@@ -3,6 +3,7 @@ package com.queryexe.components.editor;
 import javafx.scene.control.ListView;
 import javafx.scene.control.PopupControl;
 import javafx.scene.control.Skin;
+import javafx.scene.control.skin.ListViewSkin;
 import org.fxmisc.richtext.CodeArea;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.List;
 public class AutocompletePopup extends PopupControl {
 
     private ListView<String> listView;
+    private ScrollAwareListViewSkin listViewSkin;
     private SQLEditor codeArea;
 
     public AutocompletePopup(SQLEditor codeArea) {
@@ -19,6 +21,14 @@ public class AutocompletePopup extends PopupControl {
         this.listView.setPrefHeight(200);
         this.listView.getStyleClass().add("autocomplete-list");
         this.listView.setFocusTraversable(false);
+
+        // ListView.scrollTo(int) always pins the target row to the very top of the
+        // viewport (it fires a scrollToTopIndex event), which makes the selection
+        // highlight appear stuck at the top while rows scroll underneath it. The
+        // skin's VirtualFlow has a gentler scrollTo(int) that only scrolls as much
+        // as needed to bring the row into view, matching normal keyboard navigation.
+        listViewSkin = new ScrollAwareListViewSkin(listView);
+        listView.setSkin(listViewSkin);
 
         setAutoHide(true);
         setHideOnEscape(true);
@@ -33,6 +43,7 @@ public class AutocompletePopup extends PopupControl {
 
         listView.getItems().setAll(suggestions);
         listView.getSelectionModel().selectFirst();
+        listViewSkin.scrollIntoView(0);
 
         if (!isShowing()) {
             show(codeArea, x, y);
@@ -52,6 +63,7 @@ public class AutocompletePopup extends PopupControl {
             listView.getSelectionModel().select(currentSelection);
         } else {
             listView.getSelectionModel().selectFirst();
+            listViewSkin.scrollIntoView(0);
         }
     }
 
@@ -67,7 +79,7 @@ public class AutocompletePopup extends PopupControl {
         int current = listView.getSelectionModel().getSelectedIndex();
         if (current < listView.getItems().size() - 1) {
             listView.getSelectionModel().select(current + 1);
-            listView.scrollTo(current + 1);
+            listViewSkin.scrollIntoView(current + 1);
         }
     }
 
@@ -75,7 +87,7 @@ public class AutocompletePopup extends PopupControl {
         int current = listView.getSelectionModel().getSelectedIndex();
         if (current > 0) {
             listView.getSelectionModel().select(current - 1);
-            listView.scrollTo(current - 1);
+            listViewSkin.scrollIntoView(current - 1);
         }
     }
 
@@ -96,5 +108,20 @@ public class AutocompletePopup extends PopupControl {
             public void dispose() {
             }
         };
+    }
+
+    /**
+     * Exposes the VirtualFlow's minimal-scroll {@code scrollTo(int)}, which only moves
+     * the viewport as far as needed to reveal a row. The public {@link ListView#scrollTo(int)}
+     * instead always pins the target row to the top of the viewport.
+     */
+    private static class ScrollAwareListViewSkin extends ListViewSkin<String> {
+        ScrollAwareListViewSkin(ListView<String> listView) {
+            super(listView);
+        }
+
+        void scrollIntoView(int index) {
+            getVirtualFlow().scrollTo(index);
+        }
     }
 }

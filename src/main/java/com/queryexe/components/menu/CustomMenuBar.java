@@ -20,6 +20,7 @@ import com.queryexe.components.modals.AboutModal;
 import com.queryexe.components.modals.ActiveConnectionsModal;
 import com.queryexe.components.modals.HelpModal;
 import com.queryexe.components.modals.MultipleConnectionsModal;
+import com.queryexe.components.modals.SettingsModal;
 import com.queryexe.service.QueryService;
 import com.queryexe.service.RecentFilesManager;
 import com.queryexe.queryexe.App;
@@ -187,19 +188,27 @@ public class CustomMenuBar extends MenuBar {
 
     private Menu settingsMenu() {
         Menu menu = new Menu("Settings");
+        menu.setMnemonicParsing(true);
+
+        MenuItem colorSchemeMenu = createItem("Color Scheme", MaterialDesignP.PALETTE_OUTLINE, null);
+        colorSchemeMenu.setOnAction(event -> {
+            App.showModal(new SettingsModal());
+        });
+
+        menu.getItems().add(colorSchemeMenu);
         return menu;
     }
 
     private Menu aboutMenu() {
-        Menu menu = new Menu("About", new FontIcon(Feather.HELP_CIRCLE));
+        Menu menu = new Menu("About");
         menu.setMnemonicParsing(true);
 
-        MenuItem helpMenuItem = new MenuItem("Help");
+        MenuItem helpMenuItem = createItem("Help", Feather.HELP_CIRCLE, null);
         helpMenuItem.setOnAction(event -> {
             App.showModal(new HelpModal());
         });
 
-        MenuItem aboutMenuItem = new MenuItem("About");
+        MenuItem aboutMenuItem = createItem("About", MaterialDesignI.INFORMATION_OUTLINE, null);
         aboutMenuItem.setOnAction(event -> {
             App.showModal(new AboutModal());
         });

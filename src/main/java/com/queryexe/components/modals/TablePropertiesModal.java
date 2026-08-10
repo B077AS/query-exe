@@ -1,5 +1,7 @@
 package com.queryexe.components.modals;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -20,6 +22,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Map;
 
+@Slf4j
 public class TablePropertiesModal extends VBox {
 
     private String databaseName;
@@ -50,7 +53,7 @@ public class TablePropertiesModal extends VBox {
     }
 
     private void initializeUI() {
-        this.setStyle("-fx-background-color: -color-bg-default; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-border-color: -color-border-default; -fx-border-width: 1px;");
+        this.getStyleClass().add("modal-container");
         this.setMaxSize(950, 550);
         this.setMinSize(950, 550);
         this.setPrefSize(950, 550);
@@ -100,9 +103,9 @@ public class TablePropertiesModal extends VBox {
             contentPane.getChildren().add(columnsTab);
 
         } catch (SQLException e) {
-            CustomNotification notification = new CustomNotification("Failed to load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
+            CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
-            e.printStackTrace();
+            log.error("loadTableData failed", e);
         }
     }
 
@@ -140,7 +143,7 @@ public class TablePropertiesModal extends VBox {
                     -fx-background-color: -color-bg-default;
                     -fx-border-radius: 8px;
                     -fx-background-radius: 8px;
-                    -fx-border-color: #44475a;
+                    -fx-border-color: -color-accent-9;
                     -fx-border-width: 1px;
                     """);
 
@@ -171,9 +174,9 @@ public class TablePropertiesModal extends VBox {
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setPadding(new Insets(12, 15, 12, 15));
         headerRow.setStyle("""
-                -fx-background-color: rgba(68, 71, 90, 0.3);
+                -fx-background-color: -color-accent-9-alpha30;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 """);
 
         Label nameHeader = new Label("Column Name");
@@ -200,11 +203,11 @@ public class TablePropertiesModal extends VBox {
         dataRow.setPadding(new Insets(10, 15, 10, 15));
         dataRow.setSpacing(0);
 
-        String bgColor = alternate ? "rgba(68, 71, 90, 0.1)" : "transparent";
+        String bgColor = alternate ? "-color-accent-9-alpha10" : "transparent";
         dataRow.setStyle("""
                 -fx-background-color: %s;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: rgba(68, 71, 90, 0.3);
+                -fx-border-color: -color-accent-9-alpha30;
                 """.formatted(bgColor));
 
         HBox nameBox = new HBox(6);
@@ -270,7 +273,7 @@ public class TablePropertiesModal extends VBox {
                 -fx-font-size: 10px;
                 -fx-opacity: 0.85;
                 -fx-padding: 3 7 3 7;
-                -fx-background-color: rgba(68, 71, 90, 0.4);
+                -fx-background-color: -color-accent-9-alpha40;
                 -fx-background-radius: 3px;
                 -fx-font-weight: 600;
                 """);
@@ -294,7 +297,7 @@ public class TablePropertiesModal extends VBox {
                     -fx-background-color: -color-bg-default;
                     -fx-border-radius: 8px;
                     -fx-background-radius: 8px;
-                    -fx-border-color: #44475a;
+                    -fx-border-color: -color-accent-9;
                     -fx-border-width: 1px;
                     """);
 
@@ -326,9 +329,9 @@ public class TablePropertiesModal extends VBox {
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.setPadding(new Insets(12, 15, 12, 15));
         headerRow.setStyle("""
-                -fx-background-color: rgba(68, 71, 90, 0.3);
+                -fx-background-color: -color-accent-9-alpha30;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 """);
 
         Label constraintHeader = new Label("Constraint Name");
@@ -360,11 +363,11 @@ public class TablePropertiesModal extends VBox {
         dataRow.setPadding(new Insets(10, 15, 10, 15));
         dataRow.setSpacing(0);
 
-        String bgColor = alternate ? "rgba(68, 71, 90, 0.1)" : "transparent";
+        String bgColor = alternate ? "-color-accent-9-alpha10" : "transparent";
         dataRow.setStyle("""
                 -fx-background-color: %s;
                 -fx-border-width: 0 0 1px 0;
-                -fx-border-color: rgba(68, 71, 90, 0.3);
+                -fx-border-color: -color-accent-9-alpha30;
                 """.formatted(bgColor));
 
         HBox constraintBox = new HBox(6);
@@ -434,7 +437,7 @@ public class TablePropertiesModal extends VBox {
                 -fx-font-size: 10px;
                 -fx-opacity: 0.85;
                 -fx-padding: 3 7 3 7;
-                -fx-background-color: rgba(68, 71, 90, 0.4);
+                -fx-background-color: -color-accent-9-alpha40;
                 -fx-background-radius: 3px;
                 -fx-font-weight: 600;
                 """);
@@ -479,7 +482,7 @@ public class TablePropertiesModal extends VBox {
             addPropertyRow(statsGrid, 0, "Table Size:", formattedSize);
         } catch (SQLException e) {
             addPropertyRow(statsGrid, 0, "Table Size:", "N/A (Error retrieving)");
-            e.printStackTrace();
+            log.error("createPropertiesTab failed", e);
         }
 
         statsSection.getChildren().add(statsGrid);
@@ -503,7 +506,7 @@ public class TablePropertiesModal extends VBox {
                 -fx-background-color: -color-bg-default;
                 -fx-background-radius: 8px;
                 -fx-border-radius: 8px;
-                -fx-border-color: #44475a;
+                -fx-border-color: -color-accent-9;
                 -fx-border-width: 1px;
                 """);
 
