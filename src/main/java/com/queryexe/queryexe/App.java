@@ -34,6 +34,7 @@ import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.theme.ThemeManager;
+import com.queryexe.update.LauncherUpdateService;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import atlantafx.base.controls.ModalPane;
@@ -151,6 +152,7 @@ public class App extends Application {
             Platform.runLater(() -> stage.setOpacity(1));
         }
 
+        new LauncherUpdateService().start();
     }
 
     public static void connect() {

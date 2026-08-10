@@ -6,7 +6,7 @@
 
     <groupId>com.queryexe</groupId>
     <artifactId>query-exe</artifactId>
-    <version>1.0.1</version>
+    <version>0.0.1</version>
     <name>QueryExe</name>
     <description>Universal Database Management Tool</description>
 

@@ -24,6 +24,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.Node;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.service.AppSettings;
+import com.queryexe.utils.IconColorUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -457,8 +458,8 @@ public class ConnectionsPane extends VBox {
         box.setPadding(new Insets(60, 20, 60, 20));
 
         FontIcon icon = new FontIcon(searching ? Feather.SEARCH : MaterialDesignD.DATABASE);
-        icon.setIconSize(38);
-        icon.getStyleClass().add(Styles.TEXT_MUTED);
+        IconColorUtil.apply(icon, "-color-accent-emphasis", 72);
+        icon.setOpacity(0.12);
 
         Label title = new Label(searching ? "No connections match your search" : "No connections yet");
         title.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
