@@ -63,6 +63,13 @@ public class App extends Application {
     private static Map<ConnectionObject, CustomTree> databaseTreeCache = new HashMap<>();
     private static final ArrayDeque<ModalPane> modalPaneStack = new ArrayDeque<>();
 
+    // Closing a modal removes its focused control (e.g. the X button) from the
+    // scene, and JavaFX's focus-traversal engine then reassigns focus to the
+    // first traversable control it finds - typically the home page's search
+    // field. Restoring whatever had focus before the modal opened avoids that.
+    private static Node baseModalPreviousFocus;
+    private static final Map<ModalPane, Node> overlayPreviousFocus = new HashMap<>();
+
     @Override
     public void start(Stage stage) {
 
@@ -91,6 +98,13 @@ public class App extends Application {
         modalPane = new ModalPane();
         modalPane.setPersistent(false);
         setupTransitions(modalPane);
+        modalPane.displayProperty().addListener((obs, was, now) -> {
+            if (!now && baseModalPreviousFocus != null) {
+                Node toFocus = baseModalPreviousFocus;
+                baseModalPreviousFocus = null;
+                Platform.runLater(toFocus::requestFocus);
+            }
+        });
 
         connectionsPane = new ConnectionsPane();
 
@@ -209,15 +223,22 @@ public class App extends Application {
      * from the stack and the scene when it is hidden.
      */
     public static void showModal(Node modal) {
+        Node previousFocus = scene.getFocusOwner();
+
         if (modalPane.isDisplay() || !modalPaneStack.isEmpty()) {
             int nextOrder = ModalPane.Z_FRONT - (modalPaneStack.size() + 1) * 5;
             ModalPane overlay = new ModalPane(nextOrder);
             overlay.setPersistent(false);
             setupTransitions(overlay);
+            overlayPreviousFocus.put(overlay, previousFocus);
             overlay.displayProperty().addListener((obs, was, now) -> {
                 if (!now) {
                     modalPaneStack.remove(overlay);
                     mainStackPane.getChildren().remove(overlay);
+                    Node toFocus = overlayPreviousFocus.remove(overlay);
+                    if (toFocus != null) {
+                        Platform.runLater(toFocus::requestFocus);
+                    }
                 }
             });
             mainStackPane.getChildren().add(overlay);
@@ -232,6 +253,7 @@ public class App extends Application {
             return;
         }
 
+        baseModalPreviousFocus = previousFocus;
         modalPane.setContent(modal);
         modal.applyCss();
         Platform.runLater(() -> {

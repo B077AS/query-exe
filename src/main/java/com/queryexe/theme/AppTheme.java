@@ -43,7 +43,7 @@ public enum AppTheme {
 
     BLUE("Blue",
             "#e5eeff", "#ccdcff", "#b3cbff", "#99b9ff", "#80a8ff",
-            "#5b9cf6", "#4478cc", "#2d56a2", "#183578", "#09194e"),
+            "#5b9cf6", "#427dd0", "#2b66b8", "#1f5093", "#143a6f"),
 
     PINK("Pink",
             "#ffe5f5", "#ffcce9", "#ffb3de", "#ff99d2", "#ff80c7",

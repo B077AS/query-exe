@@ -730,26 +730,29 @@ public class AddConnectionModal extends VBox {
                 }
             });
 
-            HBox buttonBox = new HBox(10);
-            buttonBox.setAlignment(Pos.CENTER_LEFT);
+            GridPane buttonBox = new GridPane();
+            buttonBox.setHgap(10);
             buttonBox.setMaxWidth(Double.MAX_VALUE);
+            for (int i = 0; i < 3; i++) {
+                ColumnConstraints column = new ColumnConstraints();
+                column.setPercentWidth(100.0 / 3);
+                column.setHgrow(Priority.ALWAYS);
+                buttonBox.getColumnConstraints().add(column);
+            }
 
             Button loadDriversButton = new Button("Check Available Drivers", new FontIcon(MaterialDesignU.UPLOAD));
-            HBox.setHgrow(loadDriversButton, Priority.ALWAYS);
             loadDriversButton.setMaxWidth(Double.MAX_VALUE);
 
             Button downloadButton = new Button("Download Driver", new FontIcon(MaterialDesignD.DOWNLOAD));
-            HBox.setHgrow(downloadButton, Priority.ALWAYS);
             downloadButton.setMaxWidth(Double.MAX_VALUE);
             downloadButton.setDisable(true);
 
             Button applyDriverButton = new Button("Apply Driver", new FontIcon(MaterialDesignC.CHECK));
-            HBox.setHgrow(applyDriverButton, Priority.ALWAYS);
             applyDriverButton.setMaxWidth(Double.MAX_VALUE);
             applyDriverButton.setDisable(true);
             applyDriverButton.setStyle("-fx-background-color: -color-border-default;");
 
-            buttonBox.getChildren().addAll(loadDriversButton, downloadButton, applyDriverButton);
+            buttonBox.addRow(0, loadDriversButton, downloadButton, applyDriverButton);
 
             Label statusLabel = new Label("Click 'Check Available Drivers' to see available versions");
             statusLabel.setWrapText(true);
