@@ -23,9 +23,9 @@ The project has two pieces — you only need to think about the second one if yo
 | Piece | Role |
 |---|---|
 | **query-exe** (this repo) | The desktop client itself — connections, the SQL editor, schema browsing, result grids |
-| [query-exe-launcher](https://github.com/B077AS/query-exe-launcher) | Auto-updating launcher — Windows installer & Linux AppImage, keeps the client (and itself) up to date |
+| [query-exe-launcher](https://github.com/B077AS/query-exe-launcher) | Auto-updating launcher source — built into the Windows installer & Linux AppImage by this repo's release pipeline, keeps the client (and itself) up to date |
 
-> 📥 **Just want to use QueryExe?** Grab the launcher from [query-exe-launcher's releases](https://github.com/B077AS/query-exe-launcher/releases) — a Windows installer or Linux AppImage that installs the client and keeps it current automatically, every time you start it. You never need to build anything yourself.
+> 📥 **Just want to use QueryExe?** Grab the Windows installer or Linux AppImage from **this repo's** [Releases page](https://github.com/B077AS/query-exe/releases) — it installs the client and keeps it current automatically, every time you start it. You never need to build anything yourself. (Not query-exe-launcher's releases — that repo's own releases only carry self-update payloads for an already-installed launcher, not something you'd download directly.)
 
 ## Features
 
@@ -66,7 +66,7 @@ Every JDBC driver can be swapped out for a different version or a custom build f
 
 ## Getting the app (users)
 
-Download the **launcher** from [query-exe-launcher's releases page](https://github.com/B077AS/query-exe-launcher/releases) — a Windows installer or Linux AppImage. It installs the client into your app data directory and updates it automatically on every start, so install once and forget about it.
+Download the **launcher** — a Windows installer or Linux AppImage — from [this repo's releases page](https://github.com/B077AS/query-exe/releases). It's built by this repo's release pipeline (using query-exe-launcher's source), and it installs the client into your app data directory and updates it automatically on every start, so install once and forget about it. query-exe-launcher's own releases page only publishes self-update payloads for a launcher you've already installed — it's not where the installer/AppImage comes from.
 
 ## Keeping the launcher up to date
 
