@@ -32,7 +32,7 @@ public class RootTreeItem extends CustomTreeItem {
 
         MenuItem refreshDatabasesMenuItem = new MenuItem("Refresh", menuIcon(MaterialDesignR.REFRESH));
         refreshDatabasesMenuItem.setOnAction(event -> {
-            App.getDatabaseTree().initialize();
+            App.getCustomTree().initialize();
         });
 
         contextMenu.getItems().addAll(refreshDatabasesMenuItem);
@@ -46,7 +46,7 @@ public class RootTreeItem extends CustomTreeItem {
             try {
                 DatabaseConnection.getInstance().getConnectionObject().createDatabase(dbName);
                 Platform.runLater(() -> {
-                    App.getDatabaseTree().initialize();
+                    App.getCustomTree().initialize();
                     String entityType = isDatabase ? "Database" : "Schema";
                     CustomNotification customNotification = new CustomNotification(
                             entityType + " Created",

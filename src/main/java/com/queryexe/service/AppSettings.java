@@ -26,6 +26,8 @@ public class AppSettings {
 
     private static final String THEME_KEY = "theme";
     private static final String CONNECTIONS_VIEW_MODE_KEY = "connectionsViewMode";
+    private static final String TREE_SPLIT_WIDTH_KEY = "ui.treeSplitWidth";
+    private static final String RESULT_SPLIT_HEIGHT_KEY = "ui.resultSplitHeight";
 
     private static volatile AppSettings instance;
 
@@ -67,6 +69,28 @@ public class AppSettings {
     public void setConnectionsViewMode(String viewMode) {
         JsonObject settings = read();
         settings.addProperty(CONNECTIONS_VIEW_MODE_KEY, viewMode);
+        write(settings);
+    }
+
+    public Double getTreeSplitWidth() {
+        JsonObject settings = read();
+        return settings.has(TREE_SPLIT_WIDTH_KEY) ? settings.get(TREE_SPLIT_WIDTH_KEY).getAsDouble() : null;
+    }
+
+    public void setTreeSplitWidth(double pixelWidth) {
+        JsonObject settings = read();
+        settings.addProperty(TREE_SPLIT_WIDTH_KEY, pixelWidth);
+        write(settings);
+    }
+
+    public Double getResultSplitHeight() {
+        JsonObject settings = read();
+        return settings.has(RESULT_SPLIT_HEIGHT_KEY) ? settings.get(RESULT_SPLIT_HEIGHT_KEY).getAsDouble() : null;
+    }
+
+    public void setResultSplitHeight(double pixelHeight) {
+        JsonObject settings = read();
+        settings.addProperty(RESULT_SPLIT_HEIGHT_KEY, pixelHeight);
         write(settings);
     }
 
