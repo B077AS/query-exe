@@ -14,6 +14,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
+import com.queryexe.service.AppSettings;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 import com.queryexe.components.results.ResultBox;
@@ -179,17 +180,23 @@ public class CustomTab<T extends Node> extends Tab {
     }
 
     private void updateSplitPaneWithResult() {
+        SplitPane split = App.getCodeAndResultSplitPane();
         if (resultBox != null) {
-            double dividerPosition = 0.7;
-            if (App.getCodeAndResultSplitPane().getItems().size() > 1) {
-                dividerPosition = App.getCodeAndResultSplitPane().getDividerPositions()[0];
-                App.getCodeAndResultSplitPane().getItems().remove(1);
+            double dividerPosition;
+            if (split.getItems().size() > 1) {
+                dividerPosition = split.getDividerPositions()[0];
+                split.getItems().remove(1);
+            } else {
+                Double savedHeight = AppSettings.get().getResultSplitHeight();
+                double height = split.getHeight();
+                dividerPosition = (savedHeight != null && height > 0) ? savedHeight / height : 0.7;
             }
-            App.getCodeAndResultSplitPane().getItems().add(1, resultBox);
-            App.getCodeAndResultSplitPane().setDividerPositions(dividerPosition);
+            split.getItems().add(1, resultBox);
+            split.setDividerPosition(0, dividerPosition);
+            App.attachResultSplitDividerSaveHandler(split);
         } else {
-            if (App.getCodeAndResultSplitPane() != null && App.getCodeAndResultSplitPane().getItems().size() > 1) {
-                App.getCodeAndResultSplitPane().getItems().remove(1);
+            if (split != null && split.getItems().size() > 1) {
+                split.getItems().remove(1);
             }
         }
     }

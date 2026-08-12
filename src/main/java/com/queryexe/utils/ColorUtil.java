@@ -6,10 +6,7 @@ package com.queryexe.utils;
  * (keeping saturation/lightness fixed) is what makes a generated theme
  * "feel like" the original colors instead of an arbitrary new palette.
  */
-public final class ColorUtil {
-
-    private ColorUtil() {
-    }
+public class ColorUtil {
 
     /** Hue (0-360) of a "#rrggbb" color. */
     public static double hueOf(String hex) {

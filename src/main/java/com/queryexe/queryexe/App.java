@@ -1,5 +1,6 @@
 package com.queryexe.queryexe;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import javafx.animation.FadeTransition;
@@ -32,6 +33,7 @@ import com.queryexe.components.menu.CustomToolBar;
 import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
+import com.queryexe.service.AppSettings;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.theme.ThemeManager;
 import com.queryexe.update.LauncherUpdateService;
@@ -50,24 +52,28 @@ import com.queryexe.utils.TabScrollChevrons;
 @Slf4j
 public class App extends Application {
 
+    @Getter
     private static Scene scene;
+    @Getter
     private static StackPane stackPane;
     private static CustomToolBar toolbar;
     private static CustomMenuBar menuBar;
+    @Getter
     private static TabPane tabPane;
+    @Getter
     private static ConnectionsPane connectionsPane;
+    @Getter
     private static SplitPane codeAndResultSplitPane;
+    @Getter
     private static ModalPane modalPane;
     private static StackPane mainStackPane;
+    @Getter
     private static VBox headerBox;
+    @Getter
     private static CustomTree customTree;
     private static Map<ConnectionObject, CustomTree> databaseTreeCache = new HashMap<>();
     private static final ArrayDeque<ModalPane> modalPaneStack = new ArrayDeque<>();
 
-    // Closing a modal removes its focused control (e.g. the X button) from the
-    // scene, and JavaFX's focus-traversal engine then reassigns focus to the
-    // first traversable control it finds - typically the home page's search
-    // field. Restoring whatever had focus before the modal opened avoids that.
     private static Node baseModalPreviousFocus;
     private static final Map<ModalPane, Node> overlayPreviousFocus = new HashMap<>();
 
@@ -185,14 +191,41 @@ public class App extends Application {
         codeAndResultSplitPane.setStyle("-fx-background-color: -color-bg-default;");
         codeAndResultSplitPane.setOrientation(Orientation.VERTICAL);
         codeAndResultSplitPane.getItems().add(tabPane);
+        attachResultSplitResizeListener(codeAndResultSplitPane);
 
         SplitPane splitpane = new SplitPane(customTree, codeAndResultSplitPane);
         splitpane.setOrientation(Orientation.HORIZONTAL);
+        SplitPane.setResizableWithParent(customTree, false);
+
+        Double savedTreeWidth = AppSettings.get().getTreeSplitWidth();
         splitpane.setDividerPositions(0.15);
-        splitpane.widthProperty().addListener((obs, oldVal, newVal) -> {
-            double oldPosition = splitpane.getDividerPositions()[0];
+        splitpane.widthProperty().addListener((obs, oldW, newW) -> {
+            if (newW.doubleValue() == 0) {
+                return;
+            }
+            if (oldW.doubleValue() == 0) {
+                double targetPx = savedTreeWidth != null ? savedTreeWidth
+                        : splitpane.getDividerPositions()[0] * newW.doubleValue();
+                splitpane.setDividerPosition(0, targetPx / newW.doubleValue());
+            } else {
+                double pixelWidth = splitpane.getDividerPositions()[0] * oldW.doubleValue();
+                Platform.runLater(() -> splitpane.setDividerPosition(0, pixelWidth / newW.doubleValue()));
+            }
+        });
+        splitpane.skinProperty().addListener((obs, oldSkin, newSkin) -> {
+            if (newSkin == null) {
+                return;
+            }
             Platform.runLater(() -> {
-                splitpane.setDividerPosition(0, oldPosition);
+                Node dividerNode = splitpane.lookup(".split-pane-divider");
+                if (dividerNode != null) {
+                    dividerNode.setOnMouseReleased(e -> {
+                        double px = splitpane.getDividerPositions()[0] * splitpane.getWidth();
+                        if (px > 0) {
+                            AppSettings.get().setTreeSplitWidth(px);
+                        }
+                    });
+                }
             });
         });
 
@@ -347,36 +380,29 @@ public class App extends Application {
         }
     }
 
-    public static ConnectionsPane getConnectionsPane() {
-        return connectionsPane;
+    private static void attachResultSplitResizeListener(SplitPane split) {
+        SplitPane.setResizableWithParent(tabPane, false);
+        split.heightProperty().addListener((obs, oldH, newH) -> {
+            if (newH.doubleValue() == 0 || oldH.doubleValue() == 0 || split.getItems().size() < 2) {
+                return;
+            }
+            double pixelHeight = split.getDividerPositions()[0] * oldH.doubleValue();
+            Platform.runLater(() -> split.setDividerPosition(0, pixelHeight / newH.doubleValue()));
+        });
     }
 
-    public static StackPane getStackPane() {
-        return stackPane;
-    }
-
-    public static TabPane getTabPane() {
-        return tabPane;
-    }
-
-    public static SplitPane getCodeAndResultSplitPane() {
-        return codeAndResultSplitPane;
-    }
-
-    public static VBox getHeaderBox() {
-        return headerBox;
-    }
-
-    public static CustomTree getDatabaseTree() {
-        return customTree;
-    }
-
-    public static ModalPane getModalPane() {
-        return modalPane;
-    }
-
-    public static Scene getScene() {
-        return scene;
+    public static void attachResultSplitDividerSaveHandler(SplitPane split) {
+        Platform.runLater(() -> {
+            Node dividerNode = split.lookup(".split-pane-divider");
+            if (dividerNode != null) {
+                dividerNode.setOnMouseReleased(e -> {
+                    if (split.getItems().size() > 1 && split.getHeight() > 0) {
+                        double px = split.getDividerPositions()[0] * split.getHeight();
+                        AppSettings.get().setResultSplitHeight(px);
+                    }
+                });
+            }
+        });
     }
 
     public static void appStart(String[] args) {

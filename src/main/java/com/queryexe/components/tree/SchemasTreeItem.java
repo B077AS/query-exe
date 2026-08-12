@@ -30,7 +30,7 @@ public class SchemasTreeItem extends CustomTreeItem {
         });
 
         MenuItem refreshSchemasMenuItem = new MenuItem("Refresh", menuIcon(MaterialDesignR.REFRESH));
-        refreshSchemasMenuItem.setOnAction(event -> App.getDatabaseTree().initialize());
+        refreshSchemasMenuItem.setOnAction(event -> App.getCustomTree().initialize());
 
         contextMenu.getItems().addAll(createSchema, refreshSchemasMenuItem);
     }
@@ -40,7 +40,7 @@ public class SchemasTreeItem extends CustomTreeItem {
             try {
                 DatabaseConnection.getInstance().getConnectionObject().createDatabase(schemaName);
                 Platform.runLater(() -> {
-                    App.getDatabaseTree().initialize();
+                    App.getCustomTree().initialize();
                     CustomNotification customNotification = new CustomNotification(
                             "Schema Created",
                             "The schema was created successfully.",

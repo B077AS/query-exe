@@ -245,7 +245,7 @@ public class ResultBox extends VBox {
                     if (useMatcher.find()) {
                         String newDatabase = useMatcher.group(1);
                         newDatabase = newDatabase.replaceAll("[`'\"]", "");
-                        App.getDatabaseTree().selectDatabase(newDatabase);
+                        App.getCustomTree().selectDatabase(newDatabase);
                     }
 
                     if (DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.H2.toString())) {
@@ -253,7 +253,7 @@ public class ResultBox extends VBox {
                         Matcher h2Matcher = h2Pattern.matcher(singleQuery.trim());
                         if (h2Matcher.find()) {
                             String newDatabase = h2Matcher.group(1);
-                            App.getDatabaseTree().selectDatabase(newDatabase);
+                            App.getCustomTree().selectDatabase(newDatabase);
                         }
                     }
                 } else {
@@ -266,7 +266,7 @@ public class ResultBox extends VBox {
                         if (newDatabase.split(",").length > 1) {
                             newDatabase = newDatabase.split(",")[1].trim();
                         }
-                        App.getDatabaseTree().selectDatabase(newDatabase);
+                        App.getCustomTree().selectDatabase(newDatabase);
                     }
                 }
 

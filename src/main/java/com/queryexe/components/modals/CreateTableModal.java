@@ -321,9 +321,6 @@ public class CreateTableModal extends VBox {
         rowBox.setStyle("""
                 -fx-background-color: -color-bg-default;
                 -fx-background-radius: 8px;
-                -fx-border-radius: 8px;
-                -fx-border-color: -color-accent-9;
-                -fx-border-width: 1px;
                 -fx-padding: 10px;
                 """);
 

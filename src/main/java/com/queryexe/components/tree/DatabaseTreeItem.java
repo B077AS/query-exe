@@ -47,7 +47,7 @@ public class DatabaseTreeItem extends CustomTreeItem {
         useMenuItem.setOnAction(event -> {
             try {
                 DatabaseConnection.getInstance().getConnectionObject().useDatabase(this.titleLabel.getText());
-                App.getDatabaseTree().selectDatabase(this.titleLabel.getText());
+                App.getCustomTree().selectDatabase(this.titleLabel.getText());
             } catch (SQLException e) {
                 CustomNotification customNotification = new CustomNotification("Selection Failed", "The database could not be selected.", new FontIcon(MaterialDesignD.DATABASE_ALERT));
                 customNotification.showNotification();
@@ -97,7 +97,7 @@ public class DatabaseTreeItem extends CustomTreeItem {
 
             Map<String, ArrayList<ColumnData>> tablesAndColumnsMap = DatabaseConnection.getInstance()
                     .getConnectionObject().getAllTablesAndColumns(this.databaseName);
-            App.getDatabaseTree().addTablesAndColumns(tablesAndColumnsMap, tablesNode, this.databaseName);
+            App.getCustomTree().addTablesAndColumns(tablesAndColumnsMap, tablesNode, this.databaseName);
         }
     }
 
@@ -106,7 +106,7 @@ public class DatabaseTreeItem extends CustomTreeItem {
             try {
                 DatabaseConnection.getInstance().getConnectionObject().deleteDatabase(this.titleLabel.getText());
                 Platform.runLater(() -> {
-                    App.getDatabaseTree().initialize();
+                    App.getCustomTree().initialize();
                     String entityType = isDatabase ? "Database" : "Schema";
                     CustomNotification customNotification = new CustomNotification(
                             entityType + " Dropped",
