@@ -1,4 +1,7 @@
-# QueryExe
+<h1 align="center">
+  <img src="src/main/resources/icon.png" alt="QueryExe icon" width="80"><br>
+  QueryExe
+</h1>
 
 <p align="center">
   <b>A free, cross-platform desktop client for working with relational databases.</b><br>
