@@ -258,7 +258,15 @@ public class ConnectionsPane extends VBox {
         int clampedPage = Math.min(Math.max(targetPage, 0), totalPages - 1);
 
         pagination.setPageCount(totalPages);
-        pagination.setCurrentPageIndex(clampedPage);
+        if (pagination.getCurrentPageIndex() != clampedPage) {
+            pagination.setCurrentPageIndex(clampedPage);
+        } else if (currentPage != null) {
+            // Pagination only re-invokes the page factory when the page index
+            // itself changes, but a resize can change cardsPerRow/cardsPerColumn
+            // while leaving the index the same (e.g. still page 1 of 1) — force
+            // the grid to re-lay-out with the new dimensions in that case.
+            currentPage.setCenter(visible.isEmpty() ? buildEmptyState() : buildGrid(clampedPage));
+        }
     }
 
     private BorderPane buildPage(int pageIndex) {

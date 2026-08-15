@@ -14,13 +14,18 @@ import com.queryexe.utils.ColorUtil;
 /**
  * Applies and persists the app's accent {@link AppTheme}.
  *
- * <p>The base stylesheet's {@code -color-accent-*} tokens are purple, and
- * (unlike a neutral-gray UI) several background/border/selection tokens in
- * style.css are also purple-tinted hex literals rather than pure grays. So
- * switching themes isn't just swapping the accent ramp: those extra tokens
- * are rotated by the same hue delta as the theme's accent color, keeping
- * their saturation/lightness identical to the default theme and making the
- * result read as a hue change rather than a new palette.
+ * <p>The base stylesheet's {@code -color-accent-*} tokens are purple, and a
+ * couple of selection/syntax tokens in style.css are also purple-tinted hex
+ * literals rather than pure grays. So switching themes isn't just swapping
+ * the accent ramp: those extra tokens are rotated by the same hue delta as
+ * the theme's accent color, keeping their saturation/lightness identical to
+ * the default theme and making the result read as a hue change rather than
+ * a new palette.
+ *
+ * <p>Backgrounds ({@code -color-bg-*}) are deliberately left out of that
+ * rotation and stay pure neutral grays (defined once in style.css) for
+ * every theme, so the accent color shows up in controls/borders/highlights
+ * without tinting the app's panels.
  *
  * <p>The override is a small {@code .root{...}} rule containing only the
  * tokens above, encoded as a {@code data:text/css;base64,...} stylesheet
@@ -35,10 +40,6 @@ public class ThemeManager {
 
     // Purple-tinted tokens in style.css that aren't part of the accent ramp
     // itself but still need to rotate with the chosen theme.
-    private static final String BG_DEFAULT = "#282a36";
-    private static final String BG_OVERLAY = "#22242f";
-    private static final String BG_SUBTLE = "#3d3f4a";
-    private static final String BG_INSET = "#181920";
     private static final String SELECTION_MUTED = "#68637c";
     private static final String SYNTAX_KEYWORD = "#ac80ea";
 
@@ -125,10 +126,6 @@ public class ThemeManager {
 
         sb.append("-color-selection-muted:").append(ColorUtil.rotateHex(SELECTION_MUTED, hueShift)).append(';');
         sb.append("-color-syntax-keyword:").append(ColorUtil.rotateHex(SYNTAX_KEYWORD, hueShift)).append(';');
-        sb.append("-color-bg-default:").append(ColorUtil.rotateHex(BG_DEFAULT, hueShift)).append(';');
-        sb.append("-color-bg-overlay:").append(ColorUtil.rotateHex(BG_OVERLAY, hueShift)).append(';');
-        sb.append("-color-bg-subtle:").append(ColorUtil.rotateHex(BG_SUBTLE, hueShift)).append(';');
-        sb.append("-color-bg-inset:").append(ColorUtil.rotateHex(BG_INSET, hueShift)).append(';');
 
         return sb.toString();
     }
