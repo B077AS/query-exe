@@ -37,7 +37,6 @@ public class AboutModal extends VBox {
     private static final String URL_GITHUB;
     private static final String URL_DOCS;
     private static final String URL_ISSUES;
-    private static final String URL_WEBSITE;
 
     static {
         try (InputStream is = AboutModal.class.getResourceAsStream("/app.properties")) {
@@ -51,7 +50,6 @@ public class AboutModal extends VBox {
         URL_GITHUB = props.getProperty("app.url.github", "");
         URL_DOCS = props.getProperty("app.url.docs", "");
         URL_ISSUES = props.getProperty("app.url.issues", "");
-        URL_WEBSITE = props.getProperty("app.url.website", "");
     }
 
     public AboutModal() {
@@ -189,9 +187,8 @@ public class AboutModal extends VBox {
         Hyperlink githubLink = createHyperlink("GitHub", MaterialDesignG.GITHUB, URL_GITHUB);
         Hyperlink docsLink = createHyperlink("Documentation", MaterialDesignB.BOOK_OPEN_PAGE_VARIANT, URL_DOCS);
         Hyperlink issuesLink = createHyperlink("Report Issue", MaterialDesignB.BUG, URL_ISSUES);
-        Hyperlink websiteLink = createHyperlink("Website", MaterialDesignW.WEB, URL_WEBSITE);
 
-        linksRow.getChildren().addAll(githubLink, docsLink, issuesLink, websiteLink);
+        linksRow.getChildren().addAll(githubLink, docsLink, issuesLink);
 
         box.getChildren().addAll(titleLabel, linksRow);
         return box;
