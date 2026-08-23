@@ -18,7 +18,7 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import com.queryexe.components.modals.AboutModal;
 import com.queryexe.components.modals.ActiveConnectionsModal;
-import com.queryexe.components.modals.HelpModal;
+import com.queryexe.components.modals.ShortcutsModal;
 import com.queryexe.components.modals.MultipleConnectionsModal;
 import com.queryexe.components.modals.SettingsModal;
 import com.queryexe.service.QueryService;
@@ -38,7 +38,7 @@ public class CustomMenuBar extends MenuBar {
                 editMenu(),
                 connectionMenu(),
                 settingsMenu(),
-                aboutMenu()
+                helpMenu()
         );
     }
 
@@ -199,13 +199,13 @@ public class CustomMenuBar extends MenuBar {
         return menu;
     }
 
-    private Menu aboutMenu() {
-        Menu menu = new Menu("About");
+    private Menu helpMenu() {
+        Menu menu = new Menu("Help");
         menu.setMnemonicParsing(true);
 
-        MenuItem helpMenuItem = createItem("Help", Feather.HELP_CIRCLE, null);
-        helpMenuItem.setOnAction(event -> {
-            App.showModal(new HelpModal());
+        MenuItem shortcutsMenuItem = createItem("Shortcuts", MaterialDesignK.KEYBOARD_OUTLINE, null);
+        shortcutsMenuItem.setOnAction(event -> {
+            App.showModal(new ShortcutsModal());
         });
 
         MenuItem aboutMenuItem = createItem("About", MaterialDesignI.INFORMATION_OUTLINE, null);
@@ -213,7 +213,7 @@ public class CustomMenuBar extends MenuBar {
             App.showModal(new AboutModal());
         });
 
-        menu.getItems().addAll(helpMenuItem, aboutMenuItem);
+        menu.getItems().addAll(shortcutsMenuItem, aboutMenuItem);
         return menu;
     }
 
