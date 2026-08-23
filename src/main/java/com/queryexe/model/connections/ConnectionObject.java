@@ -60,8 +60,6 @@ public abstract class ConnectionObject {
         this.customJdbc = true;
     }
 
-    public abstract String[] getKEYWORDS();
-
     public abstract String[] getDataTypes();
 
     public abstract Map<String, ArrayList<ColumnData>> getAllTablesAndColumns(String databaseName);

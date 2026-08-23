@@ -10,7 +10,6 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
@@ -25,41 +24,6 @@ import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class MariaDBConnection extends ConnectionObject {
-
-    private final String[] KEYWORDS = new String[]{
-            // Basic SQL Keywords (Same as MySQL)
-            "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES",
-            "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "DROP", "ALTER", "INDEX",
-            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "NOT", "NULL", "AS",
-
-            // MariaDB Specific
-            "AUTO_INCREMENT", "SHOW", "DESCRIBE", "USE", "DATABASE", "DATABASES",
-            "EXPLAIN", "ANALYZE", "OPTIMIZE", "CHECK", "REPAIR", "SEQUENCE",
-            "RETURNING", "WITH", "RECURSIVE", "OVER", "PARTITION", "WINDOW", "ENGINE",
-
-            // Control Flow
-            "IF", "ELSE", "ELSEIF", "CASE", "WHEN", "THEN", "END", "IFNULL", "NULLIF",
-
-            // Joins and Set Operations
-            "JOIN", "INNER", "LEFT", "RIGHT", "CROSS", "OUTER", "NATURAL", "UNION", "ALL",
-
-            // Grouping and Ordering
-            "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-
-            // Functions
-            "COUNT", "SUM", "AVG", "MAX", "MIN", "CONCAT", "CONCAT_WS", "SUBSTRING",
-            "SUBSTR", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH",
-            "LOWER", "UPPER", "REPLACE", "REGEXP", "RLIKE", "UUID", "VERSION",
-
-            // Date/Time
-            "NOW", "CURRENT_TIMESTAMP", "DATE", "DATETIME", "TIME", "YEAR",
-            "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "DATE_ADD", "DATE_SUB",
-
-            "DISTINCT", "EXISTS", "IN", "BETWEEN", "LIKE", "IS", "UNIQUE", "CONSTRAINT",
-            "DEFAULT", "CHECK", "COLLATE", "CHARACTER", "CHARSET", "COMMENT", "TEMPORARY",
-            "VIEW", "PROCEDURE", "FUNCTION", "TRIGGER", "GRANT", "REVOKE", "COMMIT", "ROLLBACK",
-            "START", "TRANSACTION", "LOCK", "UNLOCK", "TABLES", "TRUNCATE", "CASCADE", "RESTRICT"
-    };
 
     private String[] dataTypes = new String[]{
             "INT", "VARCHAR(255)", "DECIMAL", "BINARY(8)", "BLOB", "LONGBLOB",
@@ -1448,12 +1412,6 @@ public class MariaDBConnection extends ConnectionObject {
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.execute();
         statement.close();
-    }
-
-    @Override
-    public String[] getKEYWORDS() {
-        return Stream.concat(Stream.of(this.KEYWORDS), Stream.of(this.dataTypes))
-                .toArray(String[]::new);
     }
 
     @Override

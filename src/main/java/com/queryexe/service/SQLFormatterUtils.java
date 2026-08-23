@@ -24,7 +24,7 @@ public class SQLFormatterUtils {
         }
     }
 
-    private static Dialect dialectFor(ConnectionObject connectionObject) {
+    public static Dialect dialectFor(ConnectionObject connectionObject) {
         if (connectionObject == null || connectionObject.getDbType() == null) {
             return Dialect.StandardSql;
         }

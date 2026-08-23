@@ -9,7 +9,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.*;
-import java.util.stream.Stream;
 
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
@@ -24,37 +23,6 @@ import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class MySQLConnection extends ConnectionObject {
-
-    private String[] KEYWORDS = new String[]{
-            // Basic SQL Keywords
-            "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES",
-            "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "DROP", "ALTER", "INDEX",
-            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "NOT", "NULL", "AS",
-
-            // MySQL Specific
-            "AUTO_INCREMENT", "SHOW", "DESCRIBE", "USE", "DATABASE", "DATABASES",
-            "EXPLAIN", "ANALYZE", "OPTIMIZE", "CHECK", "REPAIR", "INFILE", "OUTFILE",
-            "ENGINE", "CHARSET", "TRUNCATE", "TEMPORARY", "SPATIAL", "FULLTEXT",
-
-            // Control Flow
-            "IF", "ELSE", "ELSEIF", "CASE", "WHEN", "THEN", "END", "IFNULL", "NULLIF",
-
-            // Joins and Set Operations
-            "JOIN", "INNER", "LEFT", "RIGHT", "CROSS", "OUTER", "NATURAL", "UNION", "ALL",
-
-            // Grouping and Ordering
-            "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-
-            // Functions
-            "COUNT", "SUM", "AVG", "MAX", "MIN", "CONCAT", "CONCAT_WS", "SUBSTRING",
-            "SUBSTR", "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH",
-            "LOWER", "UPPER", "REPLACE", "REGEXP", "RLIKE",
-
-            // Date/Time
-            "NOW", "CURRENT_TIMESTAMP", "DATE", "DATETIME", "TIME", "YEAR",
-            "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "DATE_ADD", "DATE_SUB",
-            "DATEDIFF", "DATE_FORMAT", "STR_TO_DATE"
-    };
 
     private String[] dataTypes = new String[]{
             "INT", "VARCHAR(255)", "DECIMAL", "BINARY(8)", "BLOB", "LONGBLOB",
@@ -1438,12 +1406,6 @@ public class MySQLConnection extends ConnectionObject {
 
 		return sizeMB;
 	}
-
-    @Override
-    public String[] getKEYWORDS() {
-        return Stream.concat(Stream.of(this.KEYWORDS), Stream.of(this.dataTypes))
-                .toArray(String[]::new);
-    }
 
     @Override
     public String[] getDataTypes() {
