@@ -34,6 +34,7 @@ public class ShortcutsModal extends HBox {
                     {"Ctrl + Enter", "Run selection, or current statement if nothing is selected"},
                     {"Ctrl + Shift + Enter", "Run entire query/script"},
                     {"Ctrl + D", "Duplicate current line"},
+                    {"Ctrl + Shift + F", "Format selection, or entire script if nothing is selected"},
                     {"Ctrl + F", "Find and replace"},
                     {"Ctrl + O", "Open file"},
                     {"Ctrl + S", "Save file"}

@@ -18,11 +18,13 @@ import javafx.application.Platform;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.IndexRange;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
@@ -30,6 +32,7 @@ import com.queryexe.model.data.ColumnData;
 import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.service.QueryService;
+import com.queryexe.service.SQLFormatterUtils;
 import com.queryexe.queryexe.App;
 
 import java.time.Duration;
@@ -185,6 +188,8 @@ public class SQLEditor extends CodeArea {
         this.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.isControlDown() && event.getCode() == KeyCode.SPACE) {
                 handleCtrlSpace(event);
+            } else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.F) {
+                handleCtrlShiftF(event);
             } else if (event.isControlDown() && event.getCode() == KeyCode.F) {
                 handleCtrlF(event);
             } else if (event.isControlDown() && event.getCode() == KeyCode.D) {
@@ -237,12 +242,15 @@ public class SQLEditor extends CodeArea {
         MenuItem selectAllItem = new MenuItem("Select All", menuIcon(MaterialDesignS.SELECT_ALL));
         selectAllItem.setOnAction(event -> this.selectAll());
 
+        MenuItem formatItem = new MenuItem("Format", menuIcon(MaterialDesignA.AUTO_FIX));
+        formatItem.setOnAction(event -> formatEditorContent());
+
         ContextMenu editorContextMenu = new ContextMenu(
                 undoItem, redoItem,
                 new SeparatorMenuItem(),
                 cutItem, copyItem, pasteItem,
                 new SeparatorMenuItem(),
-                selectAllItem
+                selectAllItem, formatItem
         );
 
         editorContextMenu.setOnShowing(event -> {
@@ -292,6 +300,24 @@ public class SQLEditor extends CodeArea {
     private void handleCtrlShiftEnter(KeyEvent event){
         event.consume();
         QueryService.getInstance().runQuery();
+    }
+
+    private void handleCtrlShiftF(KeyEvent event) {
+        event.consume();
+        formatEditorContent();
+    }
+
+    private void formatEditorContent() {
+        ConnectionObject connectionObject = DatabaseConnection.getInstance().getConnectionObject();
+        IndexRange selection = this.getSelection();
+
+        if (selection.getLength() > 0) {
+            String formatted = SQLFormatterUtils.format(this.getSelectedText(), connectionObject);
+            this.replaceText(selection, formatted);
+        } else {
+            String formatted = SQLFormatterUtils.format(this.getText(), connectionObject);
+            this.replaceText(formatted);
+        }
     }
 
     private void handleAutocompleteKeys(KeyEvent event) {
