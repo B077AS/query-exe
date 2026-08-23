@@ -13,6 +13,7 @@ import com.queryexe.components.editor.CustomTab;
 import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
+import com.queryexe.service.SQLFormatterUtils;
 import com.queryexe.queryexe.App;
 
 public class ResultCellsContextMenu extends ContextMenu {
@@ -50,7 +51,9 @@ public class ResultCellsContextMenu extends ContextMenu {
         insertScriptItem.setOnAction(event -> {
             SQLEditor codeArea = new SQLEditor();
 
-            String script = DatabaseConnection.getInstance().getConnectionObject().generateRowInsertScript(stringRow, cell);
+            String script = SQLFormatterUtils.format(
+                    DatabaseConnection.getInstance().getConnectionObject().generateRowInsertScript(stringRow, cell),
+                    DatabaseConnection.getInstance().getConnectionObject());
 
             codeArea.replaceText(script);
 

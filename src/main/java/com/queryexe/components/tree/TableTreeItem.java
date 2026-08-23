@@ -30,6 +30,7 @@ import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
+import com.queryexe.service.SQLFormatterUtils;
 import com.queryexe.queryexe.App;
 
 @Slf4j
@@ -67,8 +68,10 @@ public class TableTreeItem extends CustomTreeItem {
 
             Async.run(() -> {
                 try {
-                    String script = DatabaseConnection.getInstance().getConnectionObject()
-                            .generateInsertScript(this.titleLabel.getText(), this.databaseName);
+                    String script = SQLFormatterUtils.format(
+                            DatabaseConnection.getInstance().getConnectionObject()
+                                    .generateInsertScript(this.titleLabel.getText(), this.databaseName),
+                            DatabaseConnection.getInstance().getConnectionObject());
                     Platform.runLater(() -> codeArea.replaceText(script));
                 } catch (Exception e) {
                     Platform.runLater(() -> codeArea.replaceText("-- ERROR: " + e.getMessage()));
@@ -89,8 +92,10 @@ public class TableTreeItem extends CustomTreeItem {
 
             Async.run(() -> {
                 try {
-                    String script = DatabaseConnection.getInstance().getConnectionObject()
-                            .generateCreateScript(this.titleLabel.getText(), this.databaseName);
+                    String script = SQLFormatterUtils.format(
+                            DatabaseConnection.getInstance().getConnectionObject()
+                                    .generateCreateScript(this.titleLabel.getText(), this.databaseName),
+                            DatabaseConnection.getInstance().getConnectionObject());
                     Platform.runLater(() -> codeArea.replaceText(script));
                 } catch (Exception e) {
                     Platform.runLater(() -> codeArea.replaceText("-- ERROR: " + e.getMessage()));
