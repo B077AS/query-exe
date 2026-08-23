@@ -44,7 +44,6 @@ import javafx.scene.layout.VBox;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.components.editor.CustomTab;
 import com.queryexe.components.modals.ConfirmationModal;
-import com.queryexe.components.modals.QueriesSummaryModal;
 import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.data.QueryData;
@@ -94,13 +93,15 @@ public class ResultBox extends VBox {
         applyButton.setGraphic(new FontIcon(MaterialDesignC.CHECK));
         applyButton.setDisable(true);
         applyButton.setOnAction(event -> {
-            QueriesSummaryModal queriesSummaryModal = new QueriesSummaryModal(
-                    ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getUpdateQueries(),
+            ConfirmationModal applyModal = new ConfirmationModal(
+                    "Apply Changes",
+                    "Do you want to apply the changes?",
+                    new FontIcon(MaterialDesignC.CHECK),
                     () -> {
                         applyChanges(tabPane);
                     }
             );
-            App.showModal(queriesSummaryModal);
+            App.showModal(applyModal);
         });
 
         ToolBar tableHeader = new ToolBar();
@@ -308,13 +309,7 @@ public class ResultBox extends VBox {
                                             "Do you want to apply the changes?",
                                             new FontIcon(MaterialDesignA.ALERT_OUTLINE),
                                             () -> {
-                                                QueriesSummaryModal queriesSummaryModal = new QueriesSummaryModal(
-                                                        ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getUpdateQueries(),
-                                                        () -> {
-                                                            applyChanges(tabPane);
-                                                        }
-                                                );
-                                                App.showModal(queriesSummaryModal);
+                                                applyChanges(tabPane);
                                             }
                                     );
                                     App.showModal(confirmationModal);

@@ -60,8 +60,6 @@ public abstract class ConnectionObject {
         this.customJdbc = true;
     }
 
-    public abstract String[] getKEYWORDS();
-
     public abstract String[] getDataTypes();
 
     public abstract Map<String, ArrayList<ColumnData>> getAllTablesAndColumns(String databaseName);
@@ -79,6 +77,8 @@ public abstract class ConnectionObject {
     public abstract String generateCreateScript(String tableName, String databaseName);
 
     public abstract String generateInsertScript(String tableName, String databaseName);
+
+    public abstract String generateSelectScript(String tableName, String databaseName, int limit);
 
     public abstract String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell);
 

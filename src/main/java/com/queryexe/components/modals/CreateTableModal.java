@@ -20,6 +20,7 @@ import atlantafx.base.theme.Styles;
 import com.queryexe.components.extra.CustomNotification;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.service.DatabaseConnection;
+import com.queryexe.service.SQLFormatterUtils;
 import com.queryexe.model.data.ForeignKeyData;
 import com.queryexe.queryexe.App;
 
@@ -714,6 +715,8 @@ public class CreateTableModal extends VBox {
         } else {
             sql = DatabaseConnection.getInstance().getConnectionObject().generateCreateTableSQL(this.databaseName, tableName.trim(), columns, foreignKeys);
         }
+
+        sql = SQLFormatterUtils.format(sql, DatabaseConnection.getInstance().getConnectionObject());
 
         App.showModalOnTop(new SQLEditorModal(sql, refreshTables));
     }

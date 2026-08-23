@@ -292,6 +292,7 @@ public class QueryService {
         }
     }
 
+    // Runs the entire editor contents, regardless of any active selection.
     public void runQuery() {
         @SuppressWarnings("unchecked")
         CustomTab<VirtualizedScrollPane<CodeArea>> tab = (CustomTab<VirtualizedScrollPane<CodeArea>>) App.getTabPane().getSelectionModel().getSelectedItem();
@@ -299,13 +300,10 @@ public class QueryService {
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
         CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        String query = !codeArea.getSelectedText().isEmpty()
-                ? codeArea.getSelectedText()
-                : codeArea.getText();
-
-        executeQuery(tab, query);
+        executeQuery(tab, codeArea.getText());
     }
 
+    // Runs the current selection, or the statement at the caret if nothing is selected.
     public void runStatement() {
         @SuppressWarnings("unchecked")
         CustomTab<VirtualizedScrollPane<CodeArea>> tab = (CustomTab<VirtualizedScrollPane<CodeArea>>) App.getTabPane().getSelectionModel().getSelectedItem();
@@ -313,7 +311,11 @@ public class QueryService {
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
         CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        executeQuery(tab, extractStatementAtCaret(codeArea));
+        String statement = !codeArea.getSelectedText().isEmpty()
+                ? codeArea.getSelectedText()
+                : extractStatementAtCaret(codeArea);
+
+        executeQuery(tab, statement);
     }
 
     // One query at a time per tab; other tabs can run their own queries in parallel.

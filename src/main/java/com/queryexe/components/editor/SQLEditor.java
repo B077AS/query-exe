@@ -18,11 +18,18 @@ import javafx.application.Platform;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.IndexRange;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
+import com.github.vertical_blank.sqlformatter.core.FormatConfig;
+import com.github.vertical_blank.sqlformatter.core.Token;
+import com.github.vertical_blank.sqlformatter.core.TokenTypes;
+import com.github.vertical_blank.sqlformatter.core.Tokenizer;
+import com.github.vertical_blank.sqlformatter.languages.Dialect;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
@@ -30,22 +37,17 @@ import com.queryexe.model.data.ColumnData;
 import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.service.QueryService;
+import com.queryexe.service.SQLFormatterUtils;
 import com.queryexe.queryexe.App;
 
 import java.time.Duration;
 import java.util.*;
 import java.util.function.IntFunction;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class SQLEditor extends CodeArea {
 
-    private String KEYWORD_PATTERN;
-    private String STRING_PATTERN;
-    private String COMMENT_PATTERN;
-    private String NUMBER_PATTERN;
-    private Pattern PATTERN;
+    private Tokenizer sqlTokenizer;
     private FindPopup findPopup;
     private AutocompletePopup autocompletePopup;
     private final boolean[] isAutocompleteActive = {false};
@@ -71,7 +73,7 @@ public class SQLEditor extends CodeArea {
     public SQLEditor() {
         super();
         setupSuggestionService();
-        initializePatterns();
+        initializeTokenizer();
         initializeEditor();
         setupEventHandlers();
         setupContextMenu();
@@ -107,19 +109,10 @@ public class SQLEditor extends CodeArea {
         suggestionService.restart();
     }
 
-    private void initializePatterns() {
-        KEYWORD_PATTERN = "\\b(" + String.join("|", DatabaseConnection.getInstance().getConnectionObject().getKEYWORDS()) + ")\\b";
-        STRING_PATTERN = "'[^'\\\\]*(\\\\.[^'\\\\]*)*'";
-        COMMENT_PATTERN = "--[^\n]*|/\\*.*?\\*/";
-        NUMBER_PATTERN = "\\b\\d+\\b";
-
-        PATTERN = Pattern.compile(
-                "(?<KEYWORD>" + KEYWORD_PATTERN + ")"
-                        + "|(?<STRING>" + STRING_PATTERN + ")"
-                        + "|(?<COMMENT>" + COMMENT_PATTERN + ")"
-                        + "|(?<NUMBER>" + NUMBER_PATTERN + ")",
-                Pattern.CASE_INSENSITIVE
-        );
+    private void initializeTokenizer() {
+        ConnectionObject connectionObject = DatabaseConnection.getInstance().getConnectionObject();
+        Dialect dialect = SQLFormatterUtils.dialectFor(connectionObject);
+        this.sqlTokenizer = dialect.func.apply(FormatConfig.builder().build()).tokenizer();
     }
 
     private void initializeEditor() {
@@ -185,6 +178,8 @@ public class SQLEditor extends CodeArea {
         this.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.isControlDown() && event.getCode() == KeyCode.SPACE) {
                 handleCtrlSpace(event);
+            } else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.F) {
+                handleCtrlShiftF(event);
             } else if (event.isControlDown() && event.getCode() == KeyCode.F) {
                 handleCtrlF(event);
             } else if (event.isControlDown() && event.getCode() == KeyCode.D) {
@@ -237,12 +232,15 @@ public class SQLEditor extends CodeArea {
         MenuItem selectAllItem = new MenuItem("Select All", menuIcon(MaterialDesignS.SELECT_ALL));
         selectAllItem.setOnAction(event -> this.selectAll());
 
+        MenuItem formatItem = new MenuItem("Format", menuIcon(MaterialDesignA.AUTO_FIX));
+        formatItem.setOnAction(event -> formatEditorContent());
+
         ContextMenu editorContextMenu = new ContextMenu(
                 undoItem, redoItem,
                 new SeparatorMenuItem(),
                 cutItem, copyItem, pasteItem,
                 new SeparatorMenuItem(),
-                selectAllItem
+                selectAllItem, formatItem
         );
 
         editorContextMenu.setOnShowing(event -> {
@@ -292,6 +290,24 @@ public class SQLEditor extends CodeArea {
     private void handleCtrlShiftEnter(KeyEvent event){
         event.consume();
         QueryService.getInstance().runQuery();
+    }
+
+    private void handleCtrlShiftF(KeyEvent event) {
+        event.consume();
+        formatEditorContent();
+    }
+
+    private void formatEditorContent() {
+        ConnectionObject connectionObject = DatabaseConnection.getInstance().getConnectionObject();
+        IndexRange selection = this.getSelection();
+
+        if (selection.getLength() > 0) {
+            String formatted = SQLFormatterUtils.format(this.getSelectedText(), connectionObject);
+            this.replaceText(selection, formatted);
+        } else {
+            String formatted = SQLFormatterUtils.format(this.getText(), connectionObject);
+            this.replaceText(formatted);
+        }
     }
 
     private void handleAutocompleteKeys(KeyEvent event) {
@@ -613,25 +629,44 @@ public class SQLEditor extends CodeArea {
     }
 
     private StyleSpans<Collection<String>> computeHighlighting(String text) {
-        Matcher matcher = PATTERN.matcher(text);
-        int lastKwEnd = 0;
         StyleSpansBuilder<Collection<String>> spansBuilder = new StyleSpansBuilder<>();
 
-        while (matcher.find()) {
-            String styleClass =
-                    matcher.group("KEYWORD") != null ? "keyword" :
-                            matcher.group("STRING") != null ? "string" :
-                                    matcher.group("COMMENT") != null ? "comment" :
-                                            matcher.group("NUMBER") != null ? "number" :
-                                                    null;
+        List<Token> tokens = text.isEmpty() ? Collections.emptyList() : sqlTokenizer.tokenize(text).toList();
+        int consumed = 0;
 
-            spansBuilder.add(Collections.emptyList(), matcher.start() - lastKwEnd);
-            spansBuilder.add(Collections.singleton(styleClass), matcher.end() - matcher.start());
-            lastKwEnd = matcher.end();
+        for (int i = 0; i < tokens.size(); i++) {
+            Token token = tokens.get(i);
+
+            int whitespaceLength = token.whitespaceBefore.length();
+            spansBuilder.add(Collections.emptyList(), whitespaceLength);
+            consumed += whitespaceLength;
+
+            String styleClass = styleClassFor(token, i, tokens);
+            int tokenLength = token.value.length();
+            spansBuilder.add(styleClass != null ? Collections.singleton(styleClass) : Collections.emptyList(), tokenLength);
+            consumed += tokenLength;
         }
-        spansBuilder.add(Collections.emptyList(), text.length() - lastKwEnd);
+
+        spansBuilder.add(Collections.emptyList(), text.length() - consumed);
 
         return spansBuilder.create();
+    }
+
+    private static String styleClassFor(Token token, int index, List<Token> tokens) {
+        return switch (token.type) {
+            case STRING -> "string";
+            case NUMBER -> "number";
+            case LINE_COMMENT, BLOCK_COMMENT -> "comment";
+            case RESERVED, RESERVED_TOP_LEVEL, RESERVED_TOP_LEVEL_NO_INDENT, RESERVED_NEWLINE -> "keyword";
+            case PLACEHOLDER -> "placeholder";
+            case WORD -> isFunctionCall(tokens, index) ? "function" : null;
+            default -> null;
+        };
+    }
+
+    // A WORD immediately followed by "(" is treated as a function call for highlighting purposes.
+    private static boolean isFunctionCall(List<Token> tokens, int index) {
+        return index + 1 < tokens.size() && tokens.get(index + 1).type == TokenTypes.OPEN_PAREN;
     }
 
     private void duplicateCurrentLine() {

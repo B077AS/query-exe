@@ -35,6 +35,10 @@
 	-color-selection-muted: #68637c;
 	/* SQL keyword syntax-highlight color, see .paragraph-box .text.keyword below. */
 	-color-syntax-keyword: #ac80ea;
+	/* SQL function-call syntax-highlight color, see .paragraph-box .text.function below. */
+	-color-syntax-function: #41a9c9;
+	/* SQL bind-placeholder syntax-highlight color, see .paragraph-box .text.placeholder below. */
+	-color-syntax-placeholder: #c84164;
 	-color-success-0: #e2ffdf;
 	-color-success-1: #d0ffcc;
 	-color-success-2: #bfffb9;
@@ -5797,6 +5801,15 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-font-weight: bold;
 }
 
+.paragraph-box .text.function {
+    -fx-fill: -color-syntax-function;
+}
+
+.paragraph-box .text.placeholder {
+    -fx-fill: -color-syntax-placeholder;
+    -fx-font-weight: bold;
+}
+
 .caret {
     -fx-stroke: white;
     -fx-scale-y: 0.85;
@@ -5830,4 +5843,75 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .autocomplete-list .list-cell:selected {
     -fx-background-color: -color-accent-emphasis;
     -fx-text-fill: -color-fg-emphasis;
+}
+
+/* Help modal (keyboard shortcuts browser) */
+
+.help-left-panel {
+    -fx-background-color: rgba(255, 255, 255, 0.03);
+    -fx-background-radius: 12px 0 0 12px;
+}
+
+.help-nav-section-label {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-subtle;
+}
+
+.help-nav-item {
+    -fx-background-radius: 7px;
+    -fx-border-radius: 7px;
+    -fx-border-width: 1px;
+    -fx-border-color: transparent;
+    -fx-cursor: hand;
+}
+
+.help-nav-item:hover {
+    -fx-background-color: -color-bg-default;
+}
+
+.help-nav-item.help-nav-active {
+    -fx-background-color: -color-accent-subtle;
+    -fx-border-color: -color-accent-muted;
+}
+
+.help-nav-item.help-nav-active:hover {
+    -fx-background-color: -color-accent-subtle;
+}
+
+.help-nav-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-default;
+}
+
+.help-nav-active .help-nav-label {
+    -fx-text-fill: -color-accent-fg;
+}
+
+.help-kbd-chip {
+    -fx-font-family: 'Consolas', 'Monaco', monospace;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-background-color: -color-bg-overlay;
+    -fx-text-fill: -color-accent-emphasis;
+    -fx-padding: 6 12 6 12;
+    -fx-border-color: -color-accent-muted;
+    -fx-border-width: 1px;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-alignment: CENTER;
+}
+
+.help-shortcut-row {
+    -fx-background-color: -color-bg-default;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.help-shortcut-row:hover {
+    -fx-border-color: -color-accent-muted;
+    -fx-background-color: -color-bg-overlay;
 }

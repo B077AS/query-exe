@@ -410,6 +410,6 @@ public class App extends Application {
     }
 
     private static boolean isAlwaysEnabledMenu(Menu menu) {
-        return "About".equals(menu.getText()) || "Settings".equals(menu.getText());
+        return "Help".equals(menu.getText()) || "Settings".equals(menu.getText());
     }
 }

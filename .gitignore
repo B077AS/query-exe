@@ -37,3 +37,4 @@ build/
 /jdbc-drivers/
 /data/
 /dependency-reduced-pom.xml
+/CLAUDE.md

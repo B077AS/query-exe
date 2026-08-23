@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
 import com.queryexe.model.data.DetailedColumnData;
@@ -29,40 +28,6 @@ import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class SQLServerConnection extends ConnectionObject {
-
-    private String[] KEYWORDS = new String[]{
-            // Basic SQL Keywords
-            "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES",
-            "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "DROP", "ALTER", "INDEX",
-            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "NOT", "NULL", "AS", "USE",
-
-            // SQL Server Specific
-            "TOP", "OUTPUT", "MERGE", "IDENTITY", "TRIGGER", "PROCEDURE", "EXEC",
-            "DECLARE", "CURSOR", "FETCH", "BROWSE", "HOLDLOCK", "NOLOCK",
-            "READCOMMITTED", "READUNCOMMITTED", "REPEATABLEREAD", "SERIALIZABLE",
-
-            // Control Flow
-            "BEGIN", "END", "IF", "ELSE", "WHILE", "BREAK", "CONTINUE",
-            "CASE", "WHEN", "THEN", "TRY", "CATCH", "THROW",
-
-            // Joins and Set Operations
-            "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "APPLY",
-            "OUTER", "UNION", "EXCEPT", "INTERSECT", "ALL",
-
-            // Functions
-            "ISNULL", "COALESCE", "NULLIF", "CAST", "CONVERT",
-            "COUNT", "SUM", "AVG", "MAX", "MIN",
-            "CONCAT", "SUBSTRING", "LEN", "LOWER", "UPPER", "RTRIM", "LTRIM",
-            "DATEADD", "DATEDIFF", "DATEFROMPARTS", "DATENAME", "DATEPART",
-
-            // Window Functions
-            "OVER", "PARTITION", "BY", "ORDER", "ASC", "DESC",
-            "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE",
-
-            // Temporal
-            "GETDATE", "GETUTCDATE", "SYSDATETIME", "SYSUTCDATETIME",
-            "CURRENT_TIMESTAMP", "DATETIME2", "DATETIMEOFFSET"
-    };
 
     private String[] dataTypes = new String[]{
             "INT", "TINYINT", "SMALLINT", "BIGINT", "DECIMAL(18, 0)", "FLOAT", "MONEY",
@@ -823,6 +788,14 @@ public class SQLServerConnection extends ConnectionObject {
     }
 
     @Override
+    public String generateSelectScript(String tableName, String databaseName, int limit) {
+        String[] parts = parseSchemaAndTable(tableName);
+        String schema = parts[0];
+        String table = parts[1];
+        return "SELECT TOP " + limit + " * FROM [" + schema + "].[" + table + "];";
+    }
+
+    @Override
     public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
         try {
             ResultTable table = (ResultTable) cell.getTableView();
@@ -1140,12 +1113,6 @@ public class SQLServerConnection extends ConnectionObject {
         pstmt.close();
 
         return sizeMB;
-    }
-
-    @Override
-    public String[] getKEYWORDS() {
-        return Stream.concat(Stream.of(this.KEYWORDS), Stream.of(this.dataTypes))
-                .toArray(String[]::new);
     }
 
     @Override

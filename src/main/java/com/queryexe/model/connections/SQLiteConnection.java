@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
@@ -29,66 +28,6 @@ import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class SQLiteConnection extends ConnectionObject {
-
-    private final String[] KEYWORDS = new String[]{
-            // Basic SQL Keywords
-            "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES",
-            "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "DROP", "ALTER", "INDEX",
-            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "NOT", "NULL", "AS", "DISTINCT",
-            "EXISTS", "IN", "BETWEEN", "LIKE", "IS", "UNIQUE", "CONSTRAINT", "DEFAULT",
-            "CHECK", "COLLATE", "TEMPORARY", "TEMP", "VIEW", "TRIGGER",
-
-            // SQLite Specific Keywords
-            "AUTOINCREMENT", "WITHOUT", "ROWID", "STRICT", "GENERATED", "STORED",
-            "VIRTUAL", "IF", "ABORT", "FAIL", "IGNORE", "REPLACE", "ROLLBACK",
-            "ATTACH", "DETACH", "DATABASE", "PRAGMA", "VACUUM", "REINDEX",
-            "ANALYZE", "EXPLAIN", "QUERY", "PLAN",
-
-            // Control Flow
-            "CASE", "WHEN", "THEN", "ELSE", "END", "IFNULL", "NULLIF", "COALESCE",
-            "IIF", "INSTR", "SUBSTR", "SUBSTRING",
-
-            // Joins and Set Operations
-            "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL",
-            "UNION", "INTERSECT", "EXCEPT", "ALL",
-
-            // Grouping and Ordering
-            "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-
-            // Window Functions (SQLite 3.25+)
-            "OVER", "PARTITION", "RANGE", "ROWS", "PRECEDING", "FOLLOWING",
-            "UNBOUNDED", "CURRENT", "EXCLUDE", "TIES", "NULLS", "FIRST", "LAST",
-
-            // Aggregate Functions
-            "COUNT", "SUM", "AVG", "MAX", "MIN", "TOTAL", "GROUP_CONCAT",
-
-            // String Functions
-            "LENGTH", "LOWER", "UPPER", "TRIM", "LTRIM", "RTRIM", "REPLACE",
-            "ROUND", "ABS", "RANDOM", "LIKE", "GLOB", "REGEXP", "MATCH",
-
-            // Date/Time (limited in SQLite)
-            "DATE", "TIME", "DATETIME", "JULIANDAY", "STRFTIME", "NOW",
-
-            // Transaction Control
-            "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE", "TRANSACTION",
-            "DEFERRED", "IMMEDIATE", "EXCLUSIVE",
-
-            // Data Manipulation
-            "UPSERT", "ON", "CONFLICT", "DO", "NOTHING", "CASCADE", "RESTRICT",
-            "SET", "NO", "ACTION",
-
-            // SQLite Functions
-            "TYPEOF", "CAST", "PRINTF", "QUOTE", "UNICODE", "ZEROBLOB", "HEX",
-            "UNHEX", "RANDOMBLOB", "SOUNDEX", "LOAD_EXTENSION",
-
-            // Common Table Expressions
-            "WITH", "RECURSIVE",
-
-            // JSON Functions (SQLite 3.45+)
-            "JSON", "JSON_EXTRACT", "JSON_ARRAY", "JSON_OBJECT", "JSON_VALID",
-            "JSON_TYPE", "JSON_ARRAY_LENGTH", "JSON_INSERT", "JSON_REPLACE",
-            "JSON_SET", "JSON_REMOVE", "JSON_PATCH", "JSON_EACH", "JSON_TREE"
-    };
 
     private String[] dataTypes = new String[]{
             // SQLite Storage Classes (Affinity Types)
@@ -765,6 +704,11 @@ public class SQLiteConnection extends ConnectionObject {
     }
 
     @Override
+    public String generateSelectScript(String tableName, String databaseName, int limit) {
+        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+    }
+
+    @Override
     public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
         try {
             ResultTable table = (ResultTable) cell.getTableView();
@@ -932,12 +876,6 @@ public class SQLiteConnection extends ConnectionObject {
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
         statement.close();
-    }
-
-    @Override
-    public String[] getKEYWORDS() {
-        return Stream.concat(Stream.of(this.KEYWORDS), Stream.of(this.dataTypes))
-                .toArray(String[]::new);
     }
 
     @Override

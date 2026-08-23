@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
@@ -20,60 +19,6 @@ import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class H2Connection extends ConnectionObject {
-
-    private final String[] KEYWORDS = new String[]{
-            // Basic SQL Keywords
-            "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES",
-            "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "DROP", "ALTER", "INDEX",
-            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "NOT", "NULL", "AS", "DISTINCT",
-            "EXISTS", "IN", "BETWEEN", "LIKE", "IS", "UNIQUE", "CONSTRAINT", "DEFAULT",
-            "CHECK", "COLLATE", "COMMENT", "TEMPORARY", "TEMP", "VIEW", "SEQUENCE",
-
-            // H2 Specific Keywords
-            "AUTO_INCREMENT", "IDENTITY", "GENERATED", "ALWAYS", "BY", "CACHED",
-            "NOCACHE", "CYCLE", "NOCYCLE", "MINVALUE", "NOMAXVALUE", "MAXVALUE",
-            "NOMINVALUE", "START", "WITH", "INCREMENT", "RESTART", "SCHEMA",
-            "PUBLIC", "INFORMATION_SCHEMA", "SHOW", "EXPLAIN", "ANALYZE",
-
-            // Control Flow
-            "IF", "ELSE", "CASE", "WHEN", "THEN", "END", "IFNULL", "NULLIF",
-            "COALESCE", "GREATEST", "LEAST", "DECODE", "NVL", "NVL2",
-
-            // Joins and Set Operations
-            "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL",
-            "UNION", "INTERSECT", "EXCEPT", "MINUS", "ALL",
-
-            // Grouping and Ordering
-            "GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-            "TOP", "FETCH", "FIRST", "NEXT", "ONLY", "ROWS", "ROW",
-
-            // Window Functions
-            "OVER", "PARTITION", "RANGE", "PRECEDING", "FOLLOWING", "UNBOUNDED",
-            "CURRENT", "EXCLUDE", "TIES", "NULLS", "LAST",
-
-            // Functions
-            "COUNT", "SUM", "AVG", "MAX", "MIN", "CONCAT", "SUBSTRING", "SUBSTR",
-            "TRIM", "LTRIM", "RTRIM", "LENGTH", "CHAR_LENGTH", "LOWER", "UPPER",
-            "REPLACE", "REGEXP_REPLACE", "REGEXP_LIKE", "INSTR", "POSITION",
-
-            // Date/Time
-            "NOW", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "SYSDATE",
-            "DATE", "DATETIME", "TIME", "TIMESTAMP", "YEAR", "MONTH", "DAY",
-            "HOUR", "MINUTE", "SECOND", "DATEADD", "DATEDIFF", "EXTRACT",
-
-            // Transaction Control
-            "COMMIT", "ROLLBACK", "BEGIN", "TRANSACTION", "SAVEPOINT", "RELEASE",
-
-            // Data Manipulation
-            "MERGE", "UPSERT", "REPLACE", "TRUNCATE", "CASCADE", "RESTRICT",
-
-            // Access Control
-            "GRANT", "REVOKE", "ROLE", "USER", "PASSWORD", "ADMIN",
-
-            // H2 Utility Functions
-            "CSVREAD", "CSVWRITE", "RUNSCRIPT", "SCRIPT", "BACKUP", "COMPRESS",
-            "ENCRYPT", "DECRYPT", "HASH", "SECURE_RAND", "FILE_READ", "FILE_WRITE"
-    };
 
     private String[] dataTypes = new String[]{
             // Numeric Types
@@ -887,6 +832,11 @@ public class H2Connection extends ConnectionObject {
     }
 
     @Override
+    public String generateSelectScript(String tableName, String databaseName, int limit) {
+        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+    }
+
+    @Override
     public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
         try {
             ResultTable table = (ResultTable) cell.getTableView();
@@ -1173,6 +1123,10 @@ public class H2Connection extends ConnectionObject {
         List<String> columnsToAddNow = new ArrayList<>();
 
         // Drop columns (skip renamed columns)
+        // Note: H2 only allows a single "DROP COLUMN" keyword per ALTER TABLE clause,
+        // followed by a comma-separated list of column names (unlike MySQL/Postgres,
+        // which repeat "DROP COLUMN" for each column).
+        List<String> columnNamesToDrop = new ArrayList<>();
         for (ColumnData oldCol : oldColumns) {
             String oldColName = oldCol.getColumnName();
 
@@ -1189,8 +1143,16 @@ public class H2Connection extends ConnectionObject {
                 }
             }
             if (!found) {
-                columnsToDropNow.add(String.format("DROP COLUMN \"%s\"", oldColName));
+                columnNamesToDrop.add(oldColName);
             }
+        }
+        if (!columnNamesToDrop.isEmpty()) {
+            StringBuilder dropClause = new StringBuilder("DROP COLUMN ");
+            for (int i = 0; i < columnNamesToDrop.size(); i++) {
+                if (i > 0) dropClause.append(", ");
+                dropClause.append("\"").append(columnNamesToDrop.get(i)).append("\"");
+            }
+            columnsToDropNow.add(dropClause.toString());
         }
 
         // Add new columns (skip renamed columns)
@@ -1600,12 +1562,6 @@ public class H2Connection extends ConnectionObject {
         pstmt.close();
 
         return sizeMB;
-    }
-
-    @Override
-    public String[] getKEYWORDS() {
-        return Stream.concat(Stream.of(this.KEYWORDS), Stream.of(this.dataTypes))
-                .toArray(String[]::new);
     }
 
     @Override

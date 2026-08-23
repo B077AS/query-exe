@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.sql.*;
 import java.util.*;
-import java.util.stream.Stream;
 
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
@@ -19,53 +18,6 @@ import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class PostgresConnection extends ConnectionObject {
-
-    private String[] KEYWORDS = new String[]{
-            // Basic SQL Keywords
-            "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES",
-            "UPDATE", "SET", "DELETE", "CREATE", "TABLE", "DROP", "ALTER", "INDEX",
-            "PRIMARY", "KEY", "FOREIGN", "REFERENCES", "NOT", "NULL", "AS", "SHOW",
-            "RESET",
-
-            // PostgreSQL Specific
-            "RETURNING", "USING", "VACUUM", "ANALYZE", "CLUSTER", "EXPLAIN",
-            "LISTEN", "NOTIFY", "UNLISTEN", "REINDEX", "REFRESH", "MATERIALIZED",
-            "VIEW", "EXTENSION", "RECURSIVE", "LATERAL", "ORDINALITY",
-
-            // Control Flow and Operators
-            "CASE", "WHEN", "THEN", "ELSE", "END", "COALESCE", "NULLIF",
-            "GREATEST", "LEAST", "FILTER", "WITHIN", "GROUP", "ILIKE",
-
-            // Joins and Set Operations
-            "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "NATURAL",
-            "UNION", "INTERSECT", "EXCEPT", "ALL",
-
-            // Window Functions
-            "OVER", "PARTITION", "BY", "ORDER", "ASC", "DESC",
-            "RANGE", "ROWS", "GROUPS", "PRECEDING", "FOLLOWING",
-
-            // Aggregate Functions
-            "COUNT", "SUM", "AVG", "MAX", "MIN", "ARRAY_AGG", "STRING_AGG",
-            "JSONB_AGG", "JSON_AGG", "XMLAGG",
-
-            // String Functions
-            "CONCAT", "SUBSTRING", "TRIM", "LTRIM", "RTRIM", "LENGTH", "LOWER", "UPPER",
-
-            // Date/Time
-            "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME", "NOW",
-            "DATE_TRUNC", "DATE_PART", "EXTRACT", "INTERVAL",
-
-            "DISTINCT", "EXISTS", "IN", "BETWEEN", "LIKE", "IS", "UNIQUE", "CONSTRAINT",
-            "DEFAULT", "CHECK", "COLLATE", "COMMENT", "TEMPORARY", "TEMP", "SEQUENCE",
-            "PROCEDURE", "FUNCTION", "TRIGGER", "GRANT", "REVOKE", "COMMIT", "ROLLBACK",
-            "BEGIN", "TRANSACTION", "LOCK", "UNLOCK", "TRUNCATE", "CASCADE", "RESTRICT",
-            "COPY", "PERFORM", "RAISE", "NOTICE", "EXCEPTION", "LOOP", "WHILE", "FOR",
-            "FOREACH", "IF", "ELSIF", "CONTINUE", "EXIT", "RETURN", "DECLARE", "DOMAIN",
-
-            "TABLESPACE", "OWNER", "INHERITS", "WITH", "WITHOUT", "OIDS", "STORAGE", "PLAIN",
-            "EXTERNAL", "EXTENDED", "MAIN", "STATISTICS", "DEFERRABLE", "INITIALLY", "DEFERRED",
-            "IMMEDIATE"
-    };
 
     private String[] dataTypes = new String[]{
             "BIGINT", "BIGSERIAL", "BIT(1)", "BIT VARYING(64)", "BOOLEAN",
@@ -958,6 +910,11 @@ public class PostgresConnection extends ConnectionObject {
     }
 
     @Override
+    public String generateSelectScript(String tableName, String databaseName, int limit) {
+        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+    }
+
+    @Override
     public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
         try {
             ResultTable table = (ResultTable) cell.getTableView();
@@ -1682,12 +1639,6 @@ public class PostgresConnection extends ConnectionObject {
         pstmt.close();
 
         return sizeMB;
-    }
-
-    @Override
-    public String[] getKEYWORDS() {
-        return Stream.concat(Stream.of(this.KEYWORDS), Stream.of(this.dataTypes))
-                .toArray(String[]::new);
     }
 
     @Override

@@ -60,6 +60,12 @@ public class LauncherUpdateService {
     private ScheduledExecutorService scheduler;
 
     public void start() {
+        if (!isPackagedInstall()) {
+            // No installed launcher to swap (IDE/mvn dev run, or a from-source install) — nothing to do.
+            log.debug("Not running from a packaged install; skipping launcher update check");
+            return;
+        }
+
         stop();
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "launcher-update-check");
@@ -74,6 +80,18 @@ public class LauncherUpdateService {
             scheduler.shutdownNow();
         }
         scheduler = null;
+    }
+
+    /** Mirrors the guards in {@link #swapWindowsLauncherJar} / {@link #swapLinuxAppImage}:
+     *  true only when there's an installed launcher this process could actually swap. */
+    private boolean isPackagedInstall() {
+        if (Platform.isWindows()) {
+            Path javaHome = Paths.get(System.getProperty("java.home"));
+            Path installRoot = javaHome.getParent();
+            return installRoot != null && Files.isDirectory(installRoot.resolve("app"));
+        }
+        String appImagePath = System.getenv("APPIMAGE");
+        return appImagePath != null && !appImagePath.isBlank();
     }
 
     private void checkAndSwap() {
