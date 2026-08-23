@@ -1173,6 +1173,10 @@ public class H2Connection extends ConnectionObject {
         List<String> columnsToAddNow = new ArrayList<>();
 
         // Drop columns (skip renamed columns)
+        // Note: H2 only allows a single "DROP COLUMN" keyword per ALTER TABLE clause,
+        // followed by a comma-separated list of column names (unlike MySQL/Postgres,
+        // which repeat "DROP COLUMN" for each column).
+        List<String> columnNamesToDrop = new ArrayList<>();
         for (ColumnData oldCol : oldColumns) {
             String oldColName = oldCol.getColumnName();
 
@@ -1189,8 +1193,16 @@ public class H2Connection extends ConnectionObject {
                 }
             }
             if (!found) {
-                columnsToDropNow.add(String.format("DROP COLUMN \"%s\"", oldColName));
+                columnNamesToDrop.add(oldColName);
             }
+        }
+        if (!columnNamesToDrop.isEmpty()) {
+            StringBuilder dropClause = new StringBuilder("DROP COLUMN ");
+            for (int i = 0; i < columnNamesToDrop.size(); i++) {
+                if (i > 0) dropClause.append(", ");
+                dropClause.append("\"").append(columnNamesToDrop.get(i)).append("\"");
+            }
+            columnsToDropNow.add(dropClause.toString());
         }
 
         // Add new columns (skip renamed columns)

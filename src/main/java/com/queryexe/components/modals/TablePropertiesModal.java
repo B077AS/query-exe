@@ -150,9 +150,8 @@ public class TablePropertiesModal extends VBox {
             HBox headerRow = createColumnHeaderRow();
             tableContainer.getChildren().add(headerRow);
 
-            for (int i = 0; i < columns.size(); i++) {
-                ColumnData column = columns.get(i);
-                HBox dataRow = createColumnDataRow(column, i % 2 == 0);
+            for (ColumnData column : columns) {
+                HBox dataRow = createColumnDataRow(column);
                 tableContainer.getChildren().add(dataRow);
             }
 
@@ -197,18 +196,17 @@ public class TablePropertiesModal extends VBox {
         return headerRow;
     }
 
-    private HBox createColumnDataRow(ColumnData column, boolean alternate) {
+    private HBox createColumnDataRow(ColumnData column) {
         HBox dataRow = new HBox();
         dataRow.setAlignment(Pos.CENTER_LEFT);
         dataRow.setPadding(new Insets(10, 15, 10, 15));
         dataRow.setSpacing(0);
 
-        String bgColor = alternate ? "-color-accent-9-alpha10" : "transparent";
         dataRow.setStyle("""
-                -fx-background-color: %s;
+                -fx-background-color: transparent;
                 -fx-border-width: 0 0 1px 0;
                 -fx-border-color: -color-accent-9-alpha30;
-                """.formatted(bgColor));
+                """);
 
         HBox nameBox = new HBox(6);
         nameBox.setAlignment(Pos.CENTER_LEFT);
@@ -304,11 +302,9 @@ public class TablePropertiesModal extends VBox {
             HBox headerRow = createForeignKeyHeaderRow();
             tableContainer.getChildren().add(headerRow);
 
-            int index = 0;
             for (Map.Entry<String, ForeignKeyData> entry : foreignKeys.entrySet()) {
-                HBox dataRow = createForeignKeyDataRow(entry.getValue(), index % 2 == 0);
+                HBox dataRow = createForeignKeyDataRow(entry.getValue());
                 tableContainer.getChildren().add(dataRow);
-                index++;
             }
 
             container.getChildren().add(tableContainer);
@@ -357,18 +353,17 @@ public class TablePropertiesModal extends VBox {
         return headerRow;
     }
 
-    private HBox createForeignKeyDataRow(ForeignKeyData fk, boolean alternate) {
+    private HBox createForeignKeyDataRow(ForeignKeyData fk) {
         HBox dataRow = new HBox();
         dataRow.setAlignment(Pos.CENTER_LEFT);
         dataRow.setPadding(new Insets(10, 15, 10, 15));
         dataRow.setSpacing(0);
 
-        String bgColor = alternate ? "-color-accent-9-alpha10" : "transparent";
         dataRow.setStyle("""
-                -fx-background-color: %s;
+                -fx-background-color: transparent;
                 -fx-border-width: 0 0 1px 0;
                 -fx-border-color: -color-accent-9-alpha30;
-                """.formatted(bgColor));
+                """);
 
         HBox constraintBox = new HBox(6);
         constraintBox.setAlignment(Pos.CENTER_LEFT);
