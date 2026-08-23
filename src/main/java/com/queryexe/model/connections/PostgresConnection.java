@@ -958,6 +958,11 @@ public class PostgresConnection extends ConnectionObject {
     }
 
     @Override
+    public String generateSelectScript(String tableName, String databaseName, int limit) {
+        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+    }
+
+    @Override
     public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
         try {
             ResultTable table = (ResultTable) cell.getTableView();

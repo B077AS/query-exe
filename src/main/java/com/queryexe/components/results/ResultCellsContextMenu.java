@@ -9,6 +9,13 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
+import org.kordamp.ikonli.Ikon;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignN;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
 import com.queryexe.components.editor.CustomTab;
 import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.model.data.TableRowData;
@@ -22,7 +29,7 @@ public class ResultCellsContextMenu extends ContextMenu {
         TableRowData rowData = cell.getTableView().getItems().get(cell.getIndex());
         ObservableList<String> stringRow = rowData.getStringData();
         int columnIndex = cell.getTableColumn().getTableView().getColumns().indexOf(cell.getTableColumn());
-        MenuItem copyCellItem = new MenuItem("Copy Cell");
+        MenuItem copyCellItem = new MenuItem("Copy Cell", menuIcon(MaterialDesignC.CONTENT_COPY));
         copyCellItem.setOnAction(event -> {
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
@@ -30,7 +37,7 @@ public class ResultCellsContextMenu extends ContextMenu {
             clipboard.setContent(content);
         });
 
-        MenuItem copyRowItem = new MenuItem("Copy Row");
+        MenuItem copyRowItem = new MenuItem("Copy Row", menuIcon(MaterialDesignT.TABLE_ROW));
         copyRowItem.setOnAction(event -> {
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
@@ -41,13 +48,13 @@ public class ResultCellsContextMenu extends ContextMenu {
             }
         });
 
-        MenuItem duplicateRow = new MenuItem("Duplicate Row");
+        MenuItem duplicateRow = new MenuItem("Duplicate Row", menuIcon(MaterialDesignT.TABLE_ROW_PLUS_AFTER));
         duplicateRow.setOnAction(event -> {
             ResultTable table = (ResultTable) cell.getTableView();
             table.duplicateDatabaseRow(rowData);
         });
 
-        MenuItem insertScriptItem = new MenuItem("Insert Script");
+        MenuItem insertScriptItem = new MenuItem("Insert Script", menuIcon(MaterialDesignS.SCRIPT_TEXT_PLAY_OUTLINE));
         insertScriptItem.setOnAction(event -> {
             SQLEditor codeArea = new SQLEditor();
 
@@ -65,20 +72,20 @@ public class ResultCellsContextMenu extends ContextMenu {
             App.getTabPane().getTabs().add(queryTab);
         });
 
-        MenuItem editCell = new MenuItem("Edit Cell");
+        MenuItem editCell = new MenuItem("Edit Cell", menuIcon(MaterialDesignP.PENCIL_OUTLINE));
         editCell.setOnAction(event -> {
             if (cell != null && cell.getTableView().isEditable() && cell.getTableColumn().isEditable()) {
                 cell.startEdit();
             }
         });
 
-        MenuItem setNullItem = new MenuItem("Set NULL");
+        MenuItem setNullItem = new MenuItem("Set NULL", menuIcon(MaterialDesignN.NULL));
         setNullItem.setOnAction(event -> {
             ResultTable table = (ResultTable) cell.getTableView();
             table.updateDatabaseRow(rowData, columnIndex, cell.getText(), null);
         });
 
-        MenuItem deleteRow = new MenuItem("Delete Row");
+        MenuItem deleteRow = new MenuItem("Delete Row", menuIcon(MaterialDesignT.TABLE_ROW_REMOVE));
         deleteRow.setOnAction(event -> {
             int rowIndex = cell.getIndex();
             ResultTable table = (ResultTable) cell.getTableView();
@@ -100,5 +107,11 @@ public class ResultCellsContextMenu extends ContextMenu {
         } else {
             this.getItems().addAll(copyCellItem, copyRowItem);
         }
+    }
+
+    private static FontIcon menuIcon(Ikon ikon) {
+        FontIcon icon = new FontIcon(ikon);
+        icon.setIconSize(14);
+        return icon;
     }
 }

@@ -31,7 +31,7 @@ public class ShortcutsModal extends HBox {
     private final ShortcutCategory[] categories = new ShortcutCategory[]{
             new ShortcutCategory("Editor", MaterialDesignC.CODE_TAGS, new String[][]{
                     {"Ctrl + Space", "Trigger autocomplete"},
-                    {"Ctrl + Enter", "Run current statement"},
+                    {"Ctrl + Enter", "Run selection, or current statement if nothing is selected"},
                     {"Ctrl + Shift + Enter", "Run entire query/script"},
                     {"Ctrl + D", "Duplicate current line"},
                     {"Ctrl + F", "Find and replace"},

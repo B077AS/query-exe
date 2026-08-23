@@ -30,6 +30,7 @@ import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
+import com.queryexe.service.QueryService;
 import com.queryexe.service.SQLFormatterUtils;
 import com.queryexe.queryexe.App;
 
@@ -81,6 +82,35 @@ public class TableTreeItem extends CustomTreeItem {
             });
         });
 
+        MenuItem quickSelectMenuItem = new MenuItem("Quick Select (100 rows)", menuIcon(MaterialDesignT.TABLE_SEARCH));
+        quickSelectMenuItem.setOnAction(event -> {
+            SQLEditor codeArea = new SQLEditor();
+            VirtualizedScrollPane<CodeArea> scroll = new VirtualizedScrollPane<>(codeArea);
+            CustomTab<VirtualizedScrollPane<CodeArea>> queryTab = new CustomTab<>(scroll, App.getTabPane(), DatabaseConnection.getInstance().getCurrentConnectionObject());
+            queryTab.setCustomText(DatabaseConnection.getInstance().getCurrentConnectionObject().getConnectionName() + " - Script");
+            queryTab.setLoading();
+            App.getTabPane().getTabs().add(queryTab);
+            App.getTabPane().getSelectionModel().select(queryTab);
+
+            Async.run(() -> {
+                try {
+                    String script = SQLFormatterUtils.format(
+                            DatabaseConnection.getInstance().getConnectionObject()
+                                    .generateSelectScript(this.titleLabel.getText(), this.databaseName, 100),
+                            DatabaseConnection.getInstance().getConnectionObject());
+                    Platform.runLater(() -> {
+                        codeArea.replaceText(script);
+                        QueryService.getInstance().runQuery();
+                    });
+                } catch (Exception e) {
+                    Platform.runLater(() -> {
+                        codeArea.replaceText("-- ERROR: " + e.getMessage());
+                        queryTab.stopLoading();
+                    });
+                }
+            });
+        });
+
         MenuItem createScriptMenuItem = new MenuItem("Create Script", menuIcon(MaterialDesignS.SCRIPT_TEXT_OUTLINE));
         createScriptMenuItem.setOnAction(event -> {
             SQLEditor codeArea = new SQLEditor();
@@ -122,6 +152,7 @@ public class TableTreeItem extends CustomTreeItem {
         contextMenu.getItems().addAll(
                 copyTableName,
                 new SeparatorMenuItem(),
+                quickSelectMenuItem,
                 insertScriptMenuItem,
                 createScriptMenuItem,
                 new SeparatorMenuItem(),

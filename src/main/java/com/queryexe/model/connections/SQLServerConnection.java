@@ -823,6 +823,14 @@ public class SQLServerConnection extends ConnectionObject {
     }
 
     @Override
+    public String generateSelectScript(String tableName, String databaseName, int limit) {
+        String[] parts = parseSchemaAndTable(tableName);
+        String schema = parts[0];
+        String table = parts[1];
+        return "SELECT TOP " + limit + " * FROM [" + schema + "].[" + table + "];";
+    }
+
+    @Override
     public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
         try {
             ResultTable table = (ResultTable) cell.getTableView();

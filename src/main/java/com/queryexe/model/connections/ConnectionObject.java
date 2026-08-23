@@ -80,6 +80,8 @@ public abstract class ConnectionObject {
 
     public abstract String generateInsertScript(String tableName, String databaseName);
 
+    public abstract String generateSelectScript(String tableName, String databaseName, int limit);
+
     public abstract String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell);
 
     public abstract String generateCreateTableSQL(String databaseName, String tableName, List<ColumnData> columns, List<ForeignKeyData> foreignKeys);
