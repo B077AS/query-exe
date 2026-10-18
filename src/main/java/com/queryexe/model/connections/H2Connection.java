@@ -58,6 +58,26 @@ public class H2Connection extends ConnectionObject {
         return new H2Catalog(DatabaseConnection.getInstance().getConnection());
     }
 
+    @Override
+    public java.util.Map<String, java.util.List<String>> getSchemaObjects(String schemaName) {
+        java.util.Map<String, java.util.List<String>> objects = new LinkedHashMap<>();
+        try {
+            String schema = schemaOrCurrent(schemaName);
+            H2Catalog catalog = catalog();
+            putIfAny(objects, "Sequences", catalog.sequences(schema));
+            putIfAny(objects, "Synonyms", catalog.synonyms(schema));
+        } catch (SQLException e) {
+            log.warn("Could not list the sequences/synonyms of {}: {}", schemaName, e.getMessage());
+        }
+        return objects;
+    }
+
+    private static void putIfAny(java.util.Map<String, java.util.List<String>> objects, String group, java.util.List<String> names) {
+        if (!names.isEmpty()) {
+            objects.put(group, names);
+        }
+    }
+
     /**
      * {@code FOREIGN KEY (...) REFERENCES schema.table (...) [ON DELETE ..] [ON UPDATE ..]}, over every column
      * of the key. A referenced table without a known schema is taken to live in {@code defaultSchema}.

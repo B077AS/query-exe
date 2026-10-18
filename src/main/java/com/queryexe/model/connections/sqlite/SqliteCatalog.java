@@ -108,6 +108,27 @@ public class SqliteCatalog {
         return names;
     }
 
+    /** Indexes created with CREATE INDEX (not the ones SQLite makes for PRIMARY KEY/UNIQUE constraints). */
+    public List<String> indexNames(String schema) throws SQLException {
+        return masterNames(schema, "index");
+    }
+
+    public List<String> triggerNames(String schema) throws SQLException {
+        return masterNames(schema, "trigger");
+    }
+
+    private List<String> masterNames(String schema, String type) throws SQLException {
+        List<String> names = new ArrayList<>();
+        String sql = "SELECT name FROM " + quote(schemaOrMain(schema)) + ".sqlite_master "
+                + "WHERE type = '" + type + "' AND sql IS NOT NULL AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name";
+        try (PreparedStatement stmt = connection.prepareStatement(sql); ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                names.add(rs.getString(1));
+            }
+        }
+        return names;
+    }
+
     public List<ColumnInfo> columns(String schema, String table) throws SQLException {
         List<ColumnInfo> columns = new ArrayList<>();
         // table_xinfo (unlike table_info) also lists generated columns; hidden=1 are virtual-table internals

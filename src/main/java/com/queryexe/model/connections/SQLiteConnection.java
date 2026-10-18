@@ -53,6 +53,25 @@ public class SQLiteConnection extends ConnectionObject {
         return new SqliteCatalog(DatabaseConnection.getInstance().getConnection());
     }
 
+    @Override
+    public java.util.Map<String, java.util.List<String>> getSchemaObjects(String databaseName) {
+        java.util.Map<String, java.util.List<String>> objects = new LinkedHashMap<>();
+        try {
+            SqliteCatalog catalog = catalog();
+            List<String> indexes = catalog.indexNames(databaseName);
+            List<String> triggers = catalog.triggerNames(databaseName);
+            if (!indexes.isEmpty()) {
+                objects.put("Indexes", indexes);
+            }
+            if (!triggers.isEmpty()) {
+                objects.put("Triggers", triggers);
+            }
+        } catch (SQLException e) {
+            log.warn("Could not list the indexes/triggers of {}: {}", databaseName, e.getMessage());
+        }
+        return objects;
+    }
+
     // ------------------------------------------------------------------------------------ structure
 
     @Override

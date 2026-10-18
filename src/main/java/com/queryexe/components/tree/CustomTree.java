@@ -239,6 +239,7 @@ public class CustomTree extends VBox {
                 addTablesAndColumns(tablesAndColumnsMap, tablesMainTreeItem, database);
 
                 databaseItem.getChildren().add(tablesMainTreeItem);
+                databaseItem.showSchemaObjects(DatabaseConnection.getInstance().getConnectionObject().getSchemaObjects(database));
             }
             this.getChildren().addAll(createHeaderBox(), databaseTree);
 

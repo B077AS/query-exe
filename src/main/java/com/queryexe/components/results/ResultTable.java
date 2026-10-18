@@ -66,7 +66,22 @@ public class ResultTable extends TableView<TableRowData> {
     private long executionTime;
     @Getter
     private List<QueryData> updateQueries;
-    private ObservableList<TableRowData> backupData = FXCollections.observableArrayList();
+    // The rows as last loaded or applied, in order (references only). A row that is edited first saves a copy of
+    // its values in loadedValues, so Revert needs no second copy of the whole result set.
+    private List<TableRowData> loadedRows = new ArrayList<>();
+    private final Map<TableRowData, LoadedValues> loadedValues = new IdentityHashMap<>();
+
+    private static final class LoadedValues {
+        final List<Object> original;
+        final List<String> strings;
+
+        LoadedValues(TableRowData row) {
+            this.original = new ArrayList<>(row.getOriginalData());
+            this.strings = new ArrayList<>(row.getStringData());
+        }
+    }
+    // Grid columns that map to a real table column (expression columns have nothing to read back).
+    private final List<Integer> tableColumnIndexes = new ArrayList<>();
     @Setter
     private Runnable onCellUpdate;
     private final int minColumnWidth = 150;
@@ -143,6 +158,16 @@ public class ResultTable extends TableView<TableRowData> {
      * @param maxRows the limit that was set on the statement (0 = none); reaching it marks the grid as truncated
      */
     public ResultTable(Statement statement, long executionTime, int maxRows) throws SQLException {
+        this(statement, executionTime, maxRows, DatabaseConnection.getInstance().getConnectionObject());
+    }
+
+    /**
+     * @param connectionObject the connection the statement ran on (it supplies the engine's quoting rules);
+     *                         the statement's own JDBC connection is used for key lookups
+     */
+    public ResultTable(Statement statement, long executionTime, int maxRows,
+                       com.queryexe.model.connections.ConnectionObject connectionObject) throws SQLException {
+        this.connectionObject = connectionObject;
         this.updateQueries = new ArrayList<QueryData>();
         this.executionTime = executionTime;
 
@@ -187,7 +212,7 @@ public class ResultTable extends TableView<TableRowData> {
 
         ResultSet resultSet = statement.getResultSet();
         ResultSetMetaData metaData = resultSet.getMetaData();
-        hasPrimaryKey = checkForPrimaryKey(DatabaseConnection.getInstance().getConnection(), metaData);
+        hasPrimaryKey = checkForPrimaryKey(statement.getConnection(), metaData);
 
         this.setEditable(hasPrimaryKey);
 
@@ -217,6 +242,9 @@ public class ResultTable extends TableView<TableRowData> {
             } else {
                 // expressions/literals have no column to write back to
                 tableColumn.setEditable(!Objects.toString(metaData.getTableName(columnIndex), "").isEmpty());
+            }
+            if (!Objects.toString(metaData.getTableName(columnIndex), "").isEmpty()) {
+                tableColumnIndexes.add(columnIndex - 1);
             }
 
             tableColumn.setCellFactory(col -> {
@@ -434,76 +462,13 @@ public class ResultTable extends TableView<TableRowData> {
             ObservableList<Object> originalRow = FXCollections.observableArrayList();
             ObservableList<String> stringRow = FXCollections.observableArrayList();
             for (int columnIndex = 1; columnIndex <= columnCount; columnIndex++) {
-                int columnType = metaData.getColumnType(columnIndex);
-
-                Object originalValue;
-                String stringValue;
-                switch (columnType) {
-                    case java.sql.Types.BLOB:
-                    case java.sql.Types.LONGVARBINARY:
-                    case java.sql.Types.VARBINARY:
-                    case java.sql.Types.BINARY:
-                        byte[] binaryData = resultSet.getBytes(columnIndex);
-                        originalValue = binaryData;
-
-                        // Try to convert to UUID string if possible
-                        if (binaryData != null && (binaryData.length == 16 || binaryData.length == 36)) {
-                            try {
-
-                                if (binaryData.length == 16) {
-                                    UUID uuid = bytesToUUID(binaryData);
-                                    stringValue = uuid.toString();
-                                    originalValue = uuid;
-                                }
-
-                                else {
-                                    String possibleUUID = new String(binaryData, java.nio.charset.StandardCharsets.UTF_8);
-                                    if (possibleUUID.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
-                                        stringValue = possibleUUID;
-                                        originalValue = UUID.fromString(possibleUUID);
-                                    } else {
-                                        stringValue = String.format("[Data: %d bytes]", binaryData.length);
-                                    }
-                                }
-                            } catch (Exception e) {
-                                stringValue = String.format("[Data: %d bytes]", binaryData.length);
-                            }
-                        } else {
-                            stringValue = (binaryData != null) ? String.format("[Data: %d bytes]", binaryData.length) : null;
-                        }
-                        break;
-                    case java.sql.Types.BOOLEAN:
-                        boolean boolValue = resultSet.getBoolean(columnIndex);
-                        boolean boolIsNull = resultSet.wasNull();
-                        originalValue = boolIsNull ? null : boolValue;
-                        stringValue = boolIsNull ? null : String.valueOf(boolValue);
-                        break;
-                    // The drivers' own toString() of these is a debugging aid ("clob0: '...'", "[B@1f2e"), not the value.
-                    case java.sql.Types.CLOB:
-                    case java.sql.Types.NCLOB:
-                    case java.sql.Types.SQLXML:
-                        stringValue = resultSet.getString(columnIndex);
-                        originalValue = stringValue;
-                        break;
-                    case java.sql.Types.ARRAY:
-                        stringValue = formatArray(resultSet.getArray(columnIndex));
-                        originalValue = stringValue;
-                        break;
-                    default:
-                        String typeName = columnTypeNames.get(columnIndex - 1).toLowerCase();
-                        if (typeName.contains("json") || typeName.contains("xml")) {
-                            stringValue = resultSet.getString(columnIndex);
-                            originalValue = stringValue;
-                        } else {
-                            originalValue = resultSet.getObject(columnIndex);
-                            stringValue = (originalValue != null) ? originalValue.toString() : null;
-                        }
-                }
-                originalRow.add(originalValue);
-                stringRow.add(stringValue);
+                Object[] cell = readCell(resultSet, columnIndex, columnIndex - 1);
+                originalRow.add(cell[0]);
+                stringRow.add((String) cell[1]);
             }
-            tableData.add(new TableRowData(originalRow, stringRow));
-            backupData.add(new TableRowData(FXCollections.observableArrayList(originalRow), FXCollections.observableArrayList(stringRow)));
+            TableRowData row = new TableRowData(originalRow, stringRow);
+            tableData.add(row);
+            loadedRows.add(row);
         }
 
         this.setItems(tableData);
@@ -531,6 +496,77 @@ public class ResultTable extends TableView<TableRowData> {
         });
 
         addTableResizeListener();
+    }
+
+    // Reads one cell: [0] the typed value kept for write-back, [1] the text shown in the grid.
+    // columnIndex is the position in the result set, gridIndex the position among the grid columns.
+    private Object[] readCell(ResultSet resultSet, int columnIndex, int gridIndex) throws SQLException {
+        int columnType = columnSqlTypes.get(gridIndex);
+
+        Object originalValue;
+        String stringValue;
+        switch (columnType) {
+            case java.sql.Types.BLOB:
+            case java.sql.Types.LONGVARBINARY:
+            case java.sql.Types.VARBINARY:
+            case java.sql.Types.BINARY:
+                byte[] binaryData = resultSet.getBytes(columnIndex);
+                originalValue = binaryData;
+
+                // Try to convert to UUID string if possible
+                if (binaryData != null && (binaryData.length == 16 || binaryData.length == 36)) {
+                    try {
+
+                        if (binaryData.length == 16) {
+                            UUID uuid = bytesToUUID(binaryData);
+                            stringValue = uuid.toString();
+                            originalValue = uuid;
+                        }
+
+                        else {
+                            String possibleUUID = new String(binaryData, java.nio.charset.StandardCharsets.UTF_8);
+                            if (possibleUUID.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                                stringValue = possibleUUID;
+                                originalValue = UUID.fromString(possibleUUID);
+                            } else {
+                                stringValue = String.format("[Data: %d bytes]", binaryData.length);
+                            }
+                        }
+                    } catch (Exception e) {
+                        stringValue = String.format("[Data: %d bytes]", binaryData.length);
+                    }
+                } else {
+                    stringValue = (binaryData != null) ? String.format("[Data: %d bytes]", binaryData.length) : null;
+                }
+                break;
+            case java.sql.Types.BOOLEAN:
+                boolean boolValue = resultSet.getBoolean(columnIndex);
+                boolean boolIsNull = resultSet.wasNull();
+                originalValue = boolIsNull ? null : boolValue;
+                stringValue = boolIsNull ? null : String.valueOf(boolValue);
+                break;
+            // The drivers' own toString() of these is a debugging aid ("clob0: '...'", "[B@1f2e"), not the value.
+            case java.sql.Types.CLOB:
+            case java.sql.Types.NCLOB:
+            case java.sql.Types.SQLXML:
+                stringValue = resultSet.getString(columnIndex);
+                originalValue = stringValue;
+                break;
+            case java.sql.Types.ARRAY:
+                stringValue = formatArray(resultSet.getArray(columnIndex));
+                originalValue = stringValue;
+                break;
+            default:
+                String typeName = columnTypeNames.get(gridIndex).toLowerCase();
+                if (typeName.contains("json") || typeName.contains("xml")) {
+                    stringValue = resultSet.getString(columnIndex);
+                    originalValue = stringValue;
+                } else {
+                    originalValue = resultSet.getObject(columnIndex);
+                    stringValue = (originalValue != null) ? originalValue.toString() : null;
+                }
+        }
+        return new Object[]{originalValue, stringValue};
     }
 
     private static String formatArray(java.sql.Array array) throws SQLException {
@@ -623,7 +659,6 @@ public class ResultTable extends TableView<TableRowData> {
         String schema = target.get(1);
         tableName = target.get(2);
 
-        connectionObject = DatabaseConnection.getInstance().getConnectionObject();
         if (connectionObject == null) {
             return false;
         }
@@ -698,6 +733,9 @@ public class ResultTable extends TableView<TableRowData> {
                 }
             }
 
+            if (!rowData.isNewRow()) {
+                loadedValues.computeIfAbsent(rowData, LoadedValues::new);
+            }
             rowData.getStringData().set(updatedColumnIndex, newValue);
             rowData.getOriginalData().set(updatedColumnIndex, typedValue);
 
@@ -961,15 +999,13 @@ public class ResultTable extends TableView<TableRowData> {
 
     public void restoreOriginalData() {
         Platform.runLater(() -> {
-            ObservableList<TableRowData> restoredData = FXCollections.observableArrayList();
-
-            for (TableRowData backupRow : backupData) {
-                ObservableList<Object> originalDataCopy = FXCollections.observableArrayList(backupRow.getOriginalData());
-                ObservableList<String> stringDataCopy = FXCollections.observableArrayList(backupRow.getStringData());
-                TableRowData rowCopy = new TableRowData(originalDataCopy, stringDataCopy);
-                restoredData.add(rowCopy);
+            for (Map.Entry<TableRowData, LoadedValues> saved : loadedValues.entrySet()) {
+                saved.getKey().getOriginalData().setAll(saved.getValue().original);
+                saved.getKey().getStringData().setAll(saved.getValue().strings);
             }
-            this.setItems(restoredData);
+            loadedValues.clear();
+            // rows added in the grid are not in loadedRows, deleted ones are back
+            this.setItems(FXCollections.observableArrayList(loadedRows));
 
             this.updateQueries.clear();
             this.rowEdits.clear();
@@ -977,17 +1013,10 @@ public class ResultTable extends TableView<TableRowData> {
         });
     }
 
+    /** Makes the current rows the state Revert returns to. FX thread. */
     public void updateBackupData() {
-        Platform.runLater(() -> {
-            backupData.clear();
-
-            for (TableRowData currentRow : this.getItems()) {
-                ObservableList<Object> originalDataCopy = FXCollections.observableArrayList(currentRow.getOriginalData());
-                ObservableList<String> stringDataCopy = FXCollections.observableArrayList(currentRow.getStringData());
-                TableRowData backupRowCopy = new TableRowData(originalDataCopy, stringDataCopy);
-                backupData.add(backupRowCopy);
-            }
-        });
+        loadedRows = new ArrayList<>(this.getItems());
+        loadedValues.clear();
     }
 
     public void copySelectedRows() {
@@ -1040,7 +1069,8 @@ public class ResultTable extends TableView<TableRowData> {
      *
      * @param generatedKeys per INSERT (identity-keyed), the generated-key columns the driver returned
      */
-    public void commitApplied(Map<QueryData, Map<String, Object>> generatedKeys) {
+    public List<InsertedRow> commitApplied(Map<QueryData, Map<String, Object>> generatedKeys) {
+        List<InsertedRow> inserted = new ArrayList<>();
         for (TableRowData row : this.getItems()) {
             if (!row.isNewRow()) {
                 continue;
@@ -1051,6 +1081,9 @@ public class ResultTable extends TableView<TableRowData> {
             }
             row.setNewRow(false);
             row.setPendingInsert(null);
+            if (hasKnownKey(row)) {
+                inserted.add(new InsertedRow(row, currentPrimaryKeyValues(row)));
+            }
         }
 
         updateBackupData();
@@ -1059,6 +1092,63 @@ public class ResultTable extends TableView<TableRowData> {
             onCellUpdate.run();
         }
         this.refresh();
+        return inserted;
+    }
+
+    /** A row that was just inserted, with the key to find it by. */
+    public record InsertedRow(TableRowData row, Map<String, Object> key) {
+    }
+
+    /**
+     * Reads back the columns the database filled in itself (defaults, timestamps, triggers) for rows that were just
+     * inserted, so the grid shows what is stored. Blocking JDBC work: call it off the FX thread. Failures are
+     * logged only; the insert itself already succeeded.
+     */
+    public void reloadInserted(Connection connection, List<InsertedRow> rows) {
+        if (rows.isEmpty() || tableColumnIndexes.isEmpty() || connectionObject == null || qualifiedTableName == null) {
+            return;
+        }
+        StringJoiner select = new StringJoiner(", ");
+        for (int index : tableColumnIndexes) {
+            select.add(connectionObject.quoteIdentifier(columnNames.get(index)));
+        }
+
+        Map<TableRowData, Object[][]> reloaded = new IdentityHashMap<>();
+        for (InsertedRow inserted : rows) {
+            List<Object> parameters = new ArrayList<>();
+            String sql = "SELECT " + select + " FROM " + qualifiedTableName
+                    + " WHERE " + buildWhereClause(inserted.key(), parameters);
+            try (java.sql.PreparedStatement statement = connection.prepareStatement(sql)) {
+                for (int i = 0; i < parameters.size(); i++) {
+                    statement.setObject(i + 1, parameters.get(i));
+                }
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (resultSet.next()) {
+                        Object[][] cells = new Object[tableColumnIndexes.size()][];
+                        for (int i = 0; i < cells.length; i++) {
+                            cells[i] = readCell(resultSet, i + 1, tableColumnIndexes.get(i));
+                        }
+                        reloaded.put(inserted.row(), cells);
+                    }
+                }
+            } catch (SQLException e) {
+                log.warn("Could not read back an inserted row: {}", e.getMessage());
+            }
+        }
+
+        Platform.runLater(() -> {
+            reloaded.forEach((row, cells) -> {
+                for (int i = 0; i < cells.length; i++) {
+                    int gridIndex = tableColumnIndexes.get(i);
+                    // only fill what the user left empty; what they typed is what was stored
+                    if (row.getOriginalData().get(gridIndex) == null && cells[i][0] != null) {
+                        row.getOriginalData().set(gridIndex, cells[i][0]);
+                        row.getStringData().set(gridIndex, (String) cells[i][1]);
+                    }
+                }
+            });
+            this.refresh();
+        });
     }
 
     private void fillGeneratedKeys(TableRowData row, Map<String, Object> keys) {

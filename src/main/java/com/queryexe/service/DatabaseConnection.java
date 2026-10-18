@@ -5,8 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.drivers.DriverInfo;
@@ -19,12 +21,15 @@ public class DatabaseConnection {
     private final DynamicDriverLoader driverLoader;
     private final Map<String, ConnectionObject> connectionObjects;
     private final Map<String, Connection> connections;
+    // Extra connections handed to query tabs, per connection id; closed together with the shared one.
+    private final Map<String, List<Connection>> sessions;
     private String currentConnectionId;
 
     private DatabaseConnection() {
         this.driverLoader = DynamicDriverLoader.getInstance();
         this.connectionObjects = new ConcurrentHashMap<>();
         this.connections = new ConcurrentHashMap<>();
+        this.sessions = new ConcurrentHashMap<>();
         this.currentConnectionId = null;
     }
 
@@ -49,6 +54,15 @@ public class DatabaseConnection {
             return;
         }
 
+        Connection connection = open(connectionObject, forceCustomDriver);
+
+        connectionObjects.put(connectionId, connectionObject);
+        connections.put(connectionId, connection);
+
+        this.currentConnectionId = connectionId;
+    }
+
+    private Connection open(ConnectionObject connectionObject, boolean forceCustomDriver) throws SQLException {
         // Check if we need to load a custom driver
         if (forceCustomDriver || shouldUseCustomDriver(connectionObject)) {
             ConnectionTypes type = ConnectionTypes.valueOf(connectionObject.getDbType());
@@ -63,16 +77,114 @@ public class DatabaseConnection {
             }
         }
 
-        Connection connection = DriverManager.getConnection(
+        return DriverManager.getConnection(
                 connectionObject.getFullUrl(),
                 connectionObject.getUsername(),
                 connectionObject.getPassword()
         );
+    }
 
-        connectionObjects.put(connectionId, connectionObject);
-        connections.put(connectionId, connection);
+    /**
+     * A connection of its own for one query tab, so its transactions and {@code USE}/{@code SET} state don't leak
+     * into other tabs or the schema tree. The shared connection must already be open. Databases that only exist
+     * inside a single connection (unnamed in-memory H2/SQLite) get the shared one back. Release it with
+     * {@link #closeSession}.
+     */
+    public Connection openSession(ConnectionObject connectionObject) throws SQLException {
+        Connection shared = connections.get(connectionObject.getId());
+        if (shared == null) {
+            throw new SQLException("Connection is not open: " + connectionObject.getConnectionName());
+        }
+        if (isPrivateToConnection(connectionObject.getFullUrl())) {
+            return shared;
+        }
 
-        this.currentConnectionId = connectionId;
+        Connection session = open(connectionObject, false);
+        sessions.computeIfAbsent(connectionObject.getId(), id -> new CopyOnWriteArrayList<>()).add(session);
+        return session;
+    }
+
+    public void closeSession(String connectionId, Connection session) {
+        List<Connection> open = sessions.get(connectionId);
+        if (open == null || session == null || !open.remove(session)) {
+            return; // not a session (e.g. the shared connection handed out for in-memory databases)
+        }
+        closeQuietly(session);
+    }
+
+    /**
+     * Makes a session use the database/schema the shared connection is currently on, which is where the schema tree
+     * selects: the tree issues its {@code USE} on the shared connection only.
+     */
+    public String copyDefaultSchema(Connection shared, Connection session, String previousState) {
+        if (shared == null || session == null || shared == session) {
+            return previousState;
+        }
+        String catalog = null;
+        String schema = null;
+        try {
+            catalog = shared.getCatalog();
+        } catch (SQLException | RuntimeException e) {
+            log.debug("Could not read the catalog: {}", e.getMessage());
+        }
+        try {
+            schema = shared.getSchema();
+        } catch (SQLException | RuntimeException e) {
+            log.debug("Could not read the schema: {}", e.getMessage());
+        }
+
+        // Only act when the tree moved since the last copy, so a USE typed in the tab isn't overwritten on every run.
+        String state = catalog + "\u0000" + schema;
+        if (state.equals(previousState)) {
+            return previousState;
+        }
+        try {
+            if (catalog != null && !catalog.equals(session.getCatalog())) {
+                session.setCatalog(catalog);
+            }
+        } catch (SQLException | RuntimeException e) {
+            log.debug("Could not copy the catalog to a session: {}", e.getMessage());
+        }
+        try {
+            if (schema != null && !schema.equals(session.getSchema())) {
+                session.setSchema(schema);
+            }
+        } catch (SQLException | RuntimeException e) {
+            log.debug("Could not copy the schema to a session: {}", e.getMessage());
+        }
+        return state;
+    }
+
+    /** The shared connection of a connection id, for {@link #copyDefaultSchema}. */
+    public Connection sharedConnection(String connectionId) {
+        return connections.get(connectionId);
+    }
+
+    private static boolean isPrivateToConnection(String url) {
+        if (url == null) {
+            return false;
+        }
+        String lower = url.toLowerCase();
+        if (lower.startsWith("jdbc:sqlite:")) {
+            String path = lower.substring("jdbc:sqlite:".length());
+            return path.isEmpty() || path.startsWith(":memory:") || path.startsWith("file::memory:");
+        }
+        if (lower.startsWith("jdbc:h2:mem:")) {
+            // a named in-memory database is shared by every connection; an unnamed one is private
+            String rest = lower.substring("jdbc:h2:mem:".length());
+            return rest.isEmpty() || rest.startsWith(";");
+        }
+        return false;
+    }
+
+    private static void closeQuietly(Connection connection) {
+        try {
+            if (!connection.isClosed()) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            log.debug("Error closing session: {}", e.getMessage());
+        }
     }
 
     private boolean shouldUseCustomDriver(ConnectionObject connectionObject) {
@@ -171,6 +283,11 @@ public class DatabaseConnection {
             throw new SQLException("No connection object available for reconnection: " + connectionId);
         }
 
+        List<Connection> openSessions = sessions.remove(connectionId);
+        if (openSessions != null) {
+            openSessions.forEach(DatabaseConnection::closeQuietly);
+        }
+
         Connection connection = connections.get(connectionId);
         if (connection != null) {
             try {
@@ -196,6 +313,10 @@ public class DatabaseConnection {
     }
 
     public void close(String connectionId) {
+        List<Connection> openSessions = sessions.remove(connectionId);
+        if (openSessions != null) {
+            openSessions.forEach(DatabaseConnection::closeQuietly);
+        }
         try {
             Connection connection = connections.get(connectionId);
             if (connection != null && !connection.isClosed()) {

@@ -253,7 +253,7 @@ public class ResultBox extends VBox {
 
                 @Override
                 public void onResultSet(String sql, Statement statement, long millis) throws SQLException {
-                    ResultTable resultTable = new ResultTable(statement, millis, MAX_ROWS);
+                    ResultTable resultTable = new ResultTable(statement, millis, MAX_ROWS, connectionObject);
                     resultTable.setOnCellUpdate(() -> {
                         boolean hasChanges = resultTable.hasPendingChanges();
                         applyButton.setDisable(!hasChanges);
@@ -333,11 +333,14 @@ public class ResultBox extends VBox {
     }
 
     // The tab's own connection, opened on demand; never whichever one is "current".
-    private static Connection openConnection(ConnectionObject connectionObject) throws SQLException {
-        DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
+    private Connection openConnection(ConnectionObject connectionObject) throws SQLException {
         if (connectionObject == null) {
             throw new SQLException("No connection is associated with this query tab.");
         }
+        if (parentTab != null && parentTab.getConnectionObject() != null) {
+            return parentTab.getSessionConnection();
+        }
+        DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
         if (databaseConnection.getConnection(connectionObject.getId()) == null) {
             databaseConnection.initialize(connectionObject);
         }
@@ -391,7 +394,6 @@ public class ResultBox extends VBox {
         // Snapshot on the FX thread; the modal blocks editing until the apply finishes.
         List<QueryData> queries = new ArrayList<>(table.getUpdateQueries());
         Set<QueryData> inserts = table.pendingInsertQueries();
-        Connection connection = resolveConnection();
 
         applying = true;
         applyButton.setDisable(true);
@@ -399,13 +401,19 @@ public class ResultBox extends VBox {
 
         Async.run(() -> {
             try {
+                // may open the tab's connection, so not on the FX thread
+                Connection connection = resolveConnection();
                 Map<QueryData, Map<String, Object>> generatedKeys = ChangeApplier.apply(connection, queries, inserts);
 
                 Platform.runLater(() -> {
                     applying = false;
-                    table.commitApplied(generatedKeys);
+                    List<ResultTable.InsertedRow> inserted = table.commitApplied(generatedKeys);
                     applyButton.setDisable(true);
                     revertButton.setDisable(true);
+                    if (!inserted.isEmpty()) {
+                        // pick up the values the database defaulted (timestamps, defaults, triggers)
+                        Async.run(() -> table.reloadInserted(connection, inserted));
+                    }
 
                     App.closeModal();
                     new CustomNotification("Changes Saved", "Your edits were committed to the database.", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE)).showNotification();
@@ -427,9 +435,10 @@ public class ResultBox extends VBox {
     private Connection resolveConnection() {
         DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
         if (parentTab != null && parentTab.getConnectionObject() != null) {
-            Connection tabConnection = databaseConnection.getConnection(parentTab.getConnectionObject().getId());
-            if (tabConnection != null) {
-                return tabConnection;
+            try {
+                return parentTab.getSessionConnection();
+            } catch (SQLException e) {
+                log.warn("Could not open the tab's connection: {}", e.getMessage());
             }
         }
         return databaseConnection.getConnection();

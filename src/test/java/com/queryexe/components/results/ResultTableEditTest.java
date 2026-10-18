@@ -130,10 +130,10 @@ class ResultTableEditTest {
         List<QueryData> queries = new ArrayList<>(table.getUpdateQueries());
         Map<QueryData, Map<String, Object>> keys =
                 ChangeApplier.apply(connection, queries, table.pendingInsertQueries());
-        onFx(() -> {
-            table.commitApplied(keys);
-            return null;
-        });
+        List<ResultTable.InsertedRow> inserted = onFx(() -> table.commitApplied(keys));
+        // like the Apply button: read back what the database filled in
+        table.reloadInserted(connection, inserted);
+        onFx(() -> null); // lets the reload's FX update run
     }
 
     private void edit(ResultTable table, int row, int column, String oldValue, String newValue) throws Exception {
@@ -208,6 +208,41 @@ class ResultTableEditTest {
 
             assertEquals("zzz", scalar("SELECT NAME FROM PUBLIC.IDENT"));
             assertNotNull(scalar("SELECT CREATED FROM PUBLIC.IDENT"));
+        }
+
+        @Test
+        void aRowInsertedFromTheGridShowsTheValuesTheDatabaseDefaulted() throws Exception {
+            ResultTable table = grid("SELECT * FROM PUBLIC.IDENT");
+            int row = addRow(table);
+            edit(table, row, 1, "", "zzz");
+            apply(table);
+
+            TableRowData inserted = onFx(() -> table.getItems().get(row));
+            assertNotNull(inserted.getStringData().get(2), "CREATED is filled in by the database, not left empty");
+            assertFalse(inserted.getStringData().get(2).isEmpty());
+            assertEquals(scalar("SELECT CREATED FROM PUBLIC.IDENT"), inserted.getStringData().get(2));
+        }
+
+        @Test
+        void revertRestoresEditedAndDeletedRowsAndDropsNewOnes() throws Exception {
+            ResultTable table = grid("SELECT * FROM PUBLIC.DUP ORDER BY ID");
+            edit(table, 0, 1, "public", "changed");
+            onFx(() -> {
+                table.deleteDatabaseRow(1);
+                return null;
+            });
+            addRow(table);
+
+            onFx(() -> {
+                table.restoreOriginalData();
+                return null;
+            });
+            onFx(() -> null); // restoreOriginalData finishes in a later FX pulse
+
+            assertEquals(2, onFx(() -> table.getItems().size()));
+            assertEquals("public", onFx(() -> table.getItems().get(0).getStringData().get(1)));
+            assertEquals("p2", onFx(() -> table.getItems().get(1).getStringData().get(1)));
+            assertFalse(table.hasPendingChanges());
         }
 
         @Test

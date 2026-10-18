@@ -121,6 +121,28 @@ public class H2Catalog {
 
     // ------------------------------------------------------------------------------------ reading
 
+    /** Names of the sequences created in the schema (the ones behind identity columns are not listed by H2). */
+    public List<String> sequences(String schema) throws SQLException {
+        return names("SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = ? ORDER BY sequence_name", schema);
+    }
+
+    public List<String> synonyms(String schema) throws SQLException {
+        return names("SELECT synonym_name FROM information_schema.synonyms WHERE synonym_schema = ? ORDER BY synonym_name", schema);
+    }
+
+    private List<String> names(String sql, String schema) throws SQLException {
+        List<String> names = new ArrayList<>();
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, schema);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    names.add(rs.getString(1));
+                }
+            }
+        }
+        return names;
+    }
+
     public List<ColumnInfo> columns(String schema, String table) throws SQLException {
         record Raw(ColumnInfo.ColumnInfoBuilder builder, TypeParts parts) {
         }

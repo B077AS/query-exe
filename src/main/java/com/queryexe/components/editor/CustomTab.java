@@ -16,11 +16,14 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
+import javafx.collections.ListChangeListener;
+import com.queryexe.service.Async;
 import com.queryexe.service.AppSettings;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 import com.queryexe.components.results.ResultBox;
 
+import java.sql.Connection;
 import java.sql.Statement;
 import java.sql.SQLException;
 
@@ -51,6 +54,39 @@ public class CustomTab<T extends Node> extends Tab {
     @Getter
     @Setter
     private Statement currentStatement;
+
+    // This tab's own JDBC connection, opened on first use (see DatabaseConnection.openSession).
+    private Connection session;
+    private String sessionSchemaState;
+
+    /**
+     * The connection this tab runs its SQL on. Blocking: call it from a background thread. The first call
+     * opens the connection; later calls reopen it if it was lost, and follow the database selected in the tree.
+     */
+    public synchronized Connection getSessionConnection() throws SQLException {
+        if (connectionObject == null) {
+            throw new SQLException("No connection is associated with this query tab.");
+        }
+        DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
+        if (databaseConnection.getConnection(connectionObject.getId()) == null) {
+            databaseConnection.initialize(connectionObject);
+        }
+        if (session == null || session.isClosed()) {
+            session = databaseConnection.openSession(connectionObject);
+            sessionSchemaState = null;
+        }
+        sessionSchemaState = databaseConnection.copyDefaultSchema(
+                databaseConnection.sharedConnection(connectionObject.getId()), session, sessionSchemaState);
+        return session;
+    }
+
+    public synchronized void closeSession() {
+        if (session != null && connectionObject != null) {
+            DatabaseConnection.getInstance().closeSession(connectionObject.getId(), session);
+        }
+        session = null;
+        sessionSchemaState = null;
+    }
 
     public CustomTab(T content, TabPane tabPane) {
         this.content = content;
@@ -86,6 +122,22 @@ public class CustomTab<T extends Node> extends Tab {
             }
         });
         icon.setVisible(false);
+
+        // The tab's connection goes with the tab. Checked after the change settles because dragging a tab to
+        // reorder it can remove and re-add it.
+        if (connectionObject != null) {
+            tabPane.getTabs().addListener((ListChangeListener<Tab>) change -> {
+                while (change.next()) {
+                    if (change.wasRemoved() && change.getRemoved().contains(this)) {
+                        Platform.runLater(() -> {
+                            if (!tabPane.getTabs().contains(this)) {
+                                Async.run(this::closeSession);
+                            }
+                        });
+                    }
+                }
+            });
+        }
 
         tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
             if (newTab != this) {

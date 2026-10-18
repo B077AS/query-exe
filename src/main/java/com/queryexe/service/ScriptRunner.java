@@ -22,6 +22,8 @@ import lombok.extern.slf4j.Slf4j;
 @UtilityClass
 public class ScriptRunner {
 
+    private static final int FETCH_SIZE = 1_000;
+
     public interface Listener {
 
         /** The statement is about to run; keep it if it must stay cancellable. */
@@ -63,6 +65,8 @@ public class ScriptRunner {
         try (Statement statement = connection.createStatement()) {
             if (maxRows > 0) {
                 statement.setMaxRows(maxRows);
+                // read in batches where the driver can (PostgreSQL does so inside a transaction, others ignore the hint)
+                statement.setFetchSize(Math.min(maxRows, FETCH_SIZE));
             }
             listener.onStatementStarted(sql, statement);
 

@@ -102,6 +102,14 @@ public abstract class ConnectionObject {
 
     public abstract SqlSyntax getSqlSyntax();
 
+    /**
+     * Other objects of a database/schema that the tree lists next to its tables, by group title ("Sequences",
+     * "Indexes", ...), in display order. Empty groups are left out; engines without support return nothing.
+     */
+    public java.util.Map<String, java.util.List<String>> getSchemaObjects(String databaseName) {
+        return new java.util.LinkedHashMap<>();
+    }
+
     public String quoteIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
