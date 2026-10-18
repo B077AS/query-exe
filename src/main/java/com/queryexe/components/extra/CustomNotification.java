@@ -75,7 +75,12 @@ public class CustomNotification {
         this.notification = notification;
         this.notification.getStyleClass().add(Styles.ELEVATED_1);
         this.notification.getStyleClass().add(Styles.ACCENT);
-        this.notification.setPrefHeight(Region.USE_PREF_SIZE);
+        // USE_COMPUTED_SIZE (not USE_PREF_SIZE, which is only meaningful for min/max — it's
+        // Double.NEGATIVE_INFINITY, and Region.prefHeight() clamps any negative, non-
+        // USE_COMPUTED_SIZE preferred height down to 0) — lets the control size itself from its
+        // actual content, including multi-line wrapped messages, instead of collapsing to
+        // NotificationSkin's built-in (and here unused/empty) messageText's minimum height.
+        this.notification.setPrefHeight(Region.USE_COMPUTED_SIZE);
         this.notification.setMaxHeight(Region.USE_PREF_SIZE);
 
         StackPane.setAlignment(this.notification, Pos.TOP_RIGHT);
