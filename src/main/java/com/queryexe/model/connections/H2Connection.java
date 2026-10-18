@@ -14,6 +14,10 @@ import com.queryexe.components.results.ResultTable;
 import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
+import com.queryexe.model.connections.h2.H2Catalog;
+import com.queryexe.model.connections.h2.H2Catalog.ColumnInfo;
+import com.queryexe.model.connections.h2.H2Catalog.ForeignKeyInfo;
+import com.queryexe.model.connections.h2.H2Catalog.KeyInfo;
 import com.queryexe.model.data.ForeignKeyData;
 import javafx.scene.control.TableColumn;
 
@@ -44,20 +48,88 @@ public class H2Connection extends ConnectionObject {
         super(id, connectionName, dbType, url, username, password, driverInfo);
     }
 
+    // Names read from the catalog are used exactly as stored (quoted identifiers are case-sensitive in H2);
+    // no name at all means "the current schema".
+    private String schemaOrCurrent(String schemaName) throws SQLException {
+        return schemaName != null && !schemaName.isBlank() ? schemaName : catalog().currentSchema();
+    }
+
+    private H2Catalog catalog() {
+        return new H2Catalog(DatabaseConnection.getInstance().getConnection());
+    }
+
+    @Override
+    public java.util.Map<String, java.util.List<String>> getSchemaObjects(String schemaName) {
+        java.util.Map<String, java.util.List<String>> objects = new LinkedHashMap<>();
+        try {
+            String schema = schemaOrCurrent(schemaName);
+            H2Catalog catalog = catalog();
+            putIfAny(objects, "Sequences", catalog.sequences(schema));
+            putIfAny(objects, "Synonyms", catalog.synonyms(schema));
+        } catch (SQLException e) {
+            log.warn("Could not list the sequences/synonyms of {}: {}", schemaName, e.getMessage());
+        }
+        return objects;
+    }
+
+    private static void putIfAny(java.util.Map<String, java.util.List<String>> objects, String group, java.util.List<String> names) {
+        if (!names.isEmpty()) {
+            objects.put(group, names);
+        }
+    }
+
+    /**
+     * {@code FOREIGN KEY (...) REFERENCES schema.table (...) [ON DELETE ..] [ON UPDATE ..]}, over every column
+     * of the key. A referenced table without a known schema is taken to live in {@code defaultSchema}.
+     */
+    private static String foreignKeyClause(ForeignKeyData fk, String defaultSchema) {
+        String referenceSchema = fk.getReferenceSchema() != null ? fk.getReferenceSchema() : defaultSchema;
+        String referenced = referenceSchema != null && !referenceSchema.isBlank()
+                ? H2Catalog.qualified(referenceSchema, fk.getReferenceTable())
+                : H2Catalog.quote(fk.getReferenceTable());
+
+        StringBuilder clause = new StringBuilder("FOREIGN KEY (")
+                .append(String.join(", ", fk.allLocalColumns().stream().map(H2Catalog::quote).toList()))
+                .append(") REFERENCES ").append(referenced).append(" (")
+                .append(String.join(", ", fk.allReferenceColumns().stream().map(H2Catalog::quote).toList()))
+                .append(")");
+        if (fk.getOnDelete() != null && !fk.getOnDelete().isEmpty()) {
+            clause.append(" ON DELETE ").append(fk.getOnDelete());
+        }
+        if (fk.getOnUpdate() != null && !fk.getOnUpdate().isEmpty()) {
+            clause.append(" ON UPDATE ").append(fk.getOnUpdate());
+        }
+        return clause.toString();
+    }
+
+    // The table editor has no field for a default value, so a column keeps the default it already has
+    // (ALTER COLUMN with a full definition would otherwise reset it).
+    private static String defaultClause(ColumnData oldColumn, ColumnData newColumn) {
+        if (newColumn.isAutoIncrement()) {
+            return "";
+        }
+        String defaultValue = newColumn.getDefaultValue() != null
+                ? newColumn.getDefaultValue()
+                : (oldColumn != null ? oldColumn.getDefaultValue() : null);
+        return defaultValue == null ? "" : " DEFAULT " + defaultValue;
+    }
+
+    private static String escapePattern(String value, String escape) {
+        if (escape == null || escape.isEmpty()) {
+            return value;
+        }
+        return value.replace(escape, escape + escape).replace("_", escape + "_").replace("%", escape + "%");
+    }
+
     @Override
     public LinkedHashMap<String, ArrayList<ColumnData>> getAllTablesAndColumns(String schemaName) {
         LinkedHashMap<String, ArrayList<ColumnData>> tablesMap = new LinkedHashMap<>();
 
         try {
-            String normalizedSchemaName = schemaName != null ? schemaName.toUpperCase() : "PUBLIC";
-
-            ArrayList<String> tableNames = getTablesForDatabase(normalizedSchemaName);
-
-            for (String tableName : tableNames) {
-                ArrayList<ColumnData> columns = getColumnsForTable(normalizedSchemaName, tableName);
-                tablesMap.put(tableName, columns);
+            String schema = schemaOrCurrent(schemaName);
+            for (String tableName : getTablesForDatabase(schema)) {
+                tablesMap.put(tableName, getColumnsForTable(schema, tableName));
             }
-
             return tablesMap;
         } catch (SQLException e) {
             log.error("getAllTablesAndColumns failed", e);
@@ -69,14 +141,12 @@ public class H2Connection extends ConnectionObject {
     public ArrayList<String> getTablesForDatabase(String schemaName) throws SQLException {
         ArrayList<String> tableNames = new ArrayList<>();
 
-        String normalizedSchemaName = schemaName != null ? schemaName.toUpperCase() : "PUBLIC";
-
         String query = "SELECT table_name FROM information_schema.tables " +
                 "WHERE table_schema = ? AND table_type = 'BASE TABLE' " +
                 "ORDER BY table_name";
 
         try (PreparedStatement stmt = DatabaseConnection.getInstance().getConnection().prepareStatement(query)) {
-            stmt.setString(1, normalizedSchemaName);
+            stmt.setString(1, schemaOrCurrent(schemaName));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -90,73 +160,31 @@ public class H2Connection extends ConnectionObject {
 
     @Override
     public ArrayList<ColumnData> getColumnsForTable(String schemaName, String tableName) throws SQLException {
-        ArrayList<ColumnData> columns = new ArrayList<ColumnData>();
+        String schema = schemaOrCurrent(schemaName);
+        H2Catalog catalog = catalog();
 
-        String normalizedSchemaName = schemaName != null ? schemaName.toUpperCase() : "PUBLIC";
-
-        String columnQuery =
-                "SELECT " +
-                        "    c.column_name, " +
-                        "    c.data_type, " +
-                        "    CASE WHEN c.is_nullable = 'NO' THEN 1 ELSE 0 END as is_not_null, " +
-                        "    CASE WHEN pk.constraint_type = 'PRIMARY KEY' THEN 1 ELSE 0 END as is_primary_key, " +
-                        "    CASE WHEN pk.constraint_type = 'UNIQUE' THEN 1 ELSE 0 END as is_unique, " +
-                        "    CASE WHEN c.is_identity = 'YES' THEN 1 ELSE 0 END as is_auto_increment, " +
-                        "    pk.constraint_name as unique_index_name " +
-                        "FROM information_schema.columns c " +
-                        "LEFT JOIN ( " +
-                        "    SELECT ku.column_name, tc.constraint_type, tc.constraint_name " +
-                        "    FROM information_schema.key_column_usage ku " +
-                        "    JOIN information_schema.table_constraints tc " +
-                        "        ON ku.constraint_name = tc.constraint_name " +
-                        "        AND ku.table_schema = tc.table_schema " +
-                        "        AND ku.table_name = tc.table_name " +
-                        "    WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE') " +
-                        "        AND ku.table_schema = ? " +
-                        "        AND ku.table_name = ? " +
-                        ") pk ON c.column_name = pk.column_name " +
-                        "WHERE c.table_schema = ? " +
-                        "    AND c.table_name = ? " +
-                        "ORDER BY c.ordinal_position";
-
-        PreparedStatement columnStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
-
-        columnStatement.setString(1, normalizedSchemaName);
-        columnStatement.setString(2, tableName);
-        columnStatement.setString(3, normalizedSchemaName);
-        columnStatement.setString(4, tableName);
-
-        ResultSet resultSet = columnStatement.executeQuery();
-
-        while (resultSet.next()) {
-            String columnName = resultSet.getString("column_name");
-            String dataType = resultSet.getString("data_type");
-            boolean primaryKey = resultSet.getInt("is_primary_key") == 1;
-            boolean notNull = resultSet.getInt("is_not_null") == 1;
-            boolean unique = resultSet.getInt("is_unique") == 1;
-            boolean autoIncrement = resultSet.getInt("is_auto_increment") == 1;
-            String uniqueIndexName = resultSet.getString("unique_index_name");
-
-            // Only set uniqueIndexName if the column is actually unique (not PK)
-            if (!unique || primaryKey) {
-                uniqueIndexName = null;
+        Set<String> primaryKey = new HashSet<>();
+        // only single-column UNIQUE constraints make a column unique by itself
+        Map<String, String> uniqueConstraintByColumn = new HashMap<>();
+        for (KeyInfo key : catalog.keys(schema, tableName)) {
+            if (key.isPrimary()) {
+                primaryKey.addAll(key.getColumns());
+            } else if (key.getColumns().size() == 1) {
+                uniqueConstraintByColumn.put(key.getColumns().get(0), key.getName());
             }
-
-            ColumnData columnData = new ColumnData(
-                    columnName,
-                    dataType.toUpperCase(),
-                    primaryKey,
-                    notNull,
-                    unique,
-                    autoIncrement,
-                    uniqueIndexName
-            );
-            columns.add(columnData);
         }
 
-        resultSet.close();
-        columnStatement.close();
-
+        ArrayList<ColumnData> columns = new ArrayList<>();
+        for (ColumnInfo column : catalog.columns(schema, tableName)) {
+            boolean isPrimaryKey = primaryKey.contains(column.getName());
+            String uniqueName = isPrimaryKey ? null : uniqueConstraintByColumn.get(column.getName());
+            ColumnData data = new ColumnData(column.getName(), column.getTypeSql(), isPrimaryKey, !column.isNullable(),
+                    uniqueName != null, column.isIdentity(), uniqueName);
+            if (!column.isIdentity() && !column.isGenerated()) {
+                data.setDefaultValue(column.getDefaultValue());
+            }
+            columns.add(data);
+        }
         return columns;
     }
 
@@ -294,8 +322,8 @@ public class H2Connection extends ConnectionObject {
                     Map<String, String> index = new java.util.HashMap<>();
                     index.put("INDEX_NAME", rs.getString("INDEX_NAME"));
                     index.put("INDEX_TYPE", rs.getString("INDEX_TYPE"));
-                    String indexName = rs.getString("INDEX_NAME");
-                    if (indexName.startsWith("PRIMARY_KEY") || indexName.contains("_UNIQUE")) {
+                    String indexType = rs.getString("INDEX_TYPE");
+                    if (indexType != null && (indexType.contains("UNIQUE") || indexType.contains("PRIMARY"))) {
                         index.put("NON_UNIQUE", "0");
                     } else {
                         index.put("NON_UNIQUE", "1");
@@ -400,39 +428,26 @@ public class H2Connection extends ConnectionObject {
     @Override
     public ArrayList<String> getDatabases(String name) {
         ArrayList<String> schemas = new ArrayList<>();
-        try {
-            String query;
-            PreparedStatement statement;
+        String query = "SELECT schema_name FROM information_schema.schemata WHERE schema_name <> 'INFORMATION_SCHEMA' ";
+        boolean filtered = name != null && !name.trim().isEmpty();
+        if (filtered) {
+            // the configured name is user text, so match it regardless of case
+            query += "AND UPPER(schema_name) = UPPER(?) ";
+        }
+        query += "ORDER BY schema_name";
 
-            if (name != null && !name.trim().isEmpty()) {
-                query = "SELECT schema_name FROM information_schema.schemata " +
-                        "WHERE schema_name = ? AND schema_name NOT IN ('INFORMATION_SCHEMA')";
-
-                statement = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
-                statement.setString(1, name.toUpperCase());
-            } else {
-                query = "SELECT schema_name FROM information_schema.schemata " +
-                        "WHERE schema_name NOT IN ('INFORMATION_SCHEMA') " +
-                        "ORDER BY schema_name";
-
-                statement = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
+        try (PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(query)) {
+            if (filtered) {
+                statement.setString(1, name);
             }
-
-            ResultSet result = statement.executeQuery();
-
-            while (result.next()) {
-                schemas.add(result.getString("schema_name"));
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    schemas.add(result.getString("schema_name"));
+                }
             }
-
-            statement.close();
-            result.close();
-
-            if (name != null && !name.trim().isEmpty() && schemas.isEmpty()) {
+            if (filtered && schemas.isEmpty()) {
                 log.warn("Schema '{}' not found.", name);
             }
-
-            return schemas;
-
         } catch (SQLException e) {
             log.error("getDatabases failed", e);
         }
@@ -442,196 +457,8 @@ public class H2Connection extends ConnectionObject {
     @Override
     public String generateCreateScript(String tableName, String dbName) {
         try {
-            StringBuilder script = new StringBuilder();
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-
-            // Get primary keys
-            Set<String> primaryKeys = new HashSet<>();
-            try (ResultSet pkRs = metaData.getPrimaryKeys(null, null, tableName)) {
-                while (pkRs.next()) {
-                    primaryKeys.add(pkRs.getString("COLUMN_NAME"));
-                }
-            }
-
-            // Get foreign keys
-            Map<String, ForeignKeyData> foreignKeys = extractForeignKeys(dbName, tableName);
-
-            // Get all indexes (including unique and regular)
-            Map<String, List<String>> indexes = new LinkedHashMap<>();
-            Map<String, Boolean> indexUniqueness = new HashMap<>();
-            try (ResultSet indexInfo = metaData.getIndexInfo(null, dbName, tableName, false, false)) {
-                while (indexInfo.next()) {
-                    String indexName = indexInfo.getString("INDEX_NAME");
-                    if (indexName == null || indexName.contains("PRIMARY_KEY")) {
-                        continue;
-                    }
-                    String columnName = indexInfo.getString("COLUMN_NAME");
-                    boolean nonUnique = indexInfo.getBoolean("NON_UNIQUE");
-
-                    indexes.computeIfAbsent(indexName, k -> new ArrayList<>()).add(columnName);
-                    indexUniqueness.put(indexName, !nonUnique);
-                }
-            }
-
-            script.append("CREATE TABLE \"").append(tableName).append("\" (\n");
-
-            // Use the SAME query structure as getColumnsForTable - it works!
-            String normalizedSchemaName = dbName != null ? dbName.toUpperCase() : "PUBLIC";
-
-            String columnQuery = """
-                SELECT 
-                    c.COLUMN_NAME,
-                    c.DATA_TYPE,
-                    c.CHARACTER_MAXIMUM_LENGTH,
-                    c.NUMERIC_PRECISION,
-                    c.NUMERIC_SCALE,
-                    c.IS_NULLABLE,
-                    c.COLUMN_DEFAULT,
-                    c.IS_IDENTITY
-                FROM INFORMATION_SCHEMA.COLUMNS c
-                WHERE c.TABLE_SCHEMA = ? 
-                  AND c.TABLE_NAME = ?
-                ORDER BY c.ORDINAL_POSITION
-                """;
-
-            PreparedStatement columnStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
-            columnStatement.setString(1, normalizedSchemaName);
-            columnStatement.setString(2, tableName);
-
-            try (ResultSet rs = columnStatement.executeQuery()) {
-                boolean first = true;
-                while (rs.next()) {
-                    if (!first) script.append(",\n");
-                    first = false;
-
-                    String columnName = rs.getString("COLUMN_NAME");
-                    String dataType = rs.getString("DATA_TYPE");
-                    String isNullable = rs.getString("IS_NULLABLE");
-                    String columnDefault = rs.getString("COLUMN_DEFAULT");
-                    String isIdentity = rs.getString("IS_IDENTITY");
-
-                    // Build column type with precision/scale if applicable
-                    String fullType = dataType;
-                    if (dataType.equalsIgnoreCase("CHARACTER VARYING") ||
-                            dataType.equalsIgnoreCase("VARCHAR")) {
-                        Integer maxLength = rs.getObject("CHARACTER_MAXIMUM_LENGTH") != null ?
-                                rs.getInt("CHARACTER_MAXIMUM_LENGTH") : null;
-                        if (maxLength != null && maxLength > 0) {
-                            fullType = "VARCHAR(" + maxLength + ")";
-                        } else {
-                            fullType = "VARCHAR";
-                        }
-                    } else if (dataType.equalsIgnoreCase("CHARACTER") ||
-                            dataType.equalsIgnoreCase("CHAR")) {
-                        Integer maxLength = rs.getObject("CHARACTER_MAXIMUM_LENGTH") != null ?
-                                rs.getInt("CHARACTER_MAXIMUM_LENGTH") : null;
-                        if (maxLength != null && maxLength > 0) {
-                            fullType = "CHAR(" + maxLength + ")";
-                        } else {
-                            fullType = "CHAR";
-                        }
-                    } else if (dataType.equalsIgnoreCase("DECIMAL") ||
-                            dataType.equalsIgnoreCase("NUMERIC")) {
-                        Integer precision = rs.getObject("NUMERIC_PRECISION") != null ?
-                                rs.getInt("NUMERIC_PRECISION") : null;
-                        Integer scale = rs.getObject("NUMERIC_SCALE") != null ?
-                                rs.getInt("NUMERIC_SCALE") : null;
-                        if (precision != null && scale != null) {
-                            fullType = "DECIMAL(" + precision + "," + scale + ")";
-                        } else if (precision != null) {
-                            fullType = "DECIMAL(" + precision + ")";
-                        } else {
-                            fullType = "DECIMAL";
-                        }
-                    }
-
-                    script.append("  \"").append(columnName).append("\" ");
-                    script.append(fullType);
-
-                    // Add IDENTITY/AUTO_INCREMENT if present
-                    if ("YES".equalsIgnoreCase(isIdentity)) {
-                        script.append(" GENERATED BY DEFAULT AS IDENTITY");
-                    }
-
-                    // Add NOT NULL if applicable
-                    if ("NO".equals(isNullable)) {
-                        script.append(" NOT NULL");
-                    }
-
-                    // Add DEFAULT if present (and not identity)
-                    if (columnDefault != null && !"YES".equalsIgnoreCase(isIdentity)) {
-                        script.append(" DEFAULT ").append(columnDefault);
-                    }
-                }
-
-                // Add PRIMARY KEY constraint
-                if (!primaryKeys.isEmpty()) {
-                    script.append(",\n  CONSTRAINT PK_").append(tableName).append(" PRIMARY KEY (");
-                    script.append(primaryKeys.stream()
-                            .map(pk -> "\"" + pk + "\"")
-                            .collect(Collectors.joining(", ")));
-                    script.append(")");
-                }
-
-                // Add unique indexes as constraints
-                for (Map.Entry<String, List<String>> entry : indexes.entrySet()) {
-                    String indexName = entry.getKey();
-                    List<String> indexColumns = entry.getValue();
-                    boolean isUnique = indexUniqueness.get(indexName);
-
-                    if (isUnique) {
-                        script.append(",\n  ");
-                        script.append("CONSTRAINT \"").append(indexName).append("\" UNIQUE");
-                        script.append(" (");
-                        script.append(indexColumns.stream()
-                                .map(col -> "\"" + col + "\"")
-                                .collect(Collectors.joining(", ")));
-                        script.append(")");
-                    }
-                }
-
-                // Add FOREIGN KEY constraints
-                for (Map.Entry<String, ForeignKeyData> entry : foreignKeys.entrySet()) {
-                    ForeignKeyData fk = entry.getValue();
-                    script.append(",\n  CONSTRAINT \"").append(fk.getConstraintName()).append("\" ")
-                            .append("FOREIGN KEY (\"").append(fk.getLocalColumn()).append("\") ")
-                            .append("REFERENCES \"").append(fk.getReferenceTable()).append("\" ")
-                            .append("(\"").append(fk.getReferenceColumn()).append("\")");
-
-                    // Add ON DELETE action
-                    if (fk.getOnDelete() != null && !fk.getOnDelete().isEmpty()) {
-                        script.append(" ON DELETE ").append(fk.getOnDelete());
-                    }
-
-                    // Add ON UPDATE action
-                    if (fk.getOnUpdate() != null && !fk.getOnUpdate().isEmpty()) {
-                        script.append(" ON UPDATE ").append(fk.getOnUpdate());
-                    }
-                }
-
-                script.append("\n);");
-
-                // Create non-unique indexes separately (H2 requirement)
-                for (Map.Entry<String, List<String>> entry : indexes.entrySet()) {
-                    String indexName = entry.getKey();
-                    List<String> indexColumns = entry.getValue();
-                    boolean isUnique = indexUniqueness.get(indexName);
-
-                    if (!isUnique) {
-                        script.append("\nCREATE INDEX \"").append(indexName).append("\" ON \"")
-                                .append(tableName).append("\" (");
-                        script.append(indexColumns.stream()
-                                .map(col -> "\"" + col + "\"")
-                                .collect(Collectors.joining(", ")));
-                        script.append(");");
-                    }
-                }
-            }
-
-            columnStatement.close();
-            return script.toString();
-
-        } catch (Exception e) {
+            return catalog().createScript(schemaOrCurrent(dbName), tableName);
+        } catch (SQLException e) {
             log.error("generateCreateScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
@@ -639,42 +466,15 @@ public class H2Connection extends ConnectionObject {
 
     @Override
     public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
-        Map<String, ForeignKeyData> foreignKeys = new HashMap<>();
-        DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-
-        ResultSet fkRs = null;
-        try {
-            fkRs = metaData.getImportedKeys(null, null, tableName);
-
-            if (!fkRs.isBeforeFirst() && dbName != null) {
-                fkRs.close();
-                fkRs = metaData.getImportedKeys(dbName, null, tableName);
-            }
-
-            if (!fkRs.isBeforeFirst()) {
-                fkRs.close();
-                fkRs = metaData.getImportedKeys(null, "PUBLIC", tableName);
-            }
-
-            while (fkRs.next()) {
-                String fkColumnName = fkRs.getString("FKCOLUMN_NAME");
-                String constraintName = fkRs.getString("FK_NAME");
-
-                foreignKeys.put(constraintName, new ForeignKeyData(
-                        constraintName,
-                        fkColumnName,
-                        fkRs.getString("PKTABLE_NAME"),
-                        fkRs.getString("PKCOLUMN_NAME"),
-                        fkRs.getInt("DELETE_RULE"),
-                        fkRs.getInt("UPDATE_RULE")
-                ));
-            }
-        } finally {
-            if (fkRs != null) {
-                fkRs.close();
-            }
+        Map<String, ForeignKeyData> foreignKeys = new LinkedHashMap<>();
+        for (ForeignKeyInfo fk : catalog().foreignKeys(schemaOrCurrent(dbName), tableName)) {
+            ForeignKeyData data = new ForeignKeyData(fk.getName(), fk.getColumns().get(0), fk.getReferenceTable(),
+                    fk.getReferenceColumns().get(0), fk.getDeleteRule(), fk.getUpdateRule());
+            data.setReferenceSchema(fk.getReferenceSchema());
+            data.setLocalColumns(fk.getColumns());
+            data.setReferenceColumns(fk.getReferenceColumns());
+            foreignKeys.put(fk.getName(), data);
         }
-
         return foreignKeys;
     }
 
@@ -685,50 +485,10 @@ public class H2Connection extends ConnectionObject {
 
             DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
 
-            ResultSet columns = null;
-
-            try {
-                String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
-                columns = metaData.getColumns(catalog, null, tableName, null);
-            } catch (Exception e) {
-            }
-
-            if (columns == null || !columns.next()) {
-                try {
-                    if (columns != null) columns.close();
-                } catch (Exception ignored) {
-                }
-
-                columns = metaData.getColumns(dbName, null, tableName, null);
-            }
-
-            if (columns == null || !columns.next()) {
-                try {
-                    if (columns != null) columns.close();
-                } catch (Exception ignored) {
-                }
-
-                columns = metaData.getColumns(null, "PUBLIC", tableName, null);
-            }
-
-            if (columns == null || !columns.next()) {
-                try {
-                    if (columns != null) columns.close();
-                } catch (Exception ignored) {
-                }
-
-                columns = metaData.getColumns(null, null, tableName, null);
-            }
-
-            if (columns != null) {
-                columns.close();
-                String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
-                if (catalog != null && !catalog.isEmpty()) {
-                    columns = metaData.getColumns(catalog, null, tableName, null);
-                } else {
-                    columns = metaData.getColumns(null, null, tableName, null);
-                }
-            }
+            // exact schema + table: the name arguments of getColumns are LIKE patterns, so '_' and '%' must be escaped
+            String schema = schemaOrCurrent(dbName);
+            String escape = metaData.getSearchStringEscape();
+            ResultSet columns = metaData.getColumns(null, escapePattern(schema, escape), escapePattern(tableName, escape), null);
 
             List<String> columnNames = new ArrayList<>();
             List<String> columnValues = new ArrayList<>();
@@ -741,7 +501,8 @@ public class H2Connection extends ConnectionObject {
                 String autoIncrement = columns.getString("IS_AUTOINCREMENT");
                 boolean isAutoIncrement = "YES".equalsIgnoreCase(autoIncrement);
 
-                if (isAutoIncrement || "IDENTITY".equals(dataType)) {
+                boolean isGenerated = "YES".equalsIgnoreCase(columns.getString("IS_GENERATEDCOLUMN"));
+                if (isAutoIncrement || isGenerated || "IDENTITY".equals(dataType)) {
                     continue;
                 }
 
@@ -803,7 +564,7 @@ public class H2Connection extends ConnectionObject {
                 return "-- ERROR: No columns found for table: " + tableName;
             }
 
-            insertScript.append("INSERT INTO \"").append(tableName).append("\"\n");
+            insertScript.append("INSERT INTO ").append(H2Catalog.qualified(schema, tableName)).append("\n");
             insertScript.append("    (");
 
             for (int i = 0; i < columnNames.size(); i++) {
@@ -832,8 +593,16 @@ public class H2Connection extends ConnectionObject {
     }
 
     @Override
+    public SqlSyntax getSqlSyntax() {
+        return SqlSyntax.H2;
+    }
+
+    @Override
     public String generateSelectScript(String tableName, String databaseName, int limit) {
-        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+        String target = databaseName != null && !databaseName.isBlank()
+                ? H2Catalog.qualified(databaseName, tableName)
+                : H2Catalog.quote(tableName);
+        return "SELECT * FROM " + target + " LIMIT " + limit + ";";
     }
 
     @Override
@@ -848,22 +617,14 @@ public class H2Connection extends ConnectionObject {
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-
-            for (TableColumn<TableRowData, ?> col : tableColumns) {
-                String colName = col.getText();
-                columnNames.add(colName);
-
-                ResultSet columns = metaData.getColumns(null, null, tableName, colName);
-                if (columns.next()) {
-                    columnTypes.add(columns.getInt("DATA_TYPE"));
-                } else {
-                    columnTypes.add(Types.VARCHAR);
-                }
-                columns.close();
+            // the grid already knows each column's real name and SQL type; looking them up in the metadata by
+            // table name alone would ignore the schema and treat '_' as a wildcard
+            for (int i = 0; i < tableColumns.size(); i++) {
+                columnNames.add(quoteIdentifier(table.getColumnNames().get(i)));
+                columnTypes.add(table.getColumnSqlType(i));
             }
 
-            insertScript.append("INSERT INTO ").append(tableName)
+            insertScript.append("INSERT INTO ").append(table.getQualifiedTableName())
                     .append(" (")
                     .append(String.join(", ", columnNames))
                     .append(")\nVALUES (");
@@ -927,6 +688,10 @@ public class H2Connection extends ConnectionObject {
 
             sql.append("    \"").append(col.getColumnName()).append("\" ").append(col.getDataType());
 
+            if (!col.isAutoIncrement() && col.getDefaultValue() != null) {
+                sql.append(" DEFAULT ").append(col.getDefaultValue());
+            }
+
             if (col.isAutoIncrement()) {
                 sql.append(" GENERATED BY DEFAULT AS IDENTITY");
             }
@@ -968,17 +733,8 @@ public class H2Connection extends ConnectionObject {
         for (int i = 0; i < foreignKeys.size(); i++) {
             ForeignKeyData fk = foreignKeys.get(i);
 
-            sql.append("    CONSTRAINT \"").append(fk.getConstraintName()).append("\" ")
-                    .append("FOREIGN KEY (\"").append(fk.getLocalColumn()).append("\") ")
-                    .append("REFERENCES \"").append(fk.getReferenceTable()).append("\" ")
-                    .append("(\"").append(fk.getReferenceColumn()).append("\")");
-
-            if (fk.getOnDelete() != null && !fk.getOnDelete().isEmpty()) {
-                sql.append(" ON DELETE ").append(fk.getOnDelete());
-            }
-            if (fk.getOnUpdate() != null && !fk.getOnUpdate().isEmpty()) {
-                sql.append(" ON UPDATE ").append(fk.getOnUpdate());
-            }
+            sql.append("    CONSTRAINT ").append(H2Catalog.quote(fk.getConstraintName())).append(" ")
+                    .append(foreignKeyClause(fk, schemaName));
 
             if (i < foreignKeys.size() - 1) {
                 sql.append(",");
@@ -1367,8 +1123,8 @@ public class H2Connection extends ConnectionObject {
                     if (wasRenamed) {
                         // Apply modifications one by one for renamed columns
                         if (!oldCol.getDataType().equalsIgnoreCase(newCol.getDataType())) {
-                            sql.append(String.format("ALTER TABLE \"%s\".\"%s\" ALTER COLUMN \"%s\" %s;\n",
-                                    databaseName, oldTableName, newColName, newCol.getDataType()));
+                            sql.append(String.format("ALTER TABLE \"%s\".\"%s\" ALTER COLUMN \"%s\" %s%s;\n",
+                                    databaseName, oldTableName, newColName, newCol.getDataType(), defaultClause(oldCol, newCol)));
                         }
                         if (oldCol.isNotNull() != newCol.isNotNull()) {
                             if (newCol.isNotNull()) {
@@ -1381,18 +1137,20 @@ public class H2Connection extends ConnectionObject {
                         }
                         if (oldCol.isAutoIncrement() != newCol.isAutoIncrement()) {
                             // Recreate column with/without AUTO_INCREMENT
-                            sql.append(String.format("ALTER TABLE \"%s\".\"%s\" ALTER COLUMN \"%s\" %s%s%s;\n",
+                            sql.append(String.format("ALTER TABLE \"%s\".\"%s\" ALTER COLUMN \"%s\" %s%s%s%s;\n",
                                     databaseName, oldTableName, newColName,
                                     newCol.getDataType(),
+                                    defaultClause(oldCol, newCol),
                                     newCol.isNotNull() ? " NOT NULL" : "",
                                     newCol.isAutoIncrement() ? " GENERATED BY DEFAULT AS IDENTITY" : ""));
                         }
                     } else {
                         // For non-renamed columns, use single ALTER statement
-                        columnsToModify.add(String.format("ALTER COLUMN \"%s\" %s%s%s",
+                        columnsToModify.add(String.format("ALTER COLUMN \"%s\" %s%s%s%s",
                                 newColName,
                                 newCol.getDataType(),
-                                newCol.isNotNull() ? " NOT NULL" : "",
+                                defaultClause(oldCol, newCol),
+                                newCol.isNotNull() ? " NOT NULL" : " NULL",
                                 newCol.isAutoIncrement() ? " GENERATED BY DEFAULT AS IDENTITY" : ""
                         ));
                     }
@@ -1457,16 +1215,8 @@ public class H2Connection extends ConnectionObject {
         }
 
         for (ForeignKeyData fk : fksToAdd) {
-            sql.append(String.format("ALTER TABLE \"%s\".\"%s\" ADD CONSTRAINT \"%s\" FOREIGN KEY (\"%s\") REFERENCES \"%s\"(\"%s\")",
-                    databaseName, oldTableName, fk.getConstraintName(), fk.getLocalColumn(),
-                    fk.getReferenceTable(), fk.getReferenceColumn()));
-
-            if (fk.getOnDelete() != null && !fk.getOnDelete().isEmpty()) {
-                sql.append(" ON DELETE ").append(fk.getOnDelete());
-            }
-            if (fk.getOnUpdate() != null && !fk.getOnUpdate().isEmpty()) {
-                sql.append(" ON UPDATE ").append(fk.getOnUpdate());
-            }
+            sql.append(String.format("ALTER TABLE \"%s\".\"%s\" ADD CONSTRAINT %s %s",
+                    databaseName, oldTableName, H2Catalog.quote(fk.getConstraintName()), foreignKeyClause(fk, databaseName)));
             sql.append(";\n");
         }
 
@@ -1521,7 +1271,7 @@ public class H2Connection extends ConnectionObject {
 
     @Override
     public void createDatabase(String databaseName) throws SQLException {
-        String sql = "CREATE SCHEMA IF NOT EXISTS \"" + databaseName + "\"";
+        String sql = "CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(databaseName);
 
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
@@ -1530,7 +1280,7 @@ public class H2Connection extends ConnectionObject {
 
     @Override
     public void deleteDatabase(String databaseName) throws SQLException {
-        String sql = "DROP SCHEMA IF EXISTS \"" + databaseName + "\"";
+        String sql = "DROP SCHEMA IF EXISTS " + quoteIdentifier(databaseName);
 
         try (PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql)) {
             statement.executeUpdate();
@@ -1539,7 +1289,7 @@ public class H2Connection extends ConnectionObject {
 
     @Override
     public void useDatabase(String databaseName) throws SQLException {
-        String sql = "SET SCHEMA \"" + databaseName + "\"";
+        String sql = "SET SCHEMA " + quoteIdentifier(databaseName);
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.execute();
         statement.close();
@@ -1547,21 +1297,14 @@ public class H2Connection extends ConnectionObject {
 
     @Override
     public double getTableSize(String schema, String table) throws SQLException {
-        String query = """
-                SELECT ROUND(DB_OBJECT_TOTAL_SIZE('TABLE', ?, ?) / 1024.0 / 1024.0, 2) AS total_size_mb
-                """;
-
-        PreparedStatement pstmt = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
-        pstmt.setString(1, schema.toUpperCase());
-        pstmt.setString(2, table.toUpperCase());
-
-        ResultSet rs = pstmt.executeQuery();
-        double sizeMB = rs.next() ? rs.getDouble("total_size_mb") : -1;
-
-        rs.close();
-        pstmt.close();
-
-        return sizeMB;
+        // DISK_SPACE_USED takes the table name as H2 would parse it, so quote and qualify it
+        try (PreparedStatement stmt = DatabaseConnection.getInstance().getConnection()
+                .prepareStatement("SELECT ROUND(DISK_SPACE_USED(?) / 1024.0 / 1024.0, 2)")) {
+            stmt.setString(1, H2Catalog.qualified(schemaOrCurrent(schema), table));
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getDouble(1) : -1;
+            }
+        }
     }
 
     @Override

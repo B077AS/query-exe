@@ -1,5 +1,7 @@
 package com.queryexe.utils;
 
+import lombok.extern.slf4j.Slf4j;
+
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
 import com.sun.jna.platform.win32.WinDef.HWND;
@@ -8,6 +10,7 @@ import com.sun.jna.platform.win32.WinDef.WPARAM;
 import com.sun.jna.win32.StdCallLibrary;
 import com.sun.jna.win32.W32APIOptions;
 
+@Slf4j
 public class WindowsThemeUtil {
 
     private static final int DWMWA_CLOAK                  = 13;
@@ -45,7 +48,7 @@ public class WindowsThemeUtil {
 
             if (hwnd == null) {
                 hwnd = User32.INSTANCE.GetActiveWindow();
-                if (hwnd == null) { System.err.println("Could not find window"); return; }
+                if (hwnd == null) { log.warn("Could not find window to apply the dark title bar"); return; }
                 applyDarkMode(hwnd);
                 return;
             }
@@ -56,8 +59,7 @@ public class WindowsThemeUtil {
             }
 
         } catch (Exception e) {
-            System.err.println("Could not enable dark title bar: " + e.getMessage());
-            e.printStackTrace();
+            log.warn("Could not enable dark title bar", e);
         }
     }
 

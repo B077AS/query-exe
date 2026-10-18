@@ -129,13 +129,13 @@ public class App extends Application {
         mainStackPane = new StackPane();
         mainStackPane.getChildren().addAll(borderPane, modalPane);
 
-        scene = new Scene(mainStackPane, 1100, 500);
+        scene = new Scene(mainStackPane, 1300, 500);
         Application.setUserAgentStylesheet(App.class.getClassLoader().getResource("style.css").toExternalForm());
         ThemeManager.get().applyFromSettings(scene);
         stage.setTitle("QueryExe");
         stage.setScene(scene);
-        stage.setMinWidth(1100);
-        stage.setMinHeight(640);
+        stage.setMinWidth(1300);
+        stage.setMinHeight(780);
         stage.setMaximized(true);
         stage.setOpacity(0);
         stage.show();

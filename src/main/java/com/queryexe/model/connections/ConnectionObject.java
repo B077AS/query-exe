@@ -100,6 +100,35 @@ public abstract class ConnectionObject {
 
     public abstract double getTableSize(String database, String table) throws SQLException;
 
+    public abstract SqlSyntax getSqlSyntax();
+
+    /**
+     * Other objects of a database/schema that the tree lists next to its tables, by group title ("Sequences",
+     * "Indexes", ...), in display order. Empty groups are left out; engines without support return nothing.
+     */
+    public java.util.Map<String, java.util.List<String>> getSchemaObjects(String databaseName) {
+        return new java.util.LinkedHashMap<>();
+    }
+
+    public String quoteIdentifier(String identifier) {
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
+    public String qualifyTable(String catalog, String schema, String table) {
+        if (schema != null && !schema.isEmpty()) {
+            return quoteIdentifier(schema) + "." + quoteIdentifier(table);
+        }
+        return quoteIdentifier(table);
+    }
+
+    public boolean isTableReferenceAmbiguous(String catalog, String schema, String table) {
+        return false;
+    }
+
+    public String generateDefaultsOnlyInsert(String qualifiedTable) {
+        return "INSERT INTO " + qualifiedTable + " DEFAULT VALUES";
+    }
+
     public String getSimpleURL() {
         if (databaseName == null || databaseName.isBlank()) {
             return host + ":" + port;

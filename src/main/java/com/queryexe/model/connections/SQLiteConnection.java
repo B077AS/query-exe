@@ -2,21 +2,26 @@ package com.queryexe.model.connections;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Types;
+import java.sql.SQLFeatureNotSupportedException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.StringJoiner;
 
 import javafx.collections.ObservableList;
 import javafx.scene.control.TableCell;
+import com.queryexe.model.connections.sqlite.SqliteCatalog;
+import com.queryexe.model.connections.sqlite.SqliteCatalog.ColumnInfo;
+import com.queryexe.model.connections.sqlite.SqliteCatalog.ForeignKeyInfo;
+import com.queryexe.model.connections.sqlite.SqliteCatalog.IndexInfo;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.components.results.ResultTable;
@@ -44,21 +49,40 @@ public class SQLiteConnection extends ConnectionObject {
         super(id, connectionName, dbType, url, username, password, driverInfo);
     }
 
+    private SqliteCatalog catalog() {
+        return new SqliteCatalog(DatabaseConnection.getInstance().getConnection());
+    }
+
+    @Override
+    public java.util.Map<String, java.util.List<String>> getSchemaObjects(String databaseName) {
+        java.util.Map<String, java.util.List<String>> objects = new LinkedHashMap<>();
+        try {
+            SqliteCatalog catalog = catalog();
+            List<String> indexes = catalog.indexNames(databaseName);
+            List<String> triggers = catalog.triggerNames(databaseName);
+            if (!indexes.isEmpty()) {
+                objects.put("Indexes", indexes);
+            }
+            if (!triggers.isEmpty()) {
+                objects.put("Triggers", triggers);
+            }
+        } catch (SQLException e) {
+            log.warn("Could not list the indexes/triggers of {}: {}", databaseName, e.getMessage());
+        }
+        return objects;
+    }
+
+    // ------------------------------------------------------------------------------------ structure
+
     @Override
     public LinkedHashMap<String, ArrayList<ColumnData>> getAllTablesAndColumns(String databaseName) {
         LinkedHashMap<String, ArrayList<ColumnData>> tablesMap = new LinkedHashMap<>();
 
         try {
-            // Get all tables from the specified database (or main if null/empty)
-            String schema = (databaseName == null || databaseName.isEmpty()) ? "main" : databaseName;
-
-            ArrayList<String> tableNames = getTablesForDatabase(schema);
-
-            for (String tableName : tableNames) {
-                ArrayList<ColumnData> columns = getColumnsForTable(schema, tableName);
-                tablesMap.put(tableName, columns);
+            String schema = SqliteCatalog.schemaOrMain(databaseName);
+            for (String tableName : getTablesForDatabase(schema)) {
+                tablesMap.put(tableName, getColumnsForTable(schema, tableName));
             }
-
             return tablesMap;
         } catch (SQLException e) {
             log.error("getAllTablesAndColumns failed", e);
@@ -68,644 +92,306 @@ public class SQLiteConnection extends ConnectionObject {
 
     @Override
     public ArrayList<String> getTablesForDatabase(String databaseName) throws SQLException {
-        ArrayList<String> tableNames = new ArrayList<>();
-
-        // Get all tables from the specified database (or main if null/empty)
-        String schema = (databaseName == null || databaseName.isEmpty()) ? "main" : databaseName;
-
-        String query = "SELECT name FROM " + schema + ".sqlite_master " +
-                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
-                "ORDER BY name";
-
-        try (PreparedStatement stmt = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                tableNames.add(rs.getString("name"));
-            }
-        }
-
-        return tableNames;
+        return new ArrayList<>(catalog().tables(databaseName));
     }
 
     @Override
     public ArrayList<ColumnData> getColumnsForTable(String schemaName, String tableName) throws SQLException {
+        SqliteCatalog catalog = catalog();
+
+        // a column is unique by itself only through a single-column UNIQUE constraint or unique index
+        Map<String, String> uniqueIndexByColumn = new HashMap<>();
+        for (IndexInfo index : catalog.indexes(schemaName, tableName)) {
+            if (index.isUnique() && !"pk".equals(index.getOrigin()) && index.getColumns().size() == 1) {
+                uniqueIndexByColumn.putIfAbsent(index.getColumns().get(0), index.getName());
+            }
+        }
+        boolean autoIncrement = catalog.isAutoincrement(schemaName, tableName);
+
         ArrayList<ColumnData> columns = new ArrayList<>();
-        
-        // Use "main" as default schema if null/empty
-        String schema = (schemaName == null || schemaName.isEmpty()) ? "main" : schemaName;
-
-        // Get table info using PRAGMA table_info with schema prefix
-        String columnQuery = "PRAGMA " + schema + ".table_info(" + tableName + ")";
-        PreparedStatement columnStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
-        ResultSet resultSet = columnStatement.executeQuery();
-
-        // Check table definition once for AUTOINCREMENT
-        String createTableQuery = "SELECT sql FROM " + schema + ".sqlite_master WHERE type = 'table' AND name = ?";
-        PreparedStatement createStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(createTableQuery);
-        createStmt.setString(1, tableName);
-        ResultSet createRs = createStmt.executeQuery();
-        String createSql = "";
-        if (createRs.next()) {
-            createSql = createRs.getString("sql");
-            if (createSql == null) createSql = "";
-        }
-        createStmt.close();
-        createRs.close();
-
-        while (resultSet.next()) {
-            String columnName = resultSet.getString("name");
-            String dataType = resultSet.getString("type").toUpperCase();
-            boolean primaryKey = resultSet.getInt("pk") > 0;
-            boolean notNull = resultSet.getInt("notnull") == 1;
-            boolean unique = false; // Will be determined below
-            boolean autoIncrement = false;
-
-            // Check if it's autoincrement (only for INTEGER PRIMARY KEY)
-            if (primaryKey && dataType.toUpperCase().contains("INTEGER")) {
-                if (createSql.toUpperCase().contains("AUTOINCREMENT")) {
-                    autoIncrement = true;
-                }
+        for (ColumnInfo column : catalog.columns(schemaName, tableName)) {
+            boolean primaryKey = column.getPrimaryKeyPosition() > 0;
+            String uniqueName = primaryKey ? null : uniqueIndexByColumn.get(column.getName());
+            ColumnData data = new ColumnData(column.getName(), column.getType().toUpperCase(), primaryKey,
+                    column.isNotNull(), uniqueName != null, primaryKey && autoIncrement, uniqueName);
+            if (!column.isGenerated()) {
+                data.setDefaultValue(column.getDefaultValue());
             }
-
-            // Check for UNIQUE constraint
-            if (createSql.toUpperCase().contains("UNIQUE")) {
-                // Simple check - could be enhanced with regex if needed
-                String upperSql = createSql.toUpperCase();
-                String upperColName = columnName.toUpperCase();
-                if (upperSql.contains(upperColName) &&
-                        (upperSql.contains(upperColName + " UNIQUE") ||
-                                upperSql.contains("UNIQUE(" + upperColName + ")") ||
-                                upperSql.contains("UNIQUE (" + upperColName + ")"))) {
-                    unique = true;
-                }
-            }
-
-            ColumnData columnData = new ColumnData(
-                    columnName,
-                    dataType,
-                    primaryKey,
-                    notNull,
-                    unique,
-                    autoIncrement
-            );
-            columns.add(columnData);
+            columns.add(data);
         }
-        
-        columnStatement.close();
-        resultSet.close();
-
         return columns;
     }
 
     @Override
     public DetailedColumnData getDetailedColumnInfo(String schemaName, String tableName, String columnName) throws SQLException {
-        DetailedColumnData info = new DetailedColumnData();
+        String schema = SqliteCatalog.schemaOrMain(schemaName);
+        SqliteCatalog catalog = catalog();
 
-        // Use "main" as default schema if null/empty
-        String schema = (schemaName == null || schemaName.isEmpty()) ? "main" : schemaName;
-
-        // 1. Get basic column metadata using PRAGMA table_info
-        String columnQuery = "PRAGMA " + schema + ".table_info(" + tableName + ")";
-        PreparedStatement columnStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
-        ResultSet rs = columnStmt.executeQuery();
-
-        // Get CREATE TABLE statement for additional analysis
-        String createTableQuery = "SELECT sql FROM " + schema + ".sqlite_master WHERE type = 'table' AND name = ?";
-        PreparedStatement createStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(createTableQuery);
-        createStmt.setString(1, tableName);
-        ResultSet createRs = createStmt.executeQuery();
-        String createSql = "";
-        if (createRs.next()) {
-            createSql = createRs.getString("sql");
-            if (createSql == null) createSql = "";
-        }
-        createStmt.close();
-        createRs.close();
-
-        boolean found = false;
-        int ordinalPosition = 0;
-
-        while (rs.next()) {
-            String colName = rs.getString("name");
-            ordinalPosition++;
-
-            if (colName.equals(columnName)) {
-                found = true;
-
-                info.setColumnName(colName);
-                info.setTableName(tableName);
-                info.setSchemaName(schema);
-                info.setOrdinalPosition(ordinalPosition);
-
-                String dataType = rs.getString("type").toUpperCase();
-                info.setDataType(dataType);
-                info.setColumnType(dataType); // SQLite uses same for both
-
-                // SQLite doesn't track character/octet lengths or numeric precision/scale in PRAGMA
-                // We could parse the type string (e.g., "VARCHAR(50)") if needed
-                if (dataType.contains("(")) {
-                    // Extract size/precision if present in type definition
-                    try {
-                        int start = dataType.indexOf("(");
-                        int end = dataType.indexOf(")");
-                        String sizeStr = dataType.substring(start + 1, end);
-                        if (sizeStr.contains(",")) {
-                            String[] parts = sizeStr.split(",");
-                            info.setNumericPrecision(Integer.parseInt(parts[0].trim()));
-                            info.setNumericScale(Integer.parseInt(parts[1].trim()));
-                        } else {
-                            long size = Long.parseLong(sizeStr.trim());
-                            if (dataType.startsWith("VARCHAR") || dataType.startsWith("CHAR") ||
-                                    dataType.startsWith("TEXT")) {
-                                info.setCharacterMaximumLength(size);
-                                info.setCharacterOctetLength(size);
-                            } else {
-                                info.setNumericPrecision((int) size);
-                            }
-                        }
-                    } catch (Exception e) {
-                        // Ignore parsing errors
-                    }
-                }
-
-                // SQLite doesn't have character sets or collations in the same way
-                info.setCharacterSetName(null);
-                info.setCollationName(null);
-
-                boolean isPrimaryKey = rs.getInt("pk") > 0;
-                info.setPrimaryKey(isPrimaryKey);
-                info.setNullable(rs.getInt("notnull") == 0);
-
-                // Set column key
-                if (isPrimaryKey) {
-                    info.setColumnKey("PRI");
-                } else {
-                    info.setColumnKey("");
-                }
-
-                // Get default value
-                String defaultValue = rs.getString("dflt_value");
-                info.setColumnDefault(defaultValue);
-
-                // SQLite doesn't have column comments
-                info.setColumnComment(null);
-
-                // Check for AUTOINCREMENT
-                boolean autoIncrement = false;
-                if (isPrimaryKey && dataType.contains("INTEGER")) {
-                    if (createSql.toUpperCase().contains("AUTOINCREMENT")) {
-                        autoIncrement = true;
-                    }
-                }
-                info.setAutoIncrement(autoIncrement);
-
-                // Check for UNIQUE constraint
-                boolean isUnique = false;
-                String upperSql = createSql.toUpperCase();
-                String upperColName = columnName.toUpperCase();
-                if (upperSql.contains("UNIQUE")) {
-                    if (upperSql.contains(upperColName + " UNIQUE") ||
-                            upperSql.contains("UNIQUE(" + upperColName + ")") ||
-                            upperSql.contains("UNIQUE (" + upperColName + ")")) {
-                        isUnique = true;
-                    }
-                }
-                info.setUnique(isUnique);
-
-                break;
+        List<ColumnInfo> columns = catalog.columns(schema, tableName);
+        int position = -1;
+        for (int i = 0; i < columns.size(); i++) {
+            if (columns.get(i).getName().equals(columnName)) {
+                position = i;
             }
         }
-
-        columnStmt.close();
-        rs.close();
-
-        if (!found) {
+        if (position < 0) {
             throw new SQLException("Column '" + columnName + "' not found in table '" + tableName + "'");
         }
+        ColumnInfo column = columns.get(position);
 
-        // 2. Get indexes that include this column using PRAGMA index_list and index_info
-        String indexListQuery = "PRAGMA " + schema + ".index_list(" + tableName + ")";
-        PreparedStatement indexListStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(indexListQuery);
-        ResultSet indexListRs = indexListStmt.executeQuery();
+        DetailedColumnData info = new DetailedColumnData();
+        info.setColumnName(column.getName());
+        info.setTableName(tableName);
+        info.setSchemaName(schema);
+        info.setOrdinalPosition(position + 1);
 
+        String dataType = column.getType().toUpperCase();
+        info.setDataType(dataType);
+        info.setColumnType(dataType); // SQLite uses the same for both
+        applyTypeSize(info, dataType);
+
+        boolean primaryKey = column.getPrimaryKeyPosition() > 0;
+        info.setPrimaryKey(primaryKey);
+        info.setNullable(!column.isNotNull());
+        info.setColumnKey(primaryKey ? "PRI" : "");
+        info.setColumnDefault(column.getDefaultValue());
+        info.setAutoIncrement(primaryKey && catalog.isAutoincrement(schema, tableName));
+
+        // 2. indexes that include the column
         List<Map<String, String>> indexes = new ArrayList<>();
-
-        while (indexListRs.next()) {
-            String indexName = indexListRs.getString("name");
-            boolean isUnique = indexListRs.getInt("unique") == 1;
-            String origin = indexListRs.getString("origin"); // "c" = CREATE INDEX, "u" = UNIQUE, "pk" = PRIMARY KEY
-
-            // Get columns in this index
-            String indexInfoQuery = "PRAGMA " + schema + ".index_info(" + indexName + ")";
-            PreparedStatement indexInfoStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(indexInfoQuery);
-            ResultSet indexInfoRs = indexInfoStmt.executeQuery();
-
-            while (indexInfoRs.next()) {
-                String idxColName = indexInfoRs.getString("name");
-                if (idxColName != null && idxColName.equals(columnName)) {
-                    Map<String, String> index = new HashMap<>();
-                    index.put("INDEX_NAME", indexName);
-
-                    // Map origin to index type
-                    String indexType = "BTREE"; // SQLite primarily uses B-tree
-                    if ("pk".equals(origin)) {
-                        indexType = "PRIMARY";
-                    }
-                    index.put("INDEX_TYPE", indexType);
-
-                    index.put("NON_UNIQUE", isUnique ? "0" : "1");
-                    index.put("SEQ_IN_INDEX", String.valueOf(indexInfoRs.getInt("seqno") + 1));
-                    index.put("CARDINALITY", null); // SQLite doesn't provide cardinality easily
-
-                    indexes.add(index);
-                    break;
-                }
+        boolean unique = false;
+        for (IndexInfo index : catalog.indexes(schema, tableName)) {
+            int seq = index.getColumns().indexOf(columnName);
+            if (seq < 0) {
+                continue;
             }
+            Map<String, String> entry = new HashMap<>();
+            entry.put("INDEX_NAME", index.getName());
+            entry.put("INDEX_TYPE", "pk".equals(index.getOrigin()) ? "PRIMARY" : "BTREE");
+            entry.put("NON_UNIQUE", index.isUnique() ? "0" : "1");
+            entry.put("SEQ_IN_INDEX", String.valueOf(seq + 1));
+            entry.put("CARDINALITY", null);
+            indexes.add(entry);
 
-            indexInfoStmt.close();
-            indexInfoRs.close();
+            if (index.isUnique() && !"pk".equals(index.getOrigin()) && index.getColumns().size() == 1) {
+                unique = true;
+            }
         }
-
-        indexListStmt.close();
-        indexListRs.close();
         info.setIndexes(indexes);
+        info.setUnique(unique);
 
-        // 3. Get foreign key references (where this column references another table)
-        String fkListQuery = "PRAGMA " + schema + ".foreign_key_list(" + tableName + ")";
-        PreparedStatement fkStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(fkListQuery);
-        ResultSet fkRs = fkStmt.executeQuery();
-
+        // 3. foreign keys this column is part of
         List<Map<String, String>> foreignKeys = new ArrayList<>();
-
-        while (fkRs.next()) {
-            String fkColumn = fkRs.getString("from");
-            if (fkColumn.equals(columnName)) {
-                Map<String, String> fk = new HashMap<>();
-
-                // Generate constraint name (SQLite doesn't always name them)
-                int fkId = fkRs.getInt("id");
-                String constraintName = "fk_" + tableName + "_" + fkId;
-
-                fk.put("CONSTRAINT_NAME", constraintName);
-                fk.put("REFERENCED_TABLE_SCHEMA", schema);
-                fk.put("REFERENCED_TABLE_NAME", fkRs.getString("table"));
-                fk.put("REFERENCED_COLUMN_NAME", fkRs.getString("to"));
-
-                // Map SQLite actions to standard SQL terms
-                String onUpdate = fkRs.getString("on_update");
-                String onDelete = fkRs.getString("on_delete");
-                fk.put("UPDATE_RULE", onUpdate != null ? onUpdate.toUpperCase() : "NO ACTION");
-                fk.put("DELETE_RULE", onDelete != null ? onDelete.toUpperCase() : "NO ACTION");
-
-                foreignKeys.add(fk);
+        for (ForeignKeyInfo fk : catalog.foreignKeys(schema, tableName)) {
+            int index = fk.getColumns().indexOf(columnName);
+            if (index < 0) {
+                continue;
             }
+            Map<String, String> entry = new HashMap<>();
+            entry.put("CONSTRAINT_NAME", fk.getName());
+            entry.put("REFERENCED_TABLE_SCHEMA", schema);
+            entry.put("REFERENCED_TABLE_NAME", fk.getReferenceTable());
+            entry.put("REFERENCED_COLUMN_NAME", fk.getReferenceColumns().get(index));
+            entry.put("UPDATE_RULE", fk.getOnUpdate());
+            entry.put("DELETE_RULE", fk.getOnDelete());
+            foreignKeys.add(entry);
         }
-
-        fkStmt.close();
-        fkRs.close();
         info.setForeignKeyReferences(foreignKeys);
 
-        // 4. Get foreign keys that reference this column (incoming references)
-        // This requires checking all tables in the database
-        String allTablesQuery = "SELECT name FROM " + schema + ".sqlite_master " +
-                "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'";
-        PreparedStatement allTablesStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(allTablesQuery);
-        ResultSet allTablesRs = allTablesStmt.executeQuery();
-
+        // 4. foreign keys of other tables that point at this column
         List<Map<String, String>> referencedBy = new ArrayList<>();
-
-        while (allTablesRs.next()) {
-            String otherTable = allTablesRs.getString("name");
-
-            // Check foreign keys of this table
-            String otherFkQuery = "PRAGMA " + schema + ".foreign_key_list(" + otherTable + ")";
-            PreparedStatement otherFkStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(otherFkQuery);
-            ResultSet otherFkRs = otherFkStmt.executeQuery();
-
-            while (otherFkRs.next()) {
-                String refTable = otherFkRs.getString("table");
-                String refColumn = otherFkRs.getString("to");
-
-                if (refTable.equals(tableName) && refColumn.equals(columnName)) {
-                    Map<String, String> ref = new HashMap<>();
-
-                    int fkId = otherFkRs.getInt("id");
-                    String constraintName = "fk_" + otherTable + "_" + fkId;
-
-                    ref.put("TABLE_SCHEMA", schema);
-                    ref.put("TABLE_NAME", otherTable);
-                    ref.put("COLUMN_NAME", otherFkRs.getString("from"));
-                    ref.put("CONSTRAINT_NAME", constraintName);
-
-                    String onUpdate = otherFkRs.getString("on_update");
-                    String onDelete = otherFkRs.getString("on_delete");
-                    ref.put("UPDATE_RULE", onUpdate != null ? onUpdate.toUpperCase() : "NO ACTION");
-                    ref.put("DELETE_RULE", onDelete != null ? onDelete.toUpperCase() : "NO ACTION");
-
-                    referencedBy.add(ref);
-                }
+        for (ForeignKeyInfo fk : catalog.referencing(schema, tableName)) {
+            int index = fk.getReferenceColumns().indexOf(columnName);
+            if (index < 0) {
+                continue;
             }
-
-            otherFkStmt.close();
-            otherFkRs.close();
+            Map<String, String> entry = new HashMap<>();
+            entry.put("TABLE_SCHEMA", schema);
+            entry.put("TABLE_NAME", fk.getTable());
+            entry.put("COLUMN_NAME", fk.getColumns().get(index));
+            entry.put("CONSTRAINT_NAME", fk.getName());
+            entry.put("UPDATE_RULE", fk.getOnUpdate());
+            entry.put("DELETE_RULE", fk.getOnDelete());
+            referencedBy.add(entry);
         }
-
-        allTablesStmt.close();
-        allTablesRs.close();
         info.setReferencedByForeignKeys(referencedBy);
 
         return info;
     }
 
+    // SQLite keeps sizes only as part of the declared type text, e.g. VARCHAR(50) or DECIMAL(10,2).
+    private static void applyTypeSize(DetailedColumnData info, String dataType) {
+        int start = dataType.indexOf('(');
+        int end = dataType.indexOf(')');
+        if (start < 0 || end < start) {
+            return;
+        }
+        try {
+            String size = dataType.substring(start + 1, end);
+            if (size.contains(",")) {
+                String[] parts = size.split(",");
+                info.setNumericPrecision(Integer.parseInt(parts[0].trim()));
+                info.setNumericScale(Integer.parseInt(parts[1].trim()));
+            } else if (dataType.startsWith("VARCHAR") || dataType.startsWith("CHAR") || dataType.startsWith("TEXT")) {
+                info.setCharacterMaximumLength(Long.parseLong(size.trim()));
+                info.setCharacterOctetLength(Long.parseLong(size.trim()));
+            } else {
+                info.setNumericPrecision(Integer.parseInt(size.trim()));
+            }
+        } catch (NumberFormatException e) {
+            // a size we cannot read is left unset
+        }
+    }
+
     @Override
     public ArrayList<String> getDatabases(String name) {
-        ArrayList<String> databases = new ArrayList<>();
         try {
-            // SQLite can have attached databases
-            String query = "PRAGMA database_list";
-            PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
-            ResultSet result = statement.executeQuery();
-
-            while (result.next()) {
-                String dbName = result.getString("name");
-                databases.add(dbName);
+            ArrayList<String> databases = new ArrayList<>(catalog().databases());
+            if (!databases.isEmpty()) {
+                return databases;
             }
-
-            statement.close();
-            result.close();
-
-            // If no databases found, add "main" as default
-            if (databases.isEmpty()) {
-                databases.add("main");
-            }
-
-            return databases;
         } catch (SQLException e) {
             log.error("getDatabases failed", e);
-            // Fallback to main database
-            databases.add("main");
         }
-        return databases;
+        return new ArrayList<>(List.of(SqliteCatalog.MAIN));
     }
+
+    @Override
+    public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
+        Map<String, ForeignKeyData> foreignKeys = new LinkedHashMap<>();
+        for (ForeignKeyInfo fk : catalog().foreignKeys(dbName, tableName)) {
+            ForeignKeyData data = new ForeignKeyData(fk.getName(), fk.getColumns().get(0), fk.getReferenceTable(),
+                    fk.getReferenceColumns().get(0), fk.getOnDelete(), fk.getOnUpdate());
+            data.setLocalColumns(fk.getColumns());
+            data.setReferenceColumns(fk.getReferenceColumns());
+            foreignKeys.put(fk.getName(), data);
+        }
+        return foreignKeys;
+    }
+
+    // ------------------------------------------------------------------------------------ scripts
 
     @Override
     public String generateCreateScript(String tableName, String dbName) {
         try {
-            StringBuilder script = new StringBuilder();
-
-            // Get the original CREATE TABLE statement
-            String getCreateQuery = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?";
-            PreparedStatement getCreateStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(getCreateQuery);
-            getCreateStmt.setString(1, tableName);
-            ResultSet createRs = getCreateStmt.executeQuery();
-
-            if (createRs.next()) {
-                String originalSql = createRs.getString("sql");
-                if (originalSql != null) {
-                    script.append("-- Original table structure\n");
-                    script.append(originalSql).append(";\n\n");
-                }
-            } else {
-                // Fallback: generate CREATE script from metadata
-                DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-
-                // Get primary keys
-                Set<String> primaryKeys = new HashSet<>();
-                try (ResultSet pkRs = metaData.getPrimaryKeys(null, null, tableName)) {
-                    while (pkRs.next()) {
-                        primaryKeys.add(pkRs.getString("COLUMN_NAME"));
-                    }
-                }
-
-                script.append("CREATE TABLE IF NOT EXISTS ").append(tableName).append(" (\n");
-
-                // Get columns
-                try (ResultSet columns = metaData.getColumns(null, null, tableName, null)) {
-                    boolean first = true;
-                    while (columns.next()) {
-                        if (!first) script.append(",\n");
-                        first = false;
-
-                        String columnName = columns.getString("COLUMN_NAME");
-                        String dataType = columns.getString("TYPE_NAME");
-                        int columnSize = columns.getInt("COLUMN_SIZE");
-                        String nullable = columns.getInt("NULLABLE") == DatabaseMetaData.columnNoNulls ? " NOT NULL" : "";
-
-                        script.append("    ").append(columnName).append(" ");
-
-                        // SQLite type mapping
-                        switch (dataType.toUpperCase()) {
-                            case "VARCHAR", "NVARCHAR" -> script.append("TEXT");
-                            case "INTEGER", "INT" -> {
-                                script.append("INTEGER");
-                                if (primaryKeys.contains(columnName)) {
-                                    script.append(" PRIMARY KEY");
-                                }
-                            }
-                            case "REAL", "FLOAT", "DOUBLE" -> script.append("REAL");
-                            case "BLOB", "BINARY" -> script.append("BLOB");
-                            default -> script.append("TEXT");
-                        }
-
-                        script.append(nullable);
-
-                        // Add default value if exists
-                        String defaultValue = columns.getString("COLUMN_DEF");
-                        if (defaultValue != null && !defaultValue.isEmpty()) {
-                            script.append(" DEFAULT ").append(defaultValue);
-                        }
-                    }
-
-                    script.append("\n);");
-                }
+            SqliteCatalog catalog = catalog();
+            String createSql = catalog.createSql(dbName, tableName).orElse(null);
+            if (createSql == null) {
+                return "-- ERROR: Table not found: " + tableName;
             }
 
-            getCreateStmt.close();
-            createRs.close();
-
+            StringBuilder script = new StringBuilder("-- Original table structure\n").append(createSql).append(";\n");
+            for (String related : catalog.relatedSql(dbName, tableName)) {
+                script.append('\n').append(related).append(";\n");
+            }
             return script.toString();
-        } catch (Exception e) {
+        } catch (SQLException e) {
             log.error("generateCreateScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
 
     @Override
-    public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
-        Map<String, ForeignKeyData> foreignKeys = new HashMap<>();
-        DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-
-        try (ResultSet fkRs = metaData.getImportedKeys(dbName, null, tableName)) {
-            while (fkRs.next()) {
-                String fkColumnName = fkRs.getString("FKCOLUMN_NAME");
-                String constraintName = fkRs.getString("FK_NAME");  // Get constraint name
-
-                foreignKeys.put(constraintName, new ForeignKeyData(
-                        constraintName,                      // Constraint name
-                        fkColumnName,                        // Local column
-                        fkRs.getString("PKTABLE_NAME"),      // Reference table
-                        fkRs.getString("PKCOLUMN_NAME"),     // Reference column
-                        fkRs.getInt("DELETE_RULE"),          // Delete rule
-                        fkRs.getInt("UPDATE_RULE")           // Update rule
-                ));
-            }
-        }
-        return foreignKeys;
-    }
-
-    @Override
     public String generateInsertScript(String tableName, String dbName) {
         try {
-            StringBuilder insertScript = new StringBuilder();
-
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-
-            // Try different approaches to get columns
-            ResultSet columns = null;
-
-            // Method 1: Using catalog
-            try {
-                String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
-                columns = metaData.getColumns(catalog, null, tableName, null);
-            } catch (Exception e) {
-                // Fall through to next method
-            }
-
-            // Method 2: Using database name as catalog
-            if (columns == null || !columns.next()) {
-                try {
-                    if (columns != null) columns.close();
-                } catch (Exception ignored) {
-                }
-
-                columns = metaData.getColumns(dbName, null, tableName, null);
-            }
-
-            // Method 3: Using null catalog
-            if (columns == null || !columns.next()) {
-                try {
-                    if (columns != null) columns.close();
-                } catch (Exception ignored) {
-                }
-
-                columns = metaData.getColumns(null, null, tableName, null);
-            }
-
-            // Reset to beginning if we used next() to check
-            if (columns != null) {
-                columns.close();
-                // Get fresh ResultSet - SQLite typically works best with null catalog
-                columns = metaData.getColumns(null, null, tableName, null);
-            }
+            SqliteCatalog catalog = catalog();
+            String schema = SqliteCatalog.schemaOrMain(dbName);
+            List<ColumnInfo> all = catalog.columns(schema, tableName);
+            List<String> primaryKey = catalog.primaryKeyColumns(schema, tableName);
 
             List<String> columnNames = new ArrayList<>();
             List<String> columnValues = new ArrayList<>();
-
-            while (columns.next()) {
-                String columnName = columns.getString("COLUMN_NAME");
-                String dataType = columns.getString("TYPE_NAME").toUpperCase();
-                int sqlType = columns.getInt("DATA_TYPE");
-                boolean isNullable = columns.getInt("NULLABLE") == DatabaseMetaData.columnNullable;
-                String autoIncrement = columns.getString("IS_AUTOINCREMENT");
-                boolean isAutoIncrement = "YES".equalsIgnoreCase(autoIncrement);
-
-                // Skip auto-increment columns (INTEGER PRIMARY KEY in SQLite)
-                if (isAutoIncrement) {
+            for (ColumnInfo column : all) {
+                boolean rowidAlias = primaryKey.size() == 1 && primaryKey.get(0).equals(column.getName())
+                        && column.getType().equalsIgnoreCase("INTEGER");
+                // generated columns cannot be written, and an INTEGER PRIMARY KEY fills itself in
+                if (column.isGenerated() || rowidAlias) {
                     continue;
                 }
-
-                columnNames.add("\"" + columnName + "\"");
-
-                // Generate appropriate default values based on data type
-                String defaultValue;
-                if (isNullable) {
-                    defaultValue = "NULL";
-                } else {
-                    switch (sqlType) {
-                        case Types.BOOLEAN, Types.BIT -> defaultValue = "0";
-                        case Types.TINYINT, Types.SMALLINT, Types.INTEGER, Types.BIGINT -> defaultValue = "0";
-                        case Types.DECIMAL, Types.NUMERIC, Types.DOUBLE, Types.FLOAT, Types.REAL ->
-                                defaultValue = "0.00";
-                        case Types.DATE -> defaultValue = "DATE('now')";
-                        case Types.TIME -> defaultValue = "TIME('now')";
-                        case Types.TIMESTAMP -> defaultValue = "DATETIME('now')";
-                        case Types.BLOB, Types.LONGVARBINARY, Types.VARBINARY, Types.BINARY -> defaultValue = "''";
-                        case Types.OTHER -> {
-                            // Handle SQLite specific types that map to Types.OTHER
-                            if ("DATETIME".equals(dataType)) {
-                                defaultValue = "DATETIME('now')";
-                            } else if ("YEAR".equals(dataType)) {
-                                defaultValue = "strftime('%Y', 'now')";
-                            } else if ("JSON".equals(dataType)) {
-                                defaultValue = "'{}'";
-                            } else {
-                                defaultValue = "''";
-                            }
-                        }
-                        case Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR, Types.NCHAR, Types.NVARCHAR,
-                             Types.CLOB, Types.NCLOB -> {
-                            // SQLite is very flexible with text types
-                            if ("TEXT".equals(dataType)) {
-                                defaultValue = "''";
-                            } else {
-                                defaultValue = "''";
-                            }
-                        }
-                        default -> {
-                            // Additional checks for SQLite specific types
-                            if ("DATETIME".equals(dataType)) {
-                                defaultValue = "DATETIME('now')";
-                            } else if ("NUMERIC".equals(dataType)) {
-                                defaultValue = "0";
-                            } else {
-                                defaultValue = isNullable ? "NULL" : "''";
-                            }
-                        }
-                    }
-                }
-
-                columnValues.add(defaultValue);
+                columnNames.add(SqliteCatalog.quote(column.getName()));
+                columnValues.add(column.isNotNull() ? placeholderFor(column.getType()) : "NULL");
             }
-
-            columns.close();
 
             if (columnNames.isEmpty()) {
                 return "-- ERROR: No columns found for table: " + tableName;
             }
 
-            // Format the INSERT statement nicely
-            insertScript.append("INSERT INTO \"").append(tableName).append("\"\n");
-            insertScript.append("    (");
-
-            // Add column names with proper formatting
-            for (int i = 0; i < columnNames.size(); i++) {
-                if (i > 0) {
-                    insertScript.append(",\n     ");
-                }
-                insertScript.append(columnNames.get(i));
-            }
-
+            StringBuilder insertScript = new StringBuilder("INSERT INTO ").append(SqliteCatalog.qualified(schema, tableName)).append("\n    (");
+            insertScript.append(String.join(",\n     ", columnNames));
             insertScript.append(")\nVALUES\n    (");
-
-            // Add values with proper formatting
-            for (int i = 0; i < columnValues.size(); i++) {
-                if (i > 0) {
-                    insertScript.append(",\n     ");
-                }
-                insertScript.append(columnValues.get(i));
-            }
+            insertScript.append(String.join(",\n     ", columnValues));
             insertScript.append(");");
             return insertScript.toString();
-        } catch (Exception e) {
+        } catch (SQLException e) {
             log.error("generateInsertScript failed", e);
             return "-- ERROR: " + e.getMessage();
         }
     }
 
+    // A value that satisfies NOT NULL for the column's affinity (SQLite's own type-name rules).
+    private static String placeholderFor(String declaredType) {
+        String type = declaredType.toUpperCase();
+        if (type.contains("INT") || type.contains("BOOL")) {
+            return "0";
+        }
+        if (type.contains("CHAR") || type.contains("CLOB") || type.contains("TEXT")) {
+            return "''";
+        }
+        if (type.contains("BLOB")) {
+            return "X''";
+        }
+        if (type.contains("REAL") || type.contains("FLOA") || type.contains("DOUB")) {
+            return "0.0";
+        }
+        if (type.contains("TIMESTAMP") || type.contains("DATETIME")) {
+            return "CURRENT_TIMESTAMP";
+        }
+        if (type.contains("DATE")) {
+            return "CURRENT_DATE";
+        }
+        if (type.contains("TIME")) {
+            return "CURRENT_TIME";
+        }
+        return type.isEmpty() ? "''" : "0";
+    }
+
+    // The SQLite driver doesn't report which attached database a result column came from, so a table
+    // name present in more than one attached database can't be targeted safely.
+    @Override
+    public boolean isTableReferenceAmbiguous(String catalog, String schema, String table) {
+        int matches = 0;
+        try {
+            java.sql.Connection connection = DatabaseConnection.getInstance().getConnection();
+            for (String database : new SqliteCatalog(connection).databases()) {
+                String sql = "SELECT 1 FROM " + quoteIdentifier(database) + ".sqlite_master "
+                        + "WHERE type IN ('table', 'view') AND name = ? COLLATE NOCASE";
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, table);
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            matches++;
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            log.error("isTableReferenceAmbiguous failed", e);
+            return true;
+        }
+        return matches > 1;
+    }
+
+    @Override
+    public SqlSyntax getSqlSyntax() {
+        return SqlSyntax.SQLITE;
+    }
+
     @Override
     public String generateSelectScript(String tableName, String databaseName, int limit) {
-        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+        String target = databaseName != null && !databaseName.isBlank()
+                ? SqliteCatalog.qualified(databaseName, tableName)
+                : SqliteCatalog.quote(tableName);
+        return "SELECT * FROM " + target + " LIMIT " + limit + ";";
     }
 
     @Override
@@ -734,11 +420,11 @@ public class SQLiteConnection extends ConnectionObject {
 
             for (TableColumn<TableRowData, ?> col : tableColumns) {
                 String colName = col.getText();
-                columnNames.add(colName);
+                columnNames.add(quoteIdentifier(colName));
                 columnTypes.add(columnTypeMap.getOrDefault(colName, "TEXT"));
             }
 
-            insertScript.append("INSERT INTO ").append(tableName)
+            insertScript.append("INSERT INTO ").append(table.getQualifiedTableName())
                     .append(" (")
                     .append(String.join(", ", columnNames))
                     .append(")\nVALUES (");
@@ -773,123 +459,90 @@ public class SQLiteConnection extends ConnectionObject {
         }
     }
 
+
     @Override
     public String generateCreateTableSQL(String databaseName, String tableName, List<ColumnData> columns, List<ForeignKeyData> foreignKeys) {
-        StringBuilder sql = new StringBuilder();
+        String target = databaseName != null && !databaseName.isEmpty()
+                ? SqliteCatalog.qualified(databaseName, tableName)
+                : SqliteCatalog.quote(tableName);
 
-        // Build the fully qualified table name
-        String fullTableName = (databaseName != null && !databaseName.isEmpty())
-                ? "\"" + databaseName + "\".\"" + tableName + "\""
-                : "\"" + tableName + "\"";
+        List<String> primaryKeys = columns.stream().filter(ColumnData::isPrimaryKey).map(ColumnData::getColumnName).toList();
+        // AUTOINCREMENT only exists as part of "INTEGER PRIMARY KEY AUTOINCREMENT" on a single column
+        ColumnData autoIncrementKey = primaryKeys.size() == 1
+                ? columns.stream().filter(c -> c.isPrimaryKey() && c.isAutoIncrement()).findFirst().orElse(null)
+                : null;
 
-        sql.append("CREATE TABLE ").append(fullTableName).append(" (\n");
-
-        // Add columns
-        List<String> primaryKeys = new ArrayList<>();
-        for (int i = 0; i < columns.size(); i++) {
-            ColumnData col = columns.get(i);
-
-            sql.append("    \"").append(col.getColumnName()).append("\" ").append(col.getDataType());
-
-            // Add AUTOINCREMENT if specified
-            if (col.isAutoIncrement()) {
-                sql.append(" AUTOINCREMENT");
-            }
-
-            // Add NOT NULL if specified
-            if (col.isNotNull() || col.isPrimaryKey()) {
-                sql.append(" NOT NULL");
-            }
-
-            // Add UNIQUE if specified and not a primary key
-            if (col.isUnique() && !col.isPrimaryKey()) {
-                sql.append(" UNIQUE");
-            }
-
-            // Track primary keys
-            if (col.isPrimaryKey()) {
-                primaryKeys.add(col.getColumnName());
-            }
-
-            // Add comma if not last column or if we have constraints to add
-            if (i < columns.size() - 1 || !primaryKeys.isEmpty() || !foreignKeys.isEmpty()) {
-                sql.append(",");
-            }
-            sql.append("\n");
-        }
-
-        // Add PRIMARY KEY constraint
-        if (!primaryKeys.isEmpty()) {
-            sql.append("    PRIMARY KEY (");
-            for (int i = 0; i < primaryKeys.size(); i++) {
-                sql.append("\"").append(primaryKeys.get(i)).append("\"");
-                if (i < primaryKeys.size() - 1) {
-                    sql.append(", ");
+        List<String> definitions = new ArrayList<>();
+        for (ColumnData column : columns) {
+            StringBuilder definition = new StringBuilder("    ").append(SqliteCatalog.quote(column.getColumnName()));
+            if (column == autoIncrementKey) {
+                definition.append(" INTEGER PRIMARY KEY AUTOINCREMENT");
+            } else {
+                if (column.getDataType() != null && !column.getDataType().isEmpty()) {
+                    definition.append(' ').append(column.getDataType());
+                }
+                if (column.isNotNull() || column.isPrimaryKey()) {
+                    definition.append(" NOT NULL");
+                }
+                if (column.isUnique() && !column.isPrimaryKey()) {
+                    definition.append(" UNIQUE");
                 }
             }
-            sql.append(")");
-
-            if (!foreignKeys.isEmpty()) {
-                sql.append(",");
-            }
-            sql.append("\n");
+            definitions.add(definition.toString());
         }
 
-        // Add FOREIGN KEY constraints
-        for (int i = 0; i < foreignKeys.size(); i++) {
-            ForeignKeyData fk = foreignKeys.get(i);
+        if (!primaryKeys.isEmpty() && autoIncrementKey == null) {
+            definitions.add("    PRIMARY KEY (" + quoteAll(primaryKeys) + ")");
+        }
 
-            sql.append("    CONSTRAINT \"").append(fk.getConstraintName()).append("\" ")
-                    .append("FOREIGN KEY (\"").append(fk.getLocalColumn()).append("\") ")
-                    .append("REFERENCES \"").append(fk.getReferenceTable()).append("\" ")
-                    .append("(\"").append(fk.getReferenceColumn()).append("\")");
-
-            // Add ON DELETE action
+        for (ForeignKeyData fk : foreignKeys) {
+            StringBuilder definition = new StringBuilder("    CONSTRAINT ").append(SqliteCatalog.quote(fk.getConstraintName()))
+                    .append(" FOREIGN KEY (").append(quoteAll(fk.allLocalColumns())).append(") REFERENCES ")
+                    .append(SqliteCatalog.quote(fk.getReferenceTable())).append(" (").append(quoteAll(fk.allReferenceColumns())).append(")");
             if (fk.getOnDelete() != null && !fk.getOnDelete().isEmpty()) {
-                sql.append(" ON DELETE ").append(fk.getOnDelete());
+                definition.append(" ON DELETE ").append(fk.getOnDelete());
             }
-
-            // Add ON UPDATE action
             if (fk.getOnUpdate() != null && !fk.getOnUpdate().isEmpty()) {
-                sql.append(" ON UPDATE ").append(fk.getOnUpdate());
+                definition.append(" ON UPDATE ").append(fk.getOnUpdate());
             }
-
-            if (i < foreignKeys.size() - 1) {
-                sql.append(",");
-            }
-            sql.append("\n");
+            definitions.add(definition.toString());
         }
 
-        sql.append(");");
+        return "CREATE TABLE " + target + " (\n" + String.join(",\n", definitions) + "\n);";
+    }
 
-        return sql.toString();
+    private static String quoteAll(List<String> identifiers) {
+        StringJoiner joined = new StringJoiner(", ");
+        identifiers.forEach(identifier -> joined.add(SqliteCatalog.quote(identifier)));
+        return joined.toString();
     }
 
     @Override
     public void deleteTable(String databaseName, String tableName) throws SQLException {
-        // Build the fully qualified table name
-        String fullTableName = (databaseName != null && !databaseName.isEmpty())
-                ? "\"" + databaseName + "\".\"" + tableName + "\""
-                : "\"" + tableName + "\"";
+        String fullTableName = databaseName != null && !databaseName.isEmpty()
+                ? SqliteCatalog.qualified(databaseName, tableName)
+                : SqliteCatalog.quote(tableName);
 
-        String sql = "DROP TABLE IF EXISTS " + fullTableName;
-        PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
-        statement.executeUpdate();
-        statement.close();
+        try (PreparedStatement statement = DatabaseConnection.getInstance().getConnection()
+                .prepareStatement("DROP TABLE IF EXISTS " + fullTableName)) {
+            statement.executeUpdate();
+        }
     }
 
     @Override
     public String[] getDataTypes() {
         return this.dataTypes;
     }
-    
+
+    // A SQLite "database" is a file; it can only be attached, which needs a path, not just a name.
     @Override
     public void createDatabase(String databaseName) throws SQLException {
+        throw new SQLFeatureNotSupportedException("A SQLite database is a file. Use: ATTACH DATABASE '<file>' AS <name>");
     }
 
     @Override
     public void deleteDatabase(String databaseName) throws SQLException {
-
+        throw new SQLFeatureNotSupportedException("A SQLite database is a file. Use: DETACH DATABASE <name>");
     }
 
     @Override
@@ -898,40 +551,109 @@ public class SQLiteConnection extends ConnectionObject {
         users.add("(SQLite - No users)");
         return users;
     }
-    
+
     @Override
     public double getTableSize(String database, String table) throws SQLException {
-        
-        String query = """
-            SELECT 
-                ROUND(
-                    (SELECT page_count FROM pragma_page_count()) * 
-                    (SELECT page_size FROM pragma_page_size()) / 1024.0 / 1024.0 * 
-                    (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?) / 
-                    (SELECT COUNT(*) FROM sqlite_master WHERE type='table'),
-                    2
-                ) AS total_size_mb
-            """;
-        
-        PreparedStatement pstmt = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
-        pstmt.setString(1, table);
-        
-        ResultSet rs = pstmt.executeQuery();
-        double sizeMB = rs.next() ? rs.getDouble("total_size_mb") : -1;
-        
-        rs.close();
-        pstmt.close();
-        
-        return sizeMB;
+        return catalog().sizeMegabytes(database, table);
     }
 
     @Override
     public void useDatabase(String databaseName) throws SQLException {
-
+        // SQLite has no current database: names resolve in main first, then in the attached ones
     }
-    
+
+    /**
+     * SQLite can rename tables/columns and add or drop plain columns in place. Anything else (changing a
+     * column's type, NOT NULL, key or UNIQUE setting, or the foreign keys) needs the whole table rebuilt, which
+     * would silently lose defaults and CHECK constraints this editor does not know about, so it is refused.
+     */
     @Override
-    public String generateAlterTableSQL(String databaseName, String oldTableName, String newTableName, List<ColumnData> oldColumns, List<ColumnData> newColumns, Map<String, ForeignKeyData> oldForeignKeys, List<ForeignKeyData> newForeignKeys, Map<String, String> columnRenames) throws SQLException {
-        return "";
+    public String generateAlterTableSQL(String databaseName, String oldTableName, String newTableName,
+                                        List<ColumnData> oldColumns, List<ColumnData> newColumns,
+                                        Map<String, ForeignKeyData> oldForeignKeys, List<ForeignKeyData> newForeignKeys,
+                                        Map<String, String> columnRenames) throws SQLException {
+        if (!sameForeignKeys(oldForeignKeys, newForeignKeys)) {
+            throw unsupported("changing foreign keys");
+        }
+
+        String table = SqliteCatalog.qualified(SqliteCatalog.schemaOrMain(databaseName), oldTableName);
+
+        Map<String, String> newToOld = new HashMap<>();
+        columnRenames.forEach((oldName, newName) -> newToOld.put(newName, oldName));
+
+        List<String> renames = new ArrayList<>();
+        List<String> drops = new ArrayList<>();
+        List<String> adds = new ArrayList<>();
+        Set<String> keptOldColumns = new HashSet<>();
+
+        for (ColumnData newColumn : newColumns) {
+            String oldName = newToOld.getOrDefault(newColumn.getColumnName(), newColumn.getColumnName());
+            ColumnData oldColumn = oldColumns.stream().filter(c -> c.getColumnName().equals(oldName)).findFirst().orElse(null);
+
+            if (oldColumn == null) {
+                if (newColumn.isPrimaryKey() || newColumn.isUnique() || newColumn.isAutoIncrement()) {
+                    throw unsupported("adding a primary key, unique or auto-increment column (" + newColumn.getColumnName() + ")");
+                }
+                if (newColumn.isNotNull()) {
+                    throw unsupported("adding the NOT NULL column " + newColumn.getColumnName() + " (it would need a default value)");
+                }
+                adds.add("ALTER TABLE " + table + " ADD COLUMN " + SqliteCatalog.quote(newColumn.getColumnName())
+                        + (newColumn.getDataType() == null || newColumn.getDataType().isEmpty() ? "" : " " + newColumn.getDataType()));
+                continue;
+            }
+
+            keptOldColumns.add(oldName);
+            boolean changed = !Objects.equals(oldColumn.getDataType() == null ? "" : oldColumn.getDataType().toUpperCase(),
+                    newColumn.getDataType() == null ? "" : newColumn.getDataType().toUpperCase())
+                    || oldColumn.isNotNull() != newColumn.isNotNull()
+                    || oldColumn.isPrimaryKey() != newColumn.isPrimaryKey()
+                    || oldColumn.isUnique() != newColumn.isUnique()
+                    || oldColumn.isAutoIncrement() != newColumn.isAutoIncrement();
+            if (changed) {
+                throw unsupported("changing the type, NOT NULL, key or unique setting of column " + newColumn.getColumnName());
+            }
+            if (!oldName.equals(newColumn.getColumnName())) {
+                renames.add("ALTER TABLE " + table + " RENAME COLUMN " + SqliteCatalog.quote(oldName)
+                        + " TO " + SqliteCatalog.quote(newColumn.getColumnName()));
+            }
+        }
+
+        for (ColumnData oldColumn : oldColumns) {
+            if (!keptOldColumns.contains(oldColumn.getColumnName())) {
+                drops.add("ALTER TABLE " + table + " DROP COLUMN " + SqliteCatalog.quote(oldColumn.getColumnName()));
+            }
+        }
+
+        List<String> statements = new ArrayList<>();
+        statements.addAll(renames);
+        statements.addAll(drops);
+        statements.addAll(adds);
+        if (!oldTableName.equals(newTableName)) {
+            statements.add("ALTER TABLE " + table + " RENAME TO " + SqliteCatalog.quote(newTableName));
+        }
+        return statements.isEmpty() ? "" : String.join(";\n", statements) + ";";
+    }
+
+    private static boolean sameForeignKeys(Map<String, ForeignKeyData> oldForeignKeys, List<ForeignKeyData> newForeignKeys) {
+        if (oldForeignKeys.size() != newForeignKeys.size()) {
+            return false;
+        }
+        for (ForeignKeyData newKey : newForeignKeys) {
+            ForeignKeyData oldKey = oldForeignKeys.get(newKey.getConstraintName());
+            if (oldKey == null
+                    || !oldKey.allLocalColumns().equals(newKey.allLocalColumns())
+                    || !oldKey.getReferenceTable().equals(newKey.getReferenceTable())
+                    || !oldKey.allReferenceColumns().equals(newKey.allReferenceColumns())
+                    || !Objects.equals(oldKey.getOnDelete(), newKey.getOnDelete())
+                    || !Objects.equals(oldKey.getOnUpdate(), newKey.getOnUpdate())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static SQLFeatureNotSupportedException unsupported(String what) {
+        return new SQLFeatureNotSupportedException("SQLite cannot do this in place: " + what
+                + ". It would need the table to be rebuilt; do that with an explicit script instead.");
     }
 }

@@ -94,7 +94,7 @@ public class ResultCellsContextMenu extends ContextMenu {
 
         if (cell.getTableView().isEditable()) {
             ResultTable table = (ResultTable) cell.getTableView();
-            if (table.getPrimaryKeyColumns().contains(cell.getTableColumn().getText().toUpperCase())) {
+            if (table.isPrimaryKeyColumn(table.getColumns().indexOf(cell.getTableColumn()))) {
                 this.getItems().addAll(copyCellItem, copyRowItem, duplicateRow, insertScriptItem, new SeparatorMenuItem(), deleteRow);
             } else {
                 this.getItems().addAll(copyCellItem, copyRowItem, duplicateRow, insertScriptItem, new SeparatorMenuItem(), setNullItem, deleteRow);

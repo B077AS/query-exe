@@ -2,8 +2,13 @@ package com.queryexe.components.tree;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
+import org.kordamp.ikonli.Ikon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignF;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignS;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
@@ -98,7 +103,65 @@ public class DatabaseTreeItem extends CustomTreeItem {
             Map<String, ArrayList<ColumnData>> tablesAndColumnsMap = DatabaseConnection.getInstance()
                     .getConnectionObject().getAllTablesAndColumns(this.databaseName);
             App.getCustomTree().addTablesAndColumns(tablesAndColumnsMap, tablesNode, this.databaseName);
+            showSchemaObjects(DatabaseConnection.getInstance().getConnectionObject().getSchemaObjects(this.databaseName));
         }
+    }
+
+    /**
+     * Shows the sequences/indexes/... groups after the Tables node, replacing the ones shown before.
+     */
+    public void showSchemaObjects(Map<String, List<String>> objects) {
+        if (this.getChildren().isEmpty()) {
+            return;
+        }
+        this.getChildren().removeIf(child -> child instanceof SchemaObjectsTreeItem);
+
+        for (Map.Entry<String, List<String>> group : objects.entrySet()) {
+            SchemaObjectsTreeItem groupItem = new SchemaObjectsTreeItem(group.getKey(), new FontIcon(MaterialDesignF.FOLDER_OUTLINE));
+            groupItem.setDatabaseName(this.databaseName);
+            for (String name : group.getValue()) {
+                SchemaObjectTreeItem item = new SchemaObjectTreeItem(name, new FontIcon(iconFor(group.getKey())));
+                item.setDatabaseName(this.databaseName);
+                groupItem.getChildren().add(item);
+            }
+            this.getChildren().add(groupItem);
+        }
+    }
+
+    private static Ikon iconFor(String group) {
+        return switch (group) {
+            case "Sequences" -> MaterialDesignF.FORMAT_LIST_NUMBERED;
+            case "Synonyms" -> MaterialDesignL.LINK_VARIANT;
+            case "Triggers" -> MaterialDesignF.FLASH;
+            default -> MaterialDesignS.SORT_ASCENDING; // indexes
+        };
+    }
+
+    /**
+     * Reloads this database's tables without blocking the FX thread: the metadata is read in the
+     * background and the tree is updated afterwards.
+     */
+    public void refreshDatabaseAsync() {
+        if (this.getChildren().isEmpty()) {
+            return;
+        }
+        TreeItem<String> tablesNode = this.getChildren().get(0);
+        String database = this.databaseName;
+
+        Async.run(() -> {
+            Map<String, ArrayList<ColumnData>> tablesAndColumnsMap = DatabaseConnection.getInstance()
+                    .getConnectionObject().getAllTablesAndColumns(database);
+            if (tablesAndColumnsMap == null) {
+                return;
+            }
+            Map<String, List<String>> objects = DatabaseConnection.getInstance()
+                    .getConnectionObject().getSchemaObjects(database);
+            Platform.runLater(() -> {
+                tablesNode.getChildren().clear();
+                App.getCustomTree().addTablesAndColumns(tablesAndColumnsMap, tablesNode, database);
+                showSchemaObjects(objects);
+            });
+        });
     }
 
     public void deleteDatabase(boolean isDatabase) {

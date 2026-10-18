@@ -1,6 +1,8 @@
 package com.queryexe.components.editor;
 
 import javafx.scene.control.*;
+import lombok.Getter;
+import lombok.Setter;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignC;
@@ -14,12 +16,15 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import com.queryexe.components.tree.CustomTree;
 import com.queryexe.model.connections.ConnectionObject;
+import javafx.collections.ListChangeListener;
+import com.queryexe.service.Async;
 import com.queryexe.service.AppSettings;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.queryexe.App;
 import com.queryexe.components.results.ResultBox;
 
-import java.sql.PreparedStatement;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.sql.SQLException;
 
 import javafx.concurrent.Task;
@@ -28,18 +33,60 @@ public class CustomTab<T extends Node> extends Tab {
 
     private final String selectedStyle = "-fx-background-color: -color-bg-subtle; -fx-border-color: transparent, transparent, -color-tab-border-selected, transparent; -fx-border-width: 0 0 2px 0;";
     private final String unSelectedStyle = "-fx-background-color: transparent; -fx-border-color: transparent, transparent, transparent, transparent; -fx-border-width: 0 0 2px 0;";
+    @Setter
+    @Getter
     private FontIcon icon;
+    @Getter
     private Label tabLabel;
     private HBox graphicBox;
     private CustomTabProgressIndicator progressIndicator;
+    @Setter
+    @Getter
     private boolean error = false;
+    @Setter
     private Task<ResultBox> runningQueryTask;
     private ResultBox resultBox;
     private T content;
     private TabPane tabPane;
+    @Getter
     private ConnectionObject connectionObject;
     private static ConnectionObject previousConnectionObject = null;
-    private PreparedStatement currentStatement;
+    @Getter
+    @Setter
+    private Statement currentStatement;
+
+    // This tab's own JDBC connection, opened on first use (see DatabaseConnection.openSession).
+    private Connection session;
+    private String sessionSchemaState;
+
+    /**
+     * The connection this tab runs its SQL on. Blocking: call it from a background thread. The first call
+     * opens the connection; later calls reopen it if it was lost, and follow the database selected in the tree.
+     */
+    public synchronized Connection getSessionConnection() throws SQLException {
+        if (connectionObject == null) {
+            throw new SQLException("No connection is associated with this query tab.");
+        }
+        DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
+        if (databaseConnection.getConnection(connectionObject.getId()) == null) {
+            databaseConnection.initialize(connectionObject);
+        }
+        if (session == null || session.isClosed()) {
+            session = databaseConnection.openSession(connectionObject);
+            sessionSchemaState = null;
+        }
+        sessionSchemaState = databaseConnection.copyDefaultSchema(
+                databaseConnection.sharedConnection(connectionObject.getId()), session, sessionSchemaState);
+        return session;
+    }
+
+    public synchronized void closeSession() {
+        if (session != null && connectionObject != null) {
+            DatabaseConnection.getInstance().closeSession(connectionObject.getId(), session);
+        }
+        session = null;
+        sessionSchemaState = null;
+    }
 
     public CustomTab(T content, TabPane tabPane) {
         this.content = content;
@@ -75,6 +122,22 @@ public class CustomTab<T extends Node> extends Tab {
             }
         });
         icon.setVisible(false);
+
+        // The tab's connection goes with the tab. Checked after the change settles because dragging a tab to
+        // reorder it can remove and re-add it.
+        if (connectionObject != null) {
+            tabPane.getTabs().addListener((ListChangeListener<Tab>) change -> {
+                while (change.next()) {
+                    if (change.wasRemoved() && change.getRemoved().contains(this)) {
+                        Platform.runLater(() -> {
+                            if (!tabPane.getTabs().contains(this)) {
+                                Async.run(this::closeSession);
+                            }
+                        });
+                    }
+                }
+            });
+        }
 
         tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
             if (newTab != this) {
@@ -201,30 +264,6 @@ public class CustomTab<T extends Node> extends Tab {
         }
     }
 
-    public FontIcon getIcon() {
-        return icon;
-    }
-
-    public void setIcon(FontIcon icon) {
-        this.icon = icon;
-    }
-
-    public boolean isError() {
-        return error;
-    }
-
-    public void setError(boolean error) {
-        this.error = error;
-    }
-
-    public Label getTabLabel() {
-        return tabLabel;
-    }
-
-    public void setRunningQueryTask(Task<ResultBox> task) {
-        this.runningQueryTask = task;
-    }
-
     public boolean isQueryRunning() {
         return runningQueryTask != null && runningQueryTask.isRunning();
     }
@@ -235,15 +274,4 @@ public class CustomTab<T extends Node> extends Tab {
         }
     }
 
-    public ConnectionObject getConnectionObject() {
-        return connectionObject;
-    }
-
-    public void setCurrentStatement(PreparedStatement stmt) {
-        this.currentStatement = stmt;
-    }
-
-    public PreparedStatement getCurrentStatement() {
-        return currentStatement;
-    }
 }
