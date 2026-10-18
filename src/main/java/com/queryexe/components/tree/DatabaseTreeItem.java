@@ -101,6 +101,30 @@ public class DatabaseTreeItem extends CustomTreeItem {
         }
     }
 
+    /**
+     * Reloads this database's tables without blocking the FX thread: the metadata is read in the
+     * background and the tree is updated afterwards.
+     */
+    public void refreshDatabaseAsync() {
+        if (this.getChildren().isEmpty()) {
+            return;
+        }
+        TreeItem<String> tablesNode = this.getChildren().get(0);
+        String database = this.databaseName;
+
+        Async.run(() -> {
+            Map<String, ArrayList<ColumnData>> tablesAndColumnsMap = DatabaseConnection.getInstance()
+                    .getConnectionObject().getAllTablesAndColumns(database);
+            if (tablesAndColumnsMap == null) {
+                return;
+            }
+            Platform.runLater(() -> {
+                tablesNode.getChildren().clear();
+                App.getCustomTree().addTablesAndColumns(tablesAndColumnsMap, tablesNode, database);
+            });
+        });
+    }
+
     public void deleteDatabase(boolean isDatabase) {
         Async.run(() -> {
             try {

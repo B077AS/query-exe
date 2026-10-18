@@ -788,6 +788,16 @@ public class SQLServerConnection extends ConnectionObject {
     }
 
     @Override
+    public String quoteIdentifier(String identifier) {
+        return "[" + identifier.replace("]", "]]") + "]";
+    }
+
+    @Override
+    public SqlSyntax getSqlSyntax() {
+        return SqlSyntax.SQLSERVER;
+    }
+
+    @Override
     public String generateSelectScript(String tableName, String databaseName, int limit) {
         String[] parts = parseSchemaAndTable(tableName);
         String schema = parts[0];
@@ -812,20 +822,11 @@ public class SQLServerConnection extends ConnectionObject {
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-            String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
-
-            for (TableColumn<TableRowData, ?> col : tableColumns) {
-                String colName = col.getText();
-                columnNames.add("[" + colName + "]");
-
-                ResultSet columns = metaData.getColumns(catalog, schema, tableOnly, colName);
-                if (columns.next()) {
-                    columnTypes.add(columns.getInt("DATA_TYPE"));
-                } else {
-                    columnTypes.add(Types.VARCHAR);
-                }
-                columns.close();
+            // the grid already knows each column's real name and SQL type; looking them up in the metadata by
+            // table name alone would ignore the schema and treat '_' as a wildcard
+            for (int i = 0; i < tableColumns.size(); i++) {
+                columnNames.add(quoteIdentifier(table.getColumnNames().get(i)));
+                columnTypes.add(table.getColumnSqlType(i));
             }
 
             insertScript.append("INSERT INTO [").append(schema).append("].[").append(tableOnly).append("]")
@@ -1049,8 +1050,8 @@ public class SQLServerConnection extends ConnectionObject {
 
     @Override
     public void createDatabase(String databaseName) throws SQLException {
-        String sql = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'" + databaseName + "') " +
-                "CREATE DATABASE [" + databaseName + "]";
+        String sql = "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'" + databaseName.replace("'", "''") + "') " +
+                "CREATE DATABASE " + quoteIdentifier(databaseName);
 
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
@@ -1059,7 +1060,7 @@ public class SQLServerConnection extends ConnectionObject {
 
     @Override
     public void deleteDatabase(String databaseName) throws SQLException {
-        String sql = "DROP DATABASE IF EXISTS [" + databaseName + "]";
+        String sql = "DROP DATABASE IF EXISTS " + quoteIdentifier(databaseName);
 
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
@@ -1068,7 +1069,7 @@ public class SQLServerConnection extends ConnectionObject {
 
     @Override
     public void useDatabase(String databaseName) throws SQLException {
-        String sql = "USE [" + databaseName + "]";
+        String sql = "USE " + quoteIdentifier(databaseName);
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.execute();
         statement.close();

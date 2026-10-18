@@ -692,8 +692,35 @@ public class MariaDBConnection extends ConnectionObject {
     }
 
     @Override
+    public String quoteIdentifier(String identifier) {
+        return "`" + identifier.replace("`", "``") + "`";
+    }
+
+    // MySQL/MariaDB "databases" are catalogs; ResultSetMetaData reports them as the catalog name.
+    @Override
+    public String qualifyTable(String catalog, String schema, String table) {
+        if (catalog != null && !catalog.isEmpty()) {
+            return quoteIdentifier(catalog) + "." + quoteIdentifier(table);
+        }
+        return quoteIdentifier(table);
+    }
+
+    @Override
+    public String generateDefaultsOnlyInsert(String qualifiedTable) {
+        return "INSERT INTO " + qualifiedTable + " () VALUES ()";
+    }
+
+    @Override
+    public SqlSyntax getSqlSyntax() {
+        return SqlSyntax.MYSQL;
+    }
+
+    @Override
     public String generateSelectScript(String tableName, String databaseName, int limit) {
-        return "SELECT * FROM `" + tableName + "` LIMIT " + limit + ";";
+        String target = databaseName != null && !databaseName.isBlank()
+                ? quoteIdentifier(databaseName) + "." + quoteIdentifier(tableName)
+                : quoteIdentifier(tableName);
+        return "SELECT * FROM " + target + " LIMIT " + limit + ";";
     }
 
     @Override
@@ -708,23 +735,14 @@ public class MariaDBConnection extends ConnectionObject {
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-            String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
-
-            for (TableColumn<TableRowData, ?> col : tableColumns) {
-                String colName = col.getText();
-                columnNames.add("`" + colName + "`");
-
-                ResultSet columns = metaData.getColumns(catalog, null, tableName, colName);
-                if (columns.next()) {
-                    columnTypes.add(columns.getInt("DATA_TYPE"));
-                } else {
-                    columnTypes.add(Types.VARCHAR);
-                }
-                columns.close();
+            // the grid already knows each column's real name and SQL type; looking them up in the metadata by
+            // table name alone would ignore the schema and treat '_' as a wildcard
+            for (int i = 0; i < tableColumns.size(); i++) {
+                columnNames.add(quoteIdentifier(table.getColumnNames().get(i)));
+                columnTypes.add(table.getColumnSqlType(i));
             }
 
-            insertScript.append("INSERT INTO `").append(tableName).append("`")
+            insertScript.append("INSERT INTO ").append(table.getQualifiedTableName())
                     .append(" (")
                     .append(String.join(", ", columnNames))
                     .append(")\nVALUES (");
@@ -1321,7 +1339,7 @@ public class MariaDBConnection extends ConnectionObject {
 
     @Override
     public void createDatabase(String databaseName) throws SQLException {
-        String sql = "CREATE DATABASE `" + databaseName + "` ";
+        String sql = "CREATE DATABASE " + quoteIdentifier(databaseName);
 
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
@@ -1330,7 +1348,7 @@ public class MariaDBConnection extends ConnectionObject {
 
     @Override
     public void deleteDatabase(String databaseName) throws SQLException {
-        String sql = "DROP DATABASE IF EXISTS `" + databaseName + "`";
+        String sql = "DROP DATABASE IF EXISTS " + quoteIdentifier(databaseName);
 
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
@@ -1408,7 +1426,7 @@ public class MariaDBConnection extends ConnectionObject {
 
     @Override
     public void useDatabase(String databaseName) throws SQLException {
-        String sql = "USE `" + databaseName + "`";
+        String sql = "USE " + quoteIdentifier(databaseName);
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.execute();
         statement.close();

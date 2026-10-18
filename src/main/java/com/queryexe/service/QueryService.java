@@ -7,6 +7,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javafx.concurrent.Task;
@@ -24,6 +25,8 @@ import com.queryexe.components.editor.CustomTab;
 import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.components.results.ResultBox;
 import com.queryexe.model.connections.ConnectionObject;
+import com.queryexe.model.connections.SqlSyntax;
+import com.queryexe.utils.SqlSplitter;
 import com.queryexe.queryexe.App;
 
 @Slf4j
@@ -300,7 +303,7 @@ public class QueryService {
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
         CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        executeQuery(tab, codeArea.getText());
+        executeQuery(tab, SqlSplitter.texts(SqlSplitter.split(codeArea.getText(), syntaxFor(tab))));
     }
 
     // Runs the current selection, or the statement at the caret if nothing is selected.
@@ -311,20 +314,33 @@ public class QueryService {
         VirtualizedScrollPane<CodeArea> scroll = (VirtualizedScrollPane<CodeArea>) tab.getContent();
         CodeArea codeArea = (CodeArea) scroll.getContent();
 
-        String statement = !codeArea.getSelectedText().isEmpty()
-                ? codeArea.getSelectedText()
-                : extractStatementAtCaret(codeArea);
+        SqlSyntax syntax = syntaxFor(tab);
+        if (!codeArea.getSelectedText().isEmpty()) {
+            executeQuery(tab, SqlSplitter.texts(SqlSplitter.split(codeArea.getSelectedText(), syntax)));
+        } else {
+            // Scanned from the top of the script so DELIMITER/GO context before the caret is honoured.
+            List<String> statement = SqlSplitter.statementAt(codeArea.getText(), codeArea.getCaretPosition(), syntax)
+                    .map(found -> List.of(found.getText()))
+                    .orElse(List.of());
+            executeQuery(tab, statement);
+        }
+    }
 
-        executeQuery(tab, statement);
+    // Splitting rules of the connection the tab belongs to (falls back to the current connection).
+    private SqlSyntax syntaxFor(CustomTab<?> tab) {
+        ConnectionObject connection = tab.getConnectionObject() != null
+                ? tab.getConnectionObject()
+                : DatabaseConnection.getInstance().getCurrentConnectionObject();
+        return connection != null ? connection.getSqlSyntax() : SqlSyntax.ANSI;
     }
 
     // One query at a time per tab; other tabs can run their own queries in parallel.
-    private void executeQuery(CustomTab<VirtualizedScrollPane<CodeArea>> tab, String query) {
+    private void executeQuery(CustomTab<VirtualizedScrollPane<CodeArea>> tab, List<String> statements) {
         if (tab.isQueryRunning()) {
             return;
         }
 
-        if (query == null || query.trim().isEmpty()) {
+        if (statements == null || statements.isEmpty()) {
             return;
         }
 
@@ -333,7 +349,7 @@ public class QueryService {
         Task<ResultBox> queryTask = new Task<>() {
             @Override
             protected ResultBox call() {
-                return new ResultBox(query, tab);
+                return new ResultBox(statements, tab);
             }
         };
 
@@ -341,7 +357,17 @@ public class QueryService {
             tab.setResultBox(queryTask.getValue());
             finishQuery(tab);
         });
-        queryTask.setOnFailed(event -> finishQuery(tab));
+        queryTask.setOnFailed(event -> {
+            // Anything that isn't a plain SQL error (those get their own result tab) used to vanish silently.
+            Throwable cause = queryTask.getException();
+            log.error("Query execution failed", cause);
+            finishQuery(tab);
+            new CustomNotification(
+                    "Execution Failed",
+                    cause != null && cause.getMessage() != null ? cause.getMessage() : String.valueOf(cause),
+                    new FontIcon(MaterialDesignC.CLOSE_CIRCLE)
+            ).showNotification();
+        });
         queryTask.setOnCancelled(event -> finishQuery(tab));
 
         tab.setRunningQueryTask(queryTask);
@@ -352,23 +378,6 @@ public class QueryService {
         tab.setCurrentStatement(null);
         tab.setRunningQueryTask(null);
         tab.stopLoading();
-    }
-
-    private String extractStatementAtCaret(CodeArea codeArea) {
-        String text = codeArea.getText();
-        int caretPosition = codeArea.getCaretPosition();
-
-        if (text.isEmpty()) {
-            return null;
-        }
-
-        int startPos = text.lastIndexOf(';', caretPosition - 1);
-        startPos = (startPos == -1) ? 0 : startPos + 1;
-
-        int endPos = text.indexOf(';', caretPosition);
-        endPos = (endPos == -1) ? text.length() : endPos;
-
-        return text.substring(startPos, endPos).trim();
     }
 
     private File showSaveDialog(Window owner) {

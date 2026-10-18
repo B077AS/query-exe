@@ -384,11 +384,11 @@ public class PostgresConnection extends ConnectionObject {
         ArrayList<String> tableNames = new ArrayList<>();
 
         String query =
-                "SELECT t.table_name, " +
-                        "       pg_total_relation_size(quote_ident(t.table_schema) || '.' || quote_ident(t.table_name)) AS table_size_bytes " +
+                "SELECT t.table_name " +
                         "FROM information_schema.tables t " +
                         "WHERE t.table_schema = ? " +
-                        "AND t.table_type = 'BASE TABLE'";
+                        "AND t.table_type = 'BASE TABLE' " +
+                        "ORDER BY t.table_name";
 
         try (PreparedStatement stmt = DatabaseConnection.getInstance().getConnection().prepareStatement(query)) {
             stmt.setString(1, schemaName);
@@ -396,7 +396,6 @@ public class PostgresConnection extends ConnectionObject {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     String tableName = rs.getString("table_name");
-                    //double tableSizeBytes = rs.getDouble("table_size_bytes"); //TODO
                     tableNames.add(tableName);
                 }
             }
@@ -415,7 +414,7 @@ public class PostgresConnection extends ConnectionObject {
                 "    CASE WHEN bool_or(pk.constraint_type = 'PRIMARY KEY') THEN true ELSE false END as is_primary_key,\n" +
                 "    CASE WHEN c.is_nullable = 'NO' THEN true ELSE false END as is_not_null,\n" +
                 "    CASE WHEN bool_or(pk.constraint_type = 'UNIQUE') THEN true ELSE false END as is_unique,\n" +
-                "    CASE WHEN c.column_default LIKE 'nextval%' THEN true ELSE false END as is_auto_increment,\n" +
+                "    CASE WHEN c.column_default LIKE 'nextval%' OR c.is_identity = 'YES' THEN true ELSE false END as is_auto_increment,\n" +
                 "    (SELECT tc.constraint_name \n" +
                 "     FROM information_schema.key_column_usage ku\n" +
                 "     JOIN information_schema.table_constraints tc\n" +
@@ -441,7 +440,7 @@ public class PostgresConnection extends ConnectionObject {
                 ") pk ON c.column_name = pk.column_name\n" +
                 "WHERE c.table_schema = ?\n" +
                 "    AND c.table_name = ?\n" +
-                "GROUP BY c.column_name, c.data_type, c.is_nullable, c.column_default, c.ordinal_position, c.table_schema, c.table_name\n" +
+                "GROUP BY c.column_name, c.data_type, c.is_nullable, c.column_default, c.is_identity, c.ordinal_position, c.table_schema, c.table_name\n" +
                 "ORDER BY c.ordinal_position";
 
         PreparedStatement columnStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
@@ -512,9 +511,9 @@ public class PostgresConnection extends ConnectionObject {
         try {
             String query = "SELECT schema_name\n"
                     + "FROM information_schema.schemata\n"
-                    + "WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'pg_temp_1', 'pg_toast_temp_1')\n"
-                    + "   OR schema_name = 'public';\n"
-                    + "";
+                    // every system schema: pg_catalog, pg_toast, pg_temp_N, pg_toast_temp_N, ...
+                    + "WHERE schema_name <> 'information_schema' AND schema_name NOT LIKE 'pg\\_%'\n"
+                    + "ORDER BY schema_name;\n";
             PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(query);
             ResultSet result = statement.executeQuery();
 
@@ -910,8 +909,16 @@ public class PostgresConnection extends ConnectionObject {
     }
 
     @Override
+    public SqlSyntax getSqlSyntax() {
+        return SqlSyntax.POSTGRES;
+    }
+
+    @Override
     public String generateSelectScript(String tableName, String databaseName, int limit) {
-        return "SELECT * FROM \"" + tableName + "\" LIMIT " + limit + ";";
+        String target = databaseName != null && !databaseName.isBlank()
+                ? quoteIdentifier(databaseName) + "." + quoteIdentifier(tableName)
+                : quoteIdentifier(tableName);
+        return "SELECT * FROM " + target + " LIMIT " + limit + ";";
     }
 
     @Override
@@ -926,23 +933,14 @@ public class PostgresConnection extends ConnectionObject {
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
-            DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
-            String catalog = DatabaseConnection.getInstance().getConnection().getCatalog();
-
-            for (TableColumn<TableRowData, ?> col : tableColumns) {
-                String colName = col.getText();
-                columnNames.add(colName);
-
-                ResultSet columns = metaData.getColumns(catalog, null, tableName, colName);
-                if (columns.next()) {
-                    columnTypes.add(columns.getInt("DATA_TYPE"));
-                } else {
-                    columnTypes.add(Types.VARCHAR);
-                }
-                columns.close();
+            // the grid already knows each column's real name and SQL type; looking them up in the metadata by
+            // table name alone would ignore the schema and treat '_' as a wildcard
+            for (int i = 0; i < tableColumns.size(); i++) {
+                columnNames.add(quoteIdentifier(table.getColumnNames().get(i)));
+                columnTypes.add(table.getColumnSqlType(i));
             }
 
-            insertScript.append("INSERT INTO ").append(tableName)
+            insertScript.append("INSERT INTO ").append(table.getQualifiedTableName())
                     .append(" (")
                     .append(String.join(", ", columnNames))
                     .append(")\nVALUES (");
@@ -1598,7 +1596,7 @@ public class PostgresConnection extends ConnectionObject {
 
     @Override
     public void createDatabase(String databaseName) throws SQLException {
-        String sql = "CREATE SCHEMA IF NOT EXISTS \"" + databaseName + "\"";
+        String sql = "CREATE SCHEMA IF NOT EXISTS " + quoteIdentifier(databaseName);
 
         Statement statement = DatabaseConnection.getInstance().getConnection().createStatement();
         statement.executeUpdate(sql);
@@ -1607,7 +1605,7 @@ public class PostgresConnection extends ConnectionObject {
 
     @Override
     public void deleteDatabase(String databaseName) throws SQLException {
-        String sql = "DROP SCHEMA IF EXISTS \"" + databaseName + "\" CASCADE";
+        String sql = "DROP SCHEMA IF EXISTS " + quoteIdentifier(databaseName) + " CASCADE";
 
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.executeUpdate();
@@ -1616,7 +1614,7 @@ public class PostgresConnection extends ConnectionObject {
 
     @Override
     public void useDatabase(String databaseName) throws SQLException {
-        String sql = "SET search_path TO \"" + databaseName + "\"";
+        String sql = "SET search_path TO " + quoteIdentifier(databaseName);
         PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
         statement.execute();
         statement.close();

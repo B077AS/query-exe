@@ -1,10 +1,12 @@
 package com.queryexe.components.results;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.PreparedStatement;
+import java.sql.Statement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -38,20 +40,52 @@ import javafx.util.StringConverter;
 import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.data.QueryData;
+import com.queryexe.components.extra.CustomNotification;
+import org.kordamp.ikonli.javafx.FontIcon;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
 
 @Slf4j
 public class ResultTable extends TableView<TableRowData> {
 
+    @Getter
+    @Setter
     private String tableName;
-    private Set<String> primaryKeyColumns;
+    // Quoted, schema/catalog-qualified target taken from the result-set metadata, used in every generated statement.
+    private String qualifiedTableName;
+    // Upper-cased PK column names (for case-insensitive lookups) mapped to their real names, in KEY_SEQ order.
+    @Getter
+    private Set<String> primaryKeyColumns = new LinkedHashSet<>();
+    private Map<String, String> primaryKeyActualNames = new LinkedHashMap<>();
+    // Underlying (non-aliased) column names per grid column, used when generating SQL.
+    private final List<String> columnNames = new ArrayList<>();
+    // True when the result hit the row limit set on the statement, i.e. more rows exist than are shown.
+    @Getter
+    private boolean truncated;
+    private com.queryexe.model.connections.ConnectionObject connectionObject;
+    @Getter
     private long executionTime;
+    @Getter
     private List<QueryData> updateQueries;
     private ObservableList<TableRowData> backupData = FXCollections.observableArrayList();
+    @Setter
     private Runnable onCellUpdate;
     private final int minColumnWidth = 150;
     private static final int MAX_CELL_LENGTH = 200;
-    private Map<String, QueryData> rowUpdateQueries = new HashMap<>();
+    // Pending edits per existing row (identity-keyed: TableRowData's value equality changes as cells are edited).
+    private final Map<TableRowData, RowEdit> rowEdits = new IdentityHashMap<>();
+
+    private static final class RowEdit {
+        // Primary key values as they are in the database, captured before the first edit of the row.
+        final Map<String, Object> primaryKeyValues;
+        final Map<Integer, Object> changes = new LinkedHashMap<>();
+        QueryData query;
+
+        RowEdit(Map<String, Object> primaryKeyValues) {
+            this.primaryKeyValues = primaryKeyValues;
+        }
+    }
     private List<Integer> columnSqlTypes = new ArrayList<>();
+    private final List<String> columnTypeNames = new ArrayList<>();
     private final javafx.event.EventHandler<MouseEvent> outsideEditClickFilter = event -> {
         TablePosition<TableRowData, ?> editingCell = this.getEditingCell();
         if (editingCell == null) {
@@ -101,7 +135,14 @@ public class ResultTable extends TableView<TableRowData> {
         }
     };
 
-    public ResultTable(PreparedStatement preparedStatement, long executionTime) throws SQLException {
+    public ResultTable(Statement statement, long executionTime) throws SQLException {
+        this(statement, executionTime, 0);
+    }
+
+    /**
+     * @param maxRows the limit that was set on the statement (0 = none); reaching it marks the grid as truncated
+     */
+    public ResultTable(Statement statement, long executionTime, int maxRows) throws SQLException {
         this.updateQueries = new ArrayList<QueryData>();
         this.executionTime = executionTime;
 
@@ -144,7 +185,7 @@ public class ResultTable extends TableView<TableRowData> {
 
         boolean hasPrimaryKey = false;
 
-        ResultSet resultSet = preparedStatement.getResultSet();
+        ResultSet resultSet = statement.getResultSet();
         ResultSetMetaData metaData = resultSet.getMetaData();
         hasPrimaryKey = checkForPrimaryKey(DatabaseConnection.getInstance().getConnection(), metaData);
 
@@ -154,7 +195,9 @@ public class ResultTable extends TableView<TableRowData> {
 
         for (int columnIndex = 1; columnIndex <= columnCount; columnIndex++) {
             String columnName = metaData.getColumnName(columnIndex);
-            TableColumn<TableRowData, String> tableColumn = new TableColumn<>(columnName);
+            columnNames.add(columnName);
+            // the header shows the alias the query gave the column; SQL is generated from the real column name
+            TableColumn<TableRowData, String> tableColumn = new TableColumn<>(metaData.getColumnLabel(columnIndex));
 
             tableColumn.setContextMenu(new ResultColumnContextMenu(tableColumn));
             tableColumn.setReorderable(false);
@@ -163,6 +206,7 @@ public class ResultTable extends TableView<TableRowData> {
 
             int columnType = metaData.getColumnType(columnIndex);
             columnSqlTypes.add(metaData.getColumnType(columnIndex));
+            columnTypeNames.add(Objects.toString(metaData.getColumnTypeName(columnIndex), ""));
 
             if (columnType == java.sql.Types.BLOB || columnType == java.sql.Types.LONGVARBINARY ||
                     columnType == java.sql.Types.VARBINARY || columnType == java.sql.Types.BINARY) {
@@ -171,7 +215,8 @@ public class ResultTable extends TableView<TableRowData> {
 
                 tableColumn.setEditable("java.util.UUID".equals(columnClassName) || columnTypeName.toUpperCase().contains("UUID"));
             } else {
-                tableColumn.setEditable(true);
+                // expressions/literals have no column to write back to
+                tableColumn.setEditable(!Objects.toString(metaData.getTableName(columnIndex), "").isEmpty());
             }
 
             tableColumn.setCellFactory(col -> {
@@ -429,12 +474,30 @@ public class ResultTable extends TableView<TableRowData> {
                         break;
                     case java.sql.Types.BOOLEAN:
                         boolean boolValue = resultSet.getBoolean(columnIndex);
-                        originalValue = boolValue;
-                        stringValue = (resultSet.wasNull()) ? null : boolValue ? "1" : "0";
+                        boolean boolIsNull = resultSet.wasNull();
+                        originalValue = boolIsNull ? null : boolValue;
+                        stringValue = boolIsNull ? null : String.valueOf(boolValue);
+                        break;
+                    // The drivers' own toString() of these is a debugging aid ("clob0: '...'", "[B@1f2e"), not the value.
+                    case java.sql.Types.CLOB:
+                    case java.sql.Types.NCLOB:
+                    case java.sql.Types.SQLXML:
+                        stringValue = resultSet.getString(columnIndex);
+                        originalValue = stringValue;
+                        break;
+                    case java.sql.Types.ARRAY:
+                        stringValue = formatArray(resultSet.getArray(columnIndex));
+                        originalValue = stringValue;
                         break;
                     default:
-                        originalValue = resultSet.getObject(columnIndex);
-                        stringValue = (originalValue != null) ? originalValue.toString() : null;
+                        String typeName = columnTypeNames.get(columnIndex - 1).toLowerCase();
+                        if (typeName.contains("json") || typeName.contains("xml")) {
+                            stringValue = resultSet.getString(columnIndex);
+                            originalValue = stringValue;
+                        } else {
+                            originalValue = resultSet.getObject(columnIndex);
+                            stringValue = (originalValue != null) ? originalValue.toString() : null;
+                        }
                 }
                 originalRow.add(originalValue);
                 stringRow.add(stringValue);
@@ -444,8 +507,8 @@ public class ResultTable extends TableView<TableRowData> {
         }
 
         this.setItems(tableData);
+        this.truncated = maxRows > 0 && tableData.size() >= maxRows;
         resultSet.close();
-        preparedStatement.close();
 
         this.setVisible(false);
         this.skinProperty().addListener((observable, oldSkin, newSkin) -> {
@@ -468,6 +531,25 @@ public class ResultTable extends TableView<TableRowData> {
         });
 
         addTableResizeListener();
+    }
+
+    private static String formatArray(java.sql.Array array) throws SQLException {
+        if (array == null) {
+            return null;
+        }
+        Object elements = array.getArray();
+        if (elements == null || !elements.getClass().isArray()) {
+            return String.valueOf(elements);
+        }
+        // reflection so primitive arrays (int[]) are handled like object arrays
+        StringJoiner joined = new StringJoiner(", ", "[", "]");
+        for (int i = 0; i < java.lang.reflect.Array.getLength(elements); i++) {
+            Object element = java.lang.reflect.Array.get(elements, i);
+            joined.add(element != null && element.getClass().isArray() && element instanceof Object[] nested
+                    ? Arrays.deepToString(nested)
+                    : String.valueOf(element));
+        }
+        return joined.toString();
     }
 
     private static boolean isUnchangedNull(String previousValue, String editedValue) {
@@ -511,35 +593,61 @@ public class ResultTable extends TableView<TableRowData> {
     }
 
     private boolean checkForPrimaryKey(Connection connection, ResultSetMetaData metaData) throws SQLException {
-        Set<String> tableNames = new HashSet<>();
+        // Identify the target by catalog + schema + table: the bare table name is ambiguous when the same
+        // name exists in several schemas/databases (edits would silently hit the default one).
+        Set<List<String>> targets = new LinkedHashSet<>();
         int columnCount = metaData.getColumnCount();
 
         for (int i = 1; i <= columnCount; i++) {
-            String tableName = metaData.getTableName(i);
-            if (tableName != null && !tableName.isEmpty()) {
-                tableNames.add(tableName);
+            String columnTable = metaData.getTableName(i);
+            if (columnTable != null && !columnTable.isEmpty()) {
+                targets.add(List.of(
+                        Objects.toString(metaData.getCatalogName(i), ""),
+                        Objects.toString(metaData.getSchemaName(i), ""),
+                        columnTable));
             }
         }
 
-        if (tableNames.size() > 1) {
+        if (targets.size() > 1) {
             log.debug("Multiple tables detected - likely a JOIN query");
             return false;
         }
 
-        if (tableNames.isEmpty()) {
+        if (targets.isEmpty()) {
             log.debug("No table names found in metadata");
             return false;
         }
 
-        tableName = tableNames.iterator().next();
+        List<String> target = targets.iterator().next();
+        String catalog = target.get(0);
+        String schema = target.get(1);
+        tableName = target.get(2);
+
+        connectionObject = DatabaseConnection.getInstance().getConnectionObject();
+        if (connectionObject == null) {
+            return false;
+        }
+        if (connectionObject.isTableReferenceAmbiguous(catalog, schema, tableName)) {
+            log.debug("Table reference {} is ambiguous - results are read-only", tableName);
+            return false;
+        }
+        qualifiedTableName = connectionObject.qualifyTable(catalog, schema, tableName);
 
         DatabaseMetaData dbMetaData = connection.getMetaData();
-        primaryKeyColumns = new HashSet<>();
+        primaryKeyColumns = new LinkedHashSet<>();
+        primaryKeyActualNames = new LinkedHashMap<>();
 
-        try (ResultSet primaryKeys = dbMetaData.getPrimaryKeys(connection.getCatalog(), null, tableName)) {
+        // Ordered by KEY_SEQ so composite keys keep their declared order.
+        TreeMap<Short, String> orderedKeys = new TreeMap<>();
+        try (ResultSet primaryKeys = dbMetaData.getPrimaryKeys(
+                catalog.isEmpty() ? null : catalog, schema.isEmpty() ? null : schema, tableName)) {
             while (primaryKeys.next()) {
-                primaryKeyColumns.add(primaryKeys.getString("COLUMN_NAME").toUpperCase());
+                orderedKeys.put(primaryKeys.getShort("KEY_SEQ"), primaryKeys.getString("COLUMN_NAME"));
             }
+        }
+        for (String pkName : orderedKeys.values()) {
+            primaryKeyColumns.add(pkName.toUpperCase());
+            primaryKeyActualNames.put(pkName.toUpperCase(), pkName);
         }
 
         if (primaryKeyColumns.isEmpty()) {
@@ -558,107 +666,49 @@ public class ResultTable extends TableView<TableRowData> {
         return foundColumns.size() == primaryKeyColumns.size();
     }
 
-    private String getRowIdentifier(TableRowData rowData) {
-        StringBuilder identifier = new StringBuilder();
-        for (String primaryKeyColumn : primaryKeyColumns) {
-            int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
-            if (pkIndex >= 0) {
-                Object value = rowData.getOriginalData().get(pkIndex);
-                identifier.append(primaryKeyColumn).append(":").append(value).append("|");
-            }
-        }
-        return identifier.toString();
-    }
-
     public void updateDatabaseRow(TableRowData rowData, int updatedColumnIndex, String oldValue, String newValue) {
         Object previousOriginal = rowData.getOriginalData().get(updatedColumnIndex);
+
+        // A row inserted in this grid whose key the database generated but the driver didn't report back
+        // can't be targeted by an UPDATE; refuse instead of silently matching nothing.
+        if (!rowData.isNewRow() && !rowEdits.containsKey(rowData) && !hasKnownKey(rowData)) {
+            try {
+                new CustomNotification("Row Not Editable",
+                        "This row's key is unknown. Re-run the query to edit it.",
+                        new FontIcon(MaterialDesignA.ALERT_OUTLINE)).showNotification();
+            } catch (Exception e) {
+                log.warn("Row has no known key; edit ignored");
+            }
+            this.refresh();
+            return;
+        }
+
         try {
             Object typedValue = convertToOriginalType(updatedColumnIndex, newValue);
+
+            RowEdit edit = null;
+            boolean newEdit = false;
+            if (!rowData.isNewRow()) {
+                edit = rowEdits.get(rowData);
+                if (edit == null) {
+                    // Captured before the cell changes: when the edited cell is part of the key,
+                    // the WHERE clause must still match the value stored in the database.
+                    edit = new RowEdit(currentPrimaryKeyValues(rowData));
+                    newEdit = true;
+                }
+            }
 
             rowData.getStringData().set(updatedColumnIndex, newValue);
             rowData.getOriginalData().set(updatedColumnIndex, typedValue);
 
             if (rowData.isNewRow()) {
-                // typedValue is already null for null/empty input, which also avoids
-                // the NPE the old newValue.isEmpty() check caused on "Set NULL".
-                QueryData insertQuery = rowData.getPendingInsert();
-                insertQuery.getParameters().set(updatedColumnIndex, typedValue);
+                rebuildInsert(rowData);
             } else {
-                String rowIdentifier = getRowIdentifier(rowData);
-                QueryData existingQuery = rowUpdateQueries.get(rowIdentifier);
-
-                if (existingQuery != null) {
-                    String columnName = this.getColumns().get(updatedColumnIndex).getText();
-                    String currentQuery = existingQuery.getQuery();
-                    int setIndex = currentQuery.indexOf("SET ") + 4;
-                    int whereIndex = currentQuery.indexOf(" WHERE ");
-                    String setClause = currentQuery.substring(setIndex, whereIndex);
-                    String whereClause = currentQuery.substring(whereIndex);
-
-                    // Exact match against the SET columns: a contains() check would
-                    // confuse columns whose names are suffixes of one another
-                    // (e.g. "name" matches inside "username = ?").
-                    String[] setColumns = setClause.split(",");
-                    int existingParamIndex = -1;
-                    for (int i = 0; i < setColumns.length; i++) {
-                        String colName = setColumns[i].trim().split(" = ")[0];
-                        if (colName.equals(columnName)) {
-                            existingParamIndex = i;
-                            break;
-                        }
-                    }
-
-                    if (existingParamIndex >= 0) {
-                        existingQuery.getParameters().set(existingParamIndex, typedValue);
-                    } else {
-                        setClause += ", " + columnName + " = ?";
-
-                        String updatedQuery = String.format("UPDATE %s SET %s%s", tableName, setClause, whereClause);
-                        existingQuery.setQuery(updatedQuery);
-
-                        List<Object> params = existingQuery.getParameters();
-                        int whereParamIndex = params.size() - primaryKeyColumns.size();
-                        params.add(whereParamIndex, typedValue);
-                    }
-                } else {
-                    Map<String, Object> primaryKeyValues = new HashMap<>();
-                    for (String primaryKeyColumn : primaryKeyColumns) {
-                        int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
-                        if (pkIndex == updatedColumnIndex) {
-                            Object oldTypedValue = convertToOriginalType(pkIndex, oldValue);
-                            primaryKeyValues.put(primaryKeyColumn, oldTypedValue);
-                        } else {
-                            primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
-                        }
-                    }
-
-                    if (!primaryKeyColumns.isEmpty()) {
-                        String columnName = this.getColumns().get(updatedColumnIndex).getText();
-
-                        StringBuilder whereClause = new StringBuilder();
-                        List<Object> parameters = new ArrayList<>();
-
-                        parameters.add(typedValue);
-
-                        boolean isFirst = true;
-                        for (String primaryKeyColumn : primaryKeyColumns) {
-                            if (!isFirst) {
-                                whereClause.append(" AND ");
-                            }
-                            whereClause.append(primaryKeyColumn).append(" = ?");
-                            parameters.add(primaryKeyValues.get(primaryKeyColumn));
-                            isFirst = false;
-                        }
-
-                        String updateQuery = String.format("UPDATE %s SET %s = ? WHERE %s",
-                                tableName,
-                                columnName,
-                                whereClause.toString());
-
-                        QueryData queryInfo = new QueryData(updateQuery, parameters);
-                        updateQueries.add(queryInfo);
-                        rowUpdateQueries.put(rowIdentifier, queryInfo);
-                    }
+                edit.changes.put(updatedColumnIndex, typedValue);
+                rebuildUpdate(edit);
+                if (newEdit) {
+                    rowEdits.put(rowData, edit);
+                    updateQueries.add(edit.query);
                 }
             }
 
@@ -684,6 +734,11 @@ public class ResultTable extends TableView<TableRowData> {
         }
 
         try {
+            // Engines with a native UUID type (e.g. PostgreSQL) need a UUID object, but text columns that merely
+            // hold UUID-looking strings must stay strings, so decide from the column type, not the value.
+            if ("uuid".equalsIgnoreCase(columnTypeNames.get(columnIndex))) {
+                return UUID.fromString(stringValue.trim());
+            }
             switch (columnSqlTypes.get(columnIndex)) {
                 case java.sql.Types.BOOLEAN:
                 case java.sql.Types.BIT: {
@@ -734,30 +789,10 @@ public class ResultTable extends TableView<TableRowData> {
         TableRowData newRow = new TableRowData(FXCollections.observableArrayList(newOriginalData), FXCollections.observableArrayList(newStringData));
         newRow.setNewRow(true);
 
-        StringBuilder columnsClause = new StringBuilder();
-        StringBuilder valuesClause = new StringBuilder();
-        List<Object> parameters = new ArrayList<>();
-
-        for (int i = 0; i < this.getColumns().size(); i++) {
-            if (i > 0) {
-                columnsClause.append(", ");
-                valuesClause.append(", ");
-            }
-            columnsClause.append(this.getColumns().get(i).getText());
-            valuesClause.append("?");
-            parameters.add(null);
-        }
-
-        String insertQuery = String.format(
-                "INSERT INTO %s (%s) VALUES (%s)",
-                tableName,
-                columnsClause.toString(),
-                valuesClause.toString()
-        );
-
-        QueryData queryInfo = new QueryData(insertQuery, parameters);
-        updateQueries.add(queryInfo);
+        QueryData queryInfo = new QueryData("", new ArrayList<>());
         newRow.setPendingInsert(queryInfo);
+        rebuildInsert(newRow);
+        updateQueries.add(queryInfo);
 
         this.getItems().add(newRow);
 
@@ -775,8 +810,7 @@ public class ResultTable extends TableView<TableRowData> {
         List<String> newStringData = new ArrayList<>(sourceRow.getStringData());
 
         for (int i = 0; i < this.getColumns().size(); i++) {
-            String colName = this.getColumns().get(i).getText().toUpperCase();
-            if (primaryKeyColumns.contains(colName)) {
+            if (primaryKeyColumns.contains(columnNames.get(i).toUpperCase())) {
                 newOriginalData.set(i, null);
                 newStringData.set(i, "");
             }
@@ -788,30 +822,10 @@ public class ResultTable extends TableView<TableRowData> {
         );
         newRow.setNewRow(true);
 
-        StringBuilder columnsClause = new StringBuilder();
-        StringBuilder valuesClause = new StringBuilder();
-        List<Object> parameters = new ArrayList<>();
-
-        for (int i = 0; i < this.getColumns().size(); i++) {
-            if (i > 0) {
-                columnsClause.append(", ");
-                valuesClause.append(", ");
-            }
-            columnsClause.append(this.getColumns().get(i).getText());
-            valuesClause.append("?");
-            parameters.add(newOriginalData.get(i));
-        }
-
-        String insertQuery = String.format(
-                "INSERT INTO %s (%s) VALUES (%s)",
-                tableName,
-                columnsClause.toString(),
-                valuesClause.toString()
-        );
-
-        QueryData queryInfo = new QueryData(insertQuery, parameters);
-        updateQueries.add(queryInfo);
+        QueryData queryInfo = new QueryData("", new ArrayList<>());
         newRow.setPendingInsert(queryInfo);
+        rebuildInsert(newRow);
+        updateQueries.add(queryInfo);
 
         this.getItems().add(newRow);
         this.scrollTo(newRow);
@@ -856,40 +870,93 @@ public class ResultTable extends TableView<TableRowData> {
             return;
         }
 
-        Map<String, Object> primaryKeyValues = new HashMap<>();
-        for (String primaryKeyColumn : primaryKeyColumns) {
-            int pkIndex = getPrimaryKeyColumnIndex(rowData, primaryKeyColumn);
-            if (pkIndex >= 0) {
-                primaryKeyValues.put(primaryKeyColumn, rowData.getOriginalData().get(pkIndex));
-            }
+        // A row with pending edits is deleted by the key it has in the database, and its UPDATE is
+        // dropped so it can't run before the DELETE (and fail or hit another row if the key was edited).
+        RowEdit edit = rowEdits.remove(rowData);
+        Map<String, Object> primaryKeyValues;
+        if (edit != null) {
+            updateQueries.removeIf(queryData -> queryData == edit.query);
+            primaryKeyValues = edit.primaryKeyValues;
+        } else {
+            primaryKeyValues = currentPrimaryKeyValues(rowData);
         }
 
-        StringBuilder whereClause = new StringBuilder();
         List<Object> parameters = new ArrayList<>();
+        String deleteQuery = "DELETE FROM " + qualifiedTableName + " WHERE " + buildWhereClause(primaryKeyValues, parameters);
 
-        boolean isFirst = true;
-        for (Map.Entry<String, Object> entry : primaryKeyValues.entrySet()) {
-            if (!isFirst) {
-                whereClause.append(" AND ");
-            }
-            whereClause.append(entry.getKey()).append(" = ?");
-            parameters.add(entry.getValue());
-            isFirst = false;
-        }
-
-        String deleteQuery = String.format("DELETE FROM %s WHERE %s", tableName, whereClause.toString());
-
-        QueryData queryInfo = new QueryData(deleteQuery, parameters);
-        updateQueries.add(queryInfo);
+        updateQueries.add(new QueryData(deleteQuery, parameters));
     }
 
-    private int getPrimaryKeyColumnIndex(TableRowData rowData, String primaryKeyColumnName) {
-        for (TableColumn<TableRowData, ?> column : this.getColumns()) {
-            if (column.getText().equalsIgnoreCase(primaryKeyColumnName)) {
-                return this.getColumns().indexOf(column);
+    private Map<String, Object> currentPrimaryKeyValues(TableRowData rowData) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        for (String primaryKeyName : primaryKeyActualNames.values()) {
+            int index = columnIndexForName(primaryKeyName);
+            if (index >= 0) {
+                values.put(primaryKeyName, rowData.getOriginalData().get(index));
+            }
+        }
+        return values;
+    }
+
+    private String buildWhereClause(Map<String, Object> primaryKeyValues, List<Object> parameters) {
+        StringJoiner where = new StringJoiner(" AND ");
+        for (Map.Entry<String, Object> entry : primaryKeyValues.entrySet()) {
+            where.add(connectionObject.quoteIdentifier(entry.getKey()) + " = ?");
+            parameters.add(entry.getValue());
+        }
+        return where.toString();
+    }
+
+    private int columnIndexForName(String name) {
+        for (int i = 0; i < columnNames.size(); i++) {
+            if (columnNames.get(i).equalsIgnoreCase(name)) {
+                return i;
             }
         }
         return -1;
+    }
+
+    // Regenerates a pending INSERT from the row's current values. Untouched (null) columns are left
+    // out so identity/default columns are filled in by the database instead of being forced to NULL.
+    private void rebuildInsert(TableRowData row) {
+        StringJoiner columnsClause = new StringJoiner(", ");
+        StringJoiner valuesClause = new StringJoiner(", ");
+        List<Object> parameters = new ArrayList<>();
+
+        for (int i = 0; i < columnNames.size(); i++) {
+            Object value = row.getOriginalData().get(i);
+            if (value != null) {
+                columnsClause.add(connectionObject.quoteIdentifier(columnNames.get(i)));
+                valuesClause.add("?");
+                parameters.add(value);
+            }
+        }
+
+        String insertQuery = parameters.isEmpty()
+                ? connectionObject.generateDefaultsOnlyInsert(qualifiedTableName)
+                : "INSERT INTO " + qualifiedTableName + " (" + columnsClause + ") VALUES (" + valuesClause + ")";
+
+        QueryData insert = row.getPendingInsert();
+        insert.setQuery(insertQuery);
+        insert.setParameters(parameters);
+    }
+
+    private void rebuildUpdate(RowEdit edit) {
+        StringJoiner setClause = new StringJoiner(", ");
+        List<Object> parameters = new ArrayList<>();
+        for (Map.Entry<Integer, Object> change : edit.changes.entrySet()) {
+            setClause.add(connectionObject.quoteIdentifier(columnNames.get(change.getKey())) + " = ?");
+            parameters.add(change.getValue());
+        }
+        String updateQuery = "UPDATE " + qualifiedTableName + " SET " + setClause
+                + " WHERE " + buildWhereClause(edit.primaryKeyValues, parameters);
+
+        if (edit.query == null) {
+            edit.query = new QueryData(updateQuery, parameters);
+        } else {
+            edit.query.setQuery(updateQuery);
+            edit.query.setParameters(parameters);
+        }
     }
 
     public void restoreOriginalData() {
@@ -905,7 +972,7 @@ public class ResultTable extends TableView<TableRowData> {
             this.setItems(restoredData);
 
             this.updateQueries.clear();
-            this.rowUpdateQueries.clear();
+            this.rowEdits.clear();
             this.refresh();
         });
     }
@@ -949,36 +1016,108 @@ public class ResultTable extends TableView<TableRowData> {
         Clipboard.getSystemClipboard().setContent(clipboardContent);
     }
 
+    private boolean hasKnownKey(TableRowData rowData) {
+        Map<String, Object> values = currentPrimaryKeyValues(rowData);
+        return values.size() == primaryKeyActualNames.size() && !values.containsValue(null);
+    }
+
+    /**
+     * The pending INSERT statements, by identity, so the caller can ask the driver for generated keys.
+     */
+    public Set<QueryData> pendingInsertQueries() {
+        Set<QueryData> inserts = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (TableRowData row : this.getItems()) {
+            if (row.isNewRow() && row.getPendingInsert() != null) {
+                inserts.add(row.getPendingInsert());
+            }
+        }
+        return inserts;
+    }
+
+    /**
+     * Called on the FX thread after all pending statements were committed: inserted rows become ordinary
+     * rows (their generated key is filled in so later edits can address them), and tracking is reset.
+     *
+     * @param generatedKeys per INSERT (identity-keyed), the generated-key columns the driver returned
+     */
+    public void commitApplied(Map<QueryData, Map<String, Object>> generatedKeys) {
+        for (TableRowData row : this.getItems()) {
+            if (!row.isNewRow()) {
+                continue;
+            }
+            Map<String, Object> keys = generatedKeys.get(row.getPendingInsert());
+            if (keys != null) {
+                fillGeneratedKeys(row, keys);
+            }
+            row.setNewRow(false);
+            row.setPendingInsert(null);
+        }
+
+        updateBackupData();
+        clearUpdateTracking();
+        if (onCellUpdate != null) {
+            onCellUpdate.run();
+        }
+        this.refresh();
+    }
+
+    private void fillGeneratedKeys(TableRowData row, Map<String, Object> keys) {
+        List<Integer> missing = new ArrayList<>();
+        for (String primaryKeyName : primaryKeyActualNames.values()) {
+            int index = columnIndexForName(primaryKeyName);
+            if (index >= 0 && row.getOriginalData().get(index) == null) {
+                missing.add(index);
+            }
+        }
+
+        for (int index : missing) {
+            Object value = null;
+            for (Map.Entry<String, Object> key : keys.entrySet()) {
+                if (key.getKey().equalsIgnoreCase(columnNames.get(index))) {
+                    value = key.getValue();
+                }
+            }
+            // Drivers like MySQL/SQLite name the key column generically ("GENERATED_KEY", "last_insert_rowid()").
+            if (value == null && keys.size() == 1 && missing.size() == 1) {
+                value = keys.values().iterator().next();
+            }
+            if (value != null) {
+                row.getOriginalData().set(index, value);
+                row.getStringData().set(index, value.toString());
+            }
+        }
+    }
+
     public void clearUpdateTracking() {
         this.updateQueries.clear();
-        this.rowUpdateQueries.clear();
+        this.rowEdits.clear();
+    }
+
+    /** The real (un-aliased) column names, in grid order; this is what generated SQL must use. */
+    public List<String> getColumnNames() {
+        return Collections.unmodifiableList(columnNames);
+    }
+
+    /** {@code java.sql.Types} code of the grid column at this index, VARCHAR when unknown. */
+    public int getColumnSqlType(int columnIndex) {
+        return columnIndex >= 0 && columnIndex < columnSqlTypes.size() ? columnSqlTypes.get(columnIndex) : java.sql.Types.VARCHAR;
+    }
+
+    /** Whether the grid column at this index is (part of) the table's primary key, regardless of its alias. */
+    public boolean isPrimaryKeyColumn(int columnIndex) {
+        return columnIndex >= 0 && columnIndex < columnNames.size()
+                && primaryKeyColumns.contains(columnNames.get(columnIndex).toUpperCase());
     }
 
     public boolean hasPendingChanges() {
         return !updateQueries.isEmpty();
     }
 
-    public void setOnCellUpdate(Runnable onCellUpdate) {
-        this.onCellUpdate = onCellUpdate;
+    public String getQualifiedTableName() {
+        if (qualifiedTableName != null) {
+            return qualifiedTableName;
+        }
+        return connectionObject != null && tableName != null ? connectionObject.quoteIdentifier(tableName) : tableName;
     }
 
-    public String getTableName() {
-        return tableName;
-    }
-
-    public void setTableName(String tableName) {
-        this.tableName = tableName;
-    }
-
-    public Set<String> getPrimaryKeyColumns() {
-        return primaryKeyColumns;
-    }
-
-    public long getExecutionTime() {
-        return executionTime;
-    }
-
-    public List<QueryData> getUpdateQueries() {
-        return updateQueries;
-    }
 }

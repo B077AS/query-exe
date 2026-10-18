@@ -12,6 +12,7 @@ public class ColumnData {
     private boolean unique;
     private boolean autoIncrement;
     private String uniqueIndexName;
+    private String defaultValue;
 
     public ColumnData(String columnName, String dataType, boolean primaryKey, boolean notNull, boolean unique, boolean autoIncrement) {
         this.columnName = columnName;

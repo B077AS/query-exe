@@ -5,12 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.Set;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
@@ -49,6 +51,13 @@ import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.data.QueryData;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.queryexe.App;
+import com.queryexe.service.Async;
+import com.queryexe.service.ChangeApplier;
+import com.queryexe.service.ScriptRunner;
+import com.queryexe.utils.SqlInspector;
+import com.queryexe.components.tree.CustomTree;
+import com.queryexe.model.connections.ConnectionObject;
+import java.sql.Statement;
 import com.queryexe.service.ExportUtils;
 import com.queryexe.utils.TabScrollChevrons;
 
@@ -59,16 +68,11 @@ public class ResultBox extends VBox {
     private Button applyButton;
     private CustomTab<?> parentTab;
 
-    public ResultBox(String query, CustomTab<?> parentTab) {
-
-        if (DatabaseConnection.getInstance().getConnectionObject() == null) {
-            try {
-                DatabaseConnection.getInstance().initialize(parentTab.getConnectionObject());
-            } catch (SQLException e) {
-            }
-        }
-
+    public ResultBox(List<String> statements, CustomTab<?> parentTab) {
         this.parentTab = parentTab;
+        ConnectionObject connectionObject = parentTab != null && parentTab.getConnectionObject() != null
+                ? parentTab.getConnectionObject()
+                : DatabaseConnection.getInstance().getCurrentConnectionObject();
 
         TabPane tabPane = new TabPane();
         tabPane.setTabDragPolicy(TabDragPolicy.REORDER);
@@ -186,7 +190,7 @@ public class ResultBox extends VBox {
                 if (newTab.getContent() instanceof ResultTable) {
                     TableView<TableRowData> selectedTable = ((ResultTable) newTab.getContent());
                     if (selectedTable != null) {
-                        rowsLabel.setText("Rows: " + selectedTable.getItems().size());
+                        rowsLabel.setText(rowsText((ResultTable) selectedTable));
                         timeLabel.setText("Time: " + ((ResultTable) selectedTable).getExecutionTime() + "ms");
                     }
 
@@ -234,318 +238,201 @@ public class ResultBox extends VBox {
             }
         });
 
-        List<String> queries = splitSqlStatements(query);
-        boolean hasErrors = false;
-
-        for (String singleQuery : queries) {
-            if (!singleQuery.trim().isEmpty()) {
-
-                if (!DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.PostgreSQL.toString())) {
-                    Pattern usePattern = Pattern.compile("^\\s*USE\\s+([^;\\s]+)\\s*;?\\s*$", Pattern.CASE_INSENSITIVE);
-                    Matcher useMatcher = usePattern.matcher(singleQuery.trim());
-                    if (useMatcher.find()) {
-                        String newDatabase = useMatcher.group(1);
-                        newDatabase = newDatabase.replaceAll("[`'\"]", "");
-                        App.getCustomTree().selectDatabase(newDatabase);
-                    }
-
-                    if (DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.H2.toString())) {
-                        Pattern h2Pattern = Pattern.compile("^\\s*SET\\s+SCHEMA\\s+\"([^\"]+)\"\\s*;?\\s*$", Pattern.CASE_INSENSITIVE);
-                        Matcher h2Matcher = h2Pattern.matcher(singleQuery.trim());
-                        if (h2Matcher.find()) {
-                            String newDatabase = h2Matcher.group(1);
-                            App.getCustomTree().selectDatabase(newDatabase);
-                        }
-                    }
-                } else {
-                    Pattern pattern = Pattern.compile("^\\s*SET\\s+search_path\\s+TO\\s+(['\"]?\\$?\\w+['\"]?\\s*(,\\s*['\"]?\\w+['\"]?)*\\s*)\\s*;?\\s*$", Pattern.CASE_INSENSITIVE);
-                    Matcher matcher = pattern.matcher(singleQuery.trim());
-                    if (matcher.find()) {
-                        String newDatabase = matcher.group(1);
-                        newDatabase = newDatabase.replaceAll("[`'\"]", "");
-
-                        if (newDatabase.split(",").length > 1) {
-                            newDatabase = newDatabase.split(",")[1].trim();
-                        }
-                        App.getCustomTree().selectDatabase(newDatabase);
-                    }
-                }
-
-                PreparedStatement preparedStatement = null;
-                ResultTable customTableView = null;
-
-                try {
-                    Connection connection = DatabaseConnection.getInstance().getConnection();
-                    long startTime = System.currentTimeMillis();
-                    preparedStatement = connection.prepareStatement(singleQuery);
-
+        // Statements were already split for this connection's dialect by SqlSplitter. The connection is resolved
+        // once, so switching tabs while a script runs can't send later statements to another database.
+        boolean allSucceeded;
+        try {
+            Connection connection = openConnection(connectionObject);
+            allSucceeded = ScriptRunner.run(connection, statements, MAX_ROWS, new ScriptRunner.Listener() {
+                @Override
+                public void onStatementStarted(String sql, Statement statement) {
                     if (parentTab != null) {
-                        this.parentTab.setCurrentStatement(preparedStatement);
+                        parentTab.setCurrentStatement(statement);
                     }
-
-                    boolean hasResultSet = preparedStatement.execute();
-                    long endTime = System.currentTimeMillis();
-                    long executionTime = endTime - startTime;
-
-                    if (hasResultSet) {
-                        ResultTable resultTable = new ResultTable(preparedStatement, executionTime);
-                        resultTable.setOnCellUpdate(() -> {
-                            boolean hasChanges = resultTable.hasPendingChanges();
-                            applyButton.setDisable(!hasChanges);
-                            revertButton.setDisable(!hasChanges);
-                            rowsLabel.setText("Rows: " + resultTable.getItems().size());
-                        });
-                        customTableView = resultTable;
-
-                        if (customTableView != null) {
-                            CustomTab<ResultTable> tableTab = new CustomTab<>(customTableView, tabPane);
-
-                            tableTab.getIcon().setOnMouseClicked(event -> {
-                                if (applyButton.isDisabled()) {
-                                    tabPane.getTabs().remove(tableTab);
-                                } else {
-                                    ConfirmationModal confirmationModal = new ConfirmationModal(
-                                            "Unsaved Changes",
-                                            "Do you want to apply the changes?",
-                                            new FontIcon(MaterialDesignA.ALERT_OUTLINE),
-                                            () -> {
-                                                applyChanges(tabPane);
-                                            }
-                                    );
-                                    App.showModal(confirmationModal);
-                                }
-                            });
-                            tabPane.getTabs().add(tableTab);
-                        }
-                    } else {
-                        int updateCount = preparedStatement.getUpdateCount();
-                        SimpleResultBox simpleResultBox = new SimpleResultBox(updateCount, singleQuery);
-
-                        CustomTab<SimpleResultBox> simpleQueryTab = new CustomTab<>(simpleResultBox, tabPane);
-                        tabPane.getTabs().add(simpleQueryTab);
-                        preparedStatement.close();
-                    }
-                } catch (SQLException e) {
-                    log.warn("Query failed: {}", e.getMessage());
-                    hasErrors = true;
-
-                    try {
-                        if (preparedStatement != null && !preparedStatement.isClosed()) {
-                            preparedStatement.close();
-                        }
-                    } catch (SQLException closeException) {
-                        log.error("ResultBox failed", closeException);
-                    }
-
-                    ResultErrorBox errorBox = new ResultErrorBox(singleQuery, e);
-
-                    CustomTab<HBox> errorTab = new CustomTab<HBox>(errorBox, tabPane);
-                    errorTab.setErrorHeader();
-
-                    tabPane.getTabs().add(errorTab);
-                    break;
                 }
-            }
+
+                @Override
+                public void onResultSet(String sql, Statement statement, long millis) throws SQLException {
+                    ResultTable resultTable = new ResultTable(statement, millis, MAX_ROWS);
+                    resultTable.setOnCellUpdate(() -> {
+                        boolean hasChanges = resultTable.hasPendingChanges();
+                        applyButton.setDisable(!hasChanges);
+                        revertButton.setDisable(!hasChanges);
+                        rowsLabel.setText(rowsText(resultTable));
+                    });
+
+                    CustomTab<ResultTable> tableTab = new CustomTab<>(resultTable, tabPane);
+                    tableTab.getIcon().setOnMouseClicked(event -> {
+                        if (applyButton.isDisabled()) {
+                            tabPane.getTabs().remove(tableTab);
+                        } else {
+                            ConfirmationModal confirmationModal = new ConfirmationModal(
+                                    "Unsaved Changes",
+                                    "Do you want to apply the changes?",
+                                    new FontIcon(MaterialDesignA.ALERT_OUTLINE),
+                                    () -> {
+                                        applyChanges(tabPane);
+                                    }
+                            );
+                            App.showModal(confirmationModal);
+                        }
+                    });
+                    tabPane.getTabs().add(tableTab);
+                }
+
+                @Override
+                public void onUpdateCount(String sql, long count, long millis) {
+                    SimpleResultBox simpleResultBox = new SimpleResultBox((int) Math.min(count, Integer.MAX_VALUE), sql);
+                    tabPane.getTabs().add(new CustomTab<>(simpleResultBox, tabPane));
+                }
+
+                @Override
+                public void onStatementSucceeded(String sql) {
+                    rememberTreeEffects(sql, connectionObject);
+                }
+
+                @Override
+                public void onError(String sql, SQLException error) {
+                    addErrorTab(tabPane, sql, error);
+                }
+            });
+        } catch (SQLException e) {
+            // the connection itself could not be opened
+            log.warn("Could not open connection: {}", e.getMessage());
+            addErrorTab(tabPane, statements.isEmpty() ? "" : statements.get(0), e);
+            allSucceeded = false;
         }
-        if (hasErrors) {
+
+        if (!allSucceeded) {
             CustomNotification errorNotification = new CustomNotification("Execution Errors", "Some queries failed to execute.", new FontIcon(MaterialDesignC.CLOSE_CIRCLE));
             errorNotification.showNotification();
         }
+        applyTreeEffects(connectionObject);
 
         this.getChildren().addAll(tableHeader, tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
     }
 
-    /**
-     * Splits a SQL script into individual statements on top-level semicolons,
-     * ignoring semicolons found inside single-quoted strings, double-quoted
-     * identifiers, line/block comments, and dollar-quoted blocks (e.g. {@code $$ ... $$}
-     * or {@code $tag$ ... $tag$} used by PL/pgSQL function bodies).
-     */
-    private static List<String> splitSqlStatements(String sql) {
-        List<String> statements = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        int len = sql.length();
-        int i = 0;
+    // Results beyond this many rows are not loaded; the row counter says so.
+    private static final int MAX_ROWS = 10_000;
 
-        while (i < len) {
-            char c = sql.charAt(i);
+    // What the finished script means for the schema tree, applied once on the FX thread after the script.
+    private String schemaToSelect;
+    private boolean refreshTree;
+    private boolean rebuildTree;
 
-            if (c == '\'' || c == '"') {
-                int end = skipQuotedLiteral(sql, i, c);
-                current.append(sql, i, end);
-                i = end;
-            } else if (c == '-' && i + 1 < len && sql.charAt(i + 1) == '-') {
-                int end = sql.indexOf('\n', i);
-                if (end == -1) {
-                    end = len;
-                }
-                current.append(sql, i, end);
-                i = end;
-            } else if (c == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
-                int end = skipBlockComment(sql, i);
-                current.append(sql, i, end);
-                i = end;
-            } else if (c == '$') {
-                int tagEnd = findDollarTagEnd(sql, i);
-                if (tagEnd != -1) {
-                    String tag = sql.substring(i, tagEnd);
-                    int closeIndex = sql.indexOf(tag, tagEnd);
-                    int end = (closeIndex == -1) ? len : closeIndex + tag.length();
-                    current.append(sql, i, end);
-                    i = end;
-                } else {
-                    current.append(c);
-                    i++;
-                }
-            } else if (c == ';') {
-                statements.add(current.toString());
-                current.setLength(0);
-                i++;
-            } else {
-                current.append(c);
-                i++;
-            }
-        }
-
-        if (!current.toString().trim().isEmpty()) {
-            statements.add(current.toString());
-        }
-
-        return statements;
+    private static String rowsText(ResultTable table) {
+        return "Rows: " + table.getItems().size() + (table.isTruncated() ? "+ (limit reached)" : "");
     }
 
-    private static int skipQuotedLiteral(String sql, int start, char quoteChar) {
-        int len = sql.length();
-        int i = start + 1;
-        while (i < len) {
-            if (sql.charAt(i) == quoteChar) {
-                if (i + 1 < len && sql.charAt(i + 1) == quoteChar) {
-                    i += 2;
-                } else {
-                    return i + 1;
-                }
-            } else {
-                i++;
-            }
-        }
-        return len;
+    private void addErrorTab(TabPane tabPane, String sql, SQLException error) {
+        ResultErrorBox errorBox = new ResultErrorBox(sql, error);
+        CustomTab<HBox> errorTab = new CustomTab<HBox>(errorBox, tabPane);
+        errorTab.setErrorHeader();
+        tabPane.getTabs().add(errorTab);
     }
 
-    private static int skipBlockComment(String sql, int start) {
-        int len = sql.length();
-        int i = start + 2;
-        int depth = 1;
-        while (i < len && depth > 0) {
-            if (sql.charAt(i) == '/' && i + 1 < len && sql.charAt(i + 1) == '*') {
-                depth++;
-                i += 2;
-            } else if (sql.charAt(i) == '*' && i + 1 < len && sql.charAt(i + 1) == '/') {
-                depth--;
-                i += 2;
-            } else {
-                i++;
-            }
+    // The tab's own connection, opened on demand; never whichever one is "current".
+    private static Connection openConnection(ConnectionObject connectionObject) throws SQLException {
+        DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
+        if (connectionObject == null) {
+            throw new SQLException("No connection is associated with this query tab.");
         }
-        return i;
+        if (databaseConnection.getConnection(connectionObject.getId()) == null) {
+            databaseConnection.initialize(connectionObject);
+        }
+        return databaseConnection.getConnection(connectionObject.getId());
     }
 
-    private static int findDollarTagEnd(String sql, int start) {
-        int len = sql.length();
-        int i = start + 1;
-
-        if (i < len && sql.charAt(i) == '$') {
-            return i + 1;
+    private void rememberTreeEffects(String sql, ConnectionObject connectionObject) {
+        SqlInspector.detectSchemaSwitch(sql, connectionObject.getDbType()).ifPresent(name -> schemaToSelect = name);
+        if (SqlInspector.changesDatabaseList(sql)) {
+            rebuildTree = true;
+        } else if (SqlInspector.isDdl(sql)) {
+            refreshTree = true;
         }
-
-        if (i < len && (Character.isLetter(sql.charAt(i)) || sql.charAt(i) == '_')) {
-            i++;
-            while (i < len && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_')) {
-                i++;
-            }
-            if (i < len && sql.charAt(i) == '$') {
-                return i + 1;
-            }
-        }
-
-        return -1;
     }
+
+    private void applyTreeEffects(ConnectionObject connectionObject) {
+        if (schemaToSelect == null && !refreshTree && !rebuildTree) {
+            return;
+        }
+        String select = schemaToSelect;
+        boolean rebuild = rebuildTree;
+        boolean refresh = refreshTree;
+
+        Platform.runLater(() -> {
+            ConnectionObject current = DatabaseConnection.getInstance().getCurrentConnectionObject();
+            CustomTree tree = App.getCustomTree();
+            // the tree shows the current connection only
+            if (tree == null || current == null || !current.getId().equals(connectionObject.getId())) {
+                return;
+            }
+            if (rebuild) {
+                tree.initialize();
+            } else if (refresh) {
+                tree.refreshSelectedDatabase();
+            }
+            if (select != null) {
+                tree.selectDatabase(select);
+            }
+        });
+    }
+
+    // Guards against a second Confirm click while the first apply is still running in the background.
+    private boolean applying = false;
 
     private void applyChanges(TabPane tabPane) {
-        List<QueryData> updateQueries = ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getUpdateQueries();
-
-        Connection connection = null;
-        try {
-            connection = DatabaseConnection.getInstance().getConnection();
-            connection.setAutoCommit(false);
-
-            for (QueryData queryInfo : updateQueries) {
-                try (PreparedStatement stmt = connection.prepareStatement(queryInfo.getQuery())) {
-                    for (int i = 0; i < queryInfo.getParameters().size(); i++) {
-                        Object param = queryInfo.getParameters().get(i);
-                        if (param == null) {
-                            stmt.setNull(i + 1, Types.NULL);
-                        } else if (isUuidParameter(param)) {
-                            if (param instanceof String) {
-                                stmt.setObject(i + 1, java.util.UUID.fromString((String) param));
-                            } else {
-                                stmt.setObject(i + 1, param);
-                            }
-                        } else if (param instanceof Boolean) {
-                            stmt.setBoolean(i + 1, (Boolean) param);
-                        } else {
-                            stmt.setObject(i + 1, param);
-                        }
-                    }
-                    stmt.executeUpdate();
-                }
-            }
-
-            connection.commit();
-            connection.setAutoCommit(true);
-
-            ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).updateBackupData();
-
-            applyButton.setDisable(true);
-            revertButton.setDisable(true);
-
-            ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).clearUpdateTracking();
-
-            App.closeModal();
-            CustomNotification customNotification = new CustomNotification("Changes Saved", "Your edits were committed to the database.", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE));
-            customNotification.showNotification();
-
-        } catch (SQLException e) {
-            try {
-                if (connection != null) {
-                    connection.rollback();
-                    connection.setAutoCommit(true);
-                }
-            } catch (SQLException e1) {
-                log.error("applyChanges failed", e1);
-            }
-            log.error("applyChanges failed", e);
-
-            CustomNotification customNotification = new CustomNotification("Save Failed", e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE));
-            customNotification.showNotification();
+        if (applying) {
+            return;
         }
+
+        ResultTable table = (ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent();
+        // Snapshot on the FX thread; the modal blocks editing until the apply finishes.
+        List<QueryData> queries = new ArrayList<>(table.getUpdateQueries());
+        Set<QueryData> inserts = table.pendingInsertQueries();
+        Connection connection = resolveConnection();
+
+        applying = true;
+        applyButton.setDisable(true);
+        revertButton.setDisable(true);
+
+        Async.run(() -> {
+            try {
+                Map<QueryData, Map<String, Object>> generatedKeys = ChangeApplier.apply(connection, queries, inserts);
+
+                Platform.runLater(() -> {
+                    applying = false;
+                    table.commitApplied(generatedKeys);
+                    applyButton.setDisable(true);
+                    revertButton.setDisable(true);
+
+                    App.closeModal();
+                    new CustomNotification("Changes Saved", "Your edits were committed to the database.", new FontIcon(MaterialDesignD.DATABASE_CHECK_OUTLINE)).showNotification();
+                });
+            } catch (SQLException e) {
+                log.error("applyChanges failed", e);
+
+                Platform.runLater(() -> {
+                    applying = false;
+                    applyButton.setDisable(false);
+                    revertButton.setDisable(false);
+                    new CustomNotification("Save Failed", e.getMessage(), new FontIcon(MaterialDesignD.DATABASE_ALERT_OUTLINE)).showNotification();
+                });
+            }
+        });
     }
 
-    private boolean isUuidParameter(Object param) {
-        if (param == null) {
-            return false;
+    // The tab's own connection, not whichever one happens to be current when the user confirms.
+    private Connection resolveConnection() {
+        DatabaseConnection databaseConnection = DatabaseConnection.getInstance();
+        if (parentTab != null && parentTab.getConnectionObject() != null) {
+            Connection tabConnection = databaseConnection.getConnection(parentTab.getConnectionObject().getId());
+            if (tabConnection != null) {
+                return tabConnection;
+            }
         }
-
-        if (param instanceof java.util.UUID) {
-            return true;
-        }
-
-        if (param instanceof String) {
-            String str = (String) param;
-            return str.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
-        }
-
-        return false;
+        return databaseConnection.getConnection();
     }
 
     public void revertChanges(TabPane tabPane) {

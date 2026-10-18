@@ -1,5 +1,8 @@
 package com.queryexe.components.tree;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -43,9 +46,11 @@ import javafx.beans.value.ObservableValue;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.service.Async;
 import com.queryexe.service.DatabaseConnection;
+import com.queryexe.utils.SqlInspector;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.connections.PostgresConnection;
 
+@Slf4j
 public class CustomTree extends VBox {
 
     private TreeView<String> databaseTree = new TreeView<String>();
@@ -60,6 +65,7 @@ public class CustomTree extends VBox {
     private boolean isSearchMode = false;
     private VBox usersView;
     private boolean isUsersViewActive = false;
+    @Getter
     private DatabaseStructureCache structureCache;
 
     private ProgressIndicator searchProgress;
@@ -156,7 +162,8 @@ public class CustomTree extends VBox {
                     ResultSet path = pathStatement.executeQuery();
                     path.next();
 
-                    String defaultSchema = path.getString(1).split(",")[1].trim();
+                    // first real schema of search_path ("$user" is only a placeholder); "public" when none is listed
+                    String defaultSchema = SqlInspector.firstSearchPathSchema(path.getString(1)).orElse("public");
                     DatabaseTreeItem schemaItem = databasesMap.get(defaultSchema.toLowerCase());
 
                     if (schemaItem != null) {
@@ -238,15 +245,18 @@ public class CustomTree extends VBox {
             if (DatabaseConnection.getInstance().getConnectionObject().getDatabaseName() != null
                     && !DatabaseConnection.getInstance().getConnectionObject().getDatabaseName().isEmpty()) {
                 try {
-                    String useDb = "USE " + DatabaseConnection.getInstance().getConnectionObject().getDatabaseName();
-                    PreparedStatement tableStatement = DatabaseConnection.getInstance().getConnection().prepareStatement(useDb);
-                    tableStatement.execute();
+                    // the engine's own useDatabase quotes the name properly
+                    DatabaseConnection.getInstance().getConnectionObject()
+                            .useDatabase(DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
                 } catch (SQLException e) {
+                    log.warn("Could not select the configured database: {}", e.getMessage());
                 }
                 databaseTree.getSelectionModel().select(1);
                 selectedDatabase = databasesMap.get(
-                        DatabaseConnection.getInstance().getConnectionObject().getDatabaseName());
-                selectedDatabase.setSelected();
+                        DatabaseConnection.getInstance().getConnectionObject().getDatabaseName().toLowerCase());
+                if (selectedDatabase != null) {
+                    selectedDatabase.setSelected();
+                }
 
             } else if (DatabaseConnection.getInstance().getConnectionObject().getDatabaseName() == null
                     && DatabaseConnection.getInstance().getConnectionObject().getDbType().equals(ConnectionTypes.H2.toString())) {
@@ -624,6 +634,18 @@ public class CustomTree extends VBox {
         return databaseItem;
     }
 
+    /**
+     * Reloads the tables of the selected database/schema (or of all of them when none is selected),
+     * e.g. after a CREATE/DROP/ALTER ran from the editor.
+     */
+    public void refreshSelectedDatabase() {
+        if (selectedDatabase != null) {
+            selectedDatabase.refreshDatabaseAsync();
+        } else {
+            databasesMap.values().forEach(DatabaseTreeItem::refreshDatabaseAsync);
+        }
+    }
+
     public void selectDatabase(String database) {
         if (databasesMap.containsKey(database.toLowerCase())) {
             if (selectedDatabase != null) {
@@ -636,7 +658,4 @@ public class CustomTree extends VBox {
         }
     }
 
-    public DatabaseStructureCache getStructureCache() {
-        return structureCache;
-    }
 }
