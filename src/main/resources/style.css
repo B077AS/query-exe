@@ -5915,3 +5915,89 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-border-color: -color-accent-muted;
     -fx-background-color: -color-bg-overlay;
 }
+/* Sidebar modal shell (table properties, create/alter table) */
+
+.modal-header {
+    -fx-border-width: 0 0 1px 0;
+    -fx-border-color: -color-border-default;
+}
+
+.modal-footer {
+    -fx-border-width: 1px 0 0 0;
+    -fx-border-color: -color-border-default;
+}
+
+.modal-card {
+    -fx-background-color: transparent;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.modal-card-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-padding: 14 16 10 16;
+}
+
+.modal-item {
+    -fx-padding: 10 24 10 24;
+    -fx-border-color: transparent transparent -color-border-subtle transparent;
+    -fx-border-width: 0 0 1px 0;
+}
+}
+
+.modal-toggle {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 6 10 6 10;
+    -fx-background-radius: 6px;
+    -fx-border-radius: 6px;
+    -fx-border-width: 1px;
+    -fx-border-color: -color-border-default;
+    -fx-background-color: -color-bg-default;
+    -fx-text-fill: -color-fg-muted;
+    -fx-cursor: hand;
+}
+
+.modal-toggle:hover {
+    -fx-border-color: -color-accent-muted;
+}
+
+.modal-toggle:selected {
+    -fx-background-color: -color-accent-subtle;
+    -fx-border-color: -color-accent-muted;
+    -fx-text-fill: -color-accent-fg;
+}
+
+.modal-mono {
+    -fx-font-family: 'Consolas', 'Monaco', monospace;
+    -fx-font-size: 12px;
+}
+
+.modal-badge {
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+    -fx-padding: 3 7 3 7;
+    -fx-text-fill: -color-fg-muted;
+    -fx-border-color: -color-border-default;
+    -fx-border-radius: 4px;
+    -fx-border-width: 1px;
+}
+
+.modal-item.last-item {
+    -fx-border-color: transparent;
+}
+
+
+.modal-badge-accent {
+    -fx-background-color: -color-accent-subtle;
+    -fx-text-fill: -color-accent-fg;
+    -fx-border-color: -color-accent-muted;
+    -fx-background-radius: 4px;
+}
+
+.modal-type {
+    -fx-text-fill: -color-accent-fg;
+}

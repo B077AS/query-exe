@@ -1,526 +1,184 @@
 package com.queryexe.components.modals;
 
-import lombok.extern.slf4j.Slf4j;
-
-import javafx.geometry.Insets;
+import com.queryexe.components.modals.shell.ModalUi;
+import com.queryexe.components.modals.shell.SidebarModal;
+import com.queryexe.components.modals.shell.SimpleTab;
+import com.queryexe.model.data.ColumnData;
+import com.queryexe.model.data.ForeignKeyData;
+import com.queryexe.service.DatabaseConnection;
 import javafx.geometry.Pos;
+import atlantafx.base.theme.Styles;
 import javafx.scene.Node;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import lombok.extern.slf4j.Slf4j;
 import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.feather.Feather;
-import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
-import atlantafx.base.theme.Styles;
-import com.queryexe.components.extra.CustomNotification;
-import com.queryexe.model.data.ColumnData;
-import com.queryexe.service.DatabaseConnection;
-import com.queryexe.model.data.ForeignKeyData;
-import com.queryexe.queryexe.App;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
+/** Read-only overview of a table: columns, foreign keys and general details. */
 @Slf4j
-public class TablePropertiesModal extends VBox {
+public class TablePropertiesModal extends SidebarModal {
 
-    private String databaseName;
-    private String tableName;
-    private StackPane contentPane;
-    private HBox tabHeaders;
 
-    private final String activeTab = """
-            -fx-background-color: transparent;
-            -fx-border-width: 0 0 2px 0;
-            -fx-border-color: -color-border-default;
-            -fx-font-weight: bold;
-            """;
-
-    private final String inactiveTab = """
-            -fx-background-color: transparent;
-            -fx-border-width: 0 0 2px 0;
-            -fx-border-color: transparent;
-            -fx-font-weight: bold;
-            -fx-opacity: 0.6;
-            """;
+    private final String databaseName;
+    private final String tableName;
 
     public TablePropertiesModal(String databaseName, String tableName) {
+        super(MaterialDesignT.TABLE, tableName, databaseName, "Table", 1100, 660);
         this.databaseName = databaseName;
         this.tableName = tableName;
-        initializeUI();
-        loadTableData();
-    }
 
-    private void initializeUI() {
-        this.getStyleClass().add("modal-container");
-        this.setMaxSize(950, 550);
-        this.setMinSize(950, 550);
-        this.setPrefSize(950, 550);
-
-        HBox headerBox = new HBox();
-        headerBox.setAlignment(Pos.CENTER);
-        headerBox.setPadding(new Insets(10, 10, 0, 0));
-
-        Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
-        closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
-        closeButton.setOnAction(event -> App.closeModal());
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        headerBox.getChildren().addAll(spacer, closeButton);
-
-        tabHeaders = new HBox();
-        tabHeaders.setAlignment(Pos.CENTER);
-        tabHeaders.setSpacing(5);
-        tabHeaders.setPadding(new Insets(15, 5, 0, 5));
-
-        contentPane = new StackPane();
-        VBox.setVgrow(contentPane, Priority.ALWAYS);
-
-        this.getChildren().addAll(headerBox, tabHeaders, contentPane);
-    }
-
-    private void loadTableData() {
         try {
             ArrayList<ColumnData> columns = DatabaseConnection.getInstance().getConnectionObject().getColumnsForTable(databaseName, tableName);
             Map<String, ForeignKeyData> foreignKeys = DatabaseConnection.getInstance().getConnectionObject().extractForeignKeys(databaseName, tableName);
 
-            VBox columnsTab = createColumnsTab(columns);
-            VBox foreignKeysTab = createForeignKeysTab(foreignKeys);
-            VBox propertiesTab = createPropertiesTab(columns.size(), foreignKeys.size());
-
-            Button columnsButton = createTabHeader("Columns", columnsTab, new FontIcon(MaterialDesignF.FORMAT_COLUMNS));
-            Button foreignKeysButton = createTabHeader("Foreign Keys", foreignKeysTab, new FontIcon(MaterialDesignT.TABLE_KEY));
-            Button propertiesButton = createTabHeader("Details", propertiesTab, new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
-
-            columnsButton.setStyle(activeTab);
-            foreignKeysButton.setStyle(inactiveTab);
-            propertiesButton.setStyle(inactiveTab);
-
-            tabHeaders.getChildren().addAll(columnsButton, foreignKeysButton, propertiesButton);
-            contentPane.getChildren().add(columnsTab);
-
+            addTab(new SimpleTab("Columns", columns.size() + (columns.size() == 1 ? " column" : " columns"),
+                    MaterialDesignT.TABLE_COLUMN, columnsPane(columns)));
+            addTab(new SimpleTab("Foreign Keys", foreignKeys.size() + (foreignKeys.size() == 1 ? " foreign key" : " foreign keys"),
+                    MaterialDesignT.TABLE_KEY, foreignKeysPane(new ArrayList<>(foreignKeys.values()))));
+            addTab(new SimpleTab("Details", "General information and statistics",
+                    MaterialDesignI.INFORMATION_OUTLINE, detailsPane(columns.size(), foreignKeys.size())));
         } catch (SQLException e) {
-            CustomNotification notification = new CustomNotification("Load Failed", "Could not load table data: " + e.getMessage(), new FontIcon(MaterialDesignT.TABLE_CANCEL));
-            notification.showNotificationOnCustomPane((StackPane) this.getParent());
-            log.error("loadTableData failed", e);
+            log.error("Could not load properties of {}.{}", databaseName, tableName, e);
+            addTab(new SimpleTab("Columns", "", MaterialDesignT.TABLE_COLUMN,
+                    ModalUi.emptyState(MaterialDesignA.ALERT_CIRCLE_OUTLINE, "Could not load table data: " + e.getMessage())));
         }
+
+        setFooter(closeFooterButton("Close"));
     }
 
-    private Button createTabHeader(String title, Node content, FontIcon icon) {
-        Button tabHeader = new Button(title, icon);
-        tabHeader.setMinWidth(935 / 3);
-        tabHeader.setMaxWidth(935 / 3);
-        HBox.setHgrow(tabHeader, Priority.ALWAYS);
+    // ── Columns ───────────────────────────────────────────────────────────────
 
-        tabHeader.setOnAction(e -> {
-            contentPane.getChildren().clear();
-            contentPane.getChildren().add(content);
-            for (Node node : tabHeaders.getChildren()) {
-                if (node instanceof Button) {
-                    ((Button) node).setStyle(inactiveTab);
-                }
-            }
-            tabHeader.setStyle(activeTab);
-        });
-        return tabHeader;
+    private VBox columnsPane(List<ColumnData> columns) {
+        if (columns.isEmpty()) return emptyPane(MaterialDesignT.TABLE_COLUMN, "No columns found");
+
+        VBox list = new VBox();
+        ModalUi.markLast(list);
+        for (ColumnData column : columns) {
+            list.getChildren().add(columnItem(column));
+        }
+        return ModalUi.listTab(list);
     }
 
-    private VBox createColumnsTab(ArrayList<ColumnData> columns) {
-        VBox container = new VBox();
-        container.setPadding(new Insets(15));
-        container.setStyle("-fx-background-color: -color-bg-default;");
+    private Node columnItem(ColumnData column) {
+        HBox badges = new HBox(6);
+        badges.setAlignment(Pos.CENTER_RIGHT);
+        if (column.isPrimaryKey()) badges.getChildren().add(ModalUi.accentBadge("PK"));
+        if (column.isNotNull()) badges.getChildren().add(ModalUi.badge("NOT NULL"));
+        if (column.isUnique()) badges.getChildren().add(ModalUi.badge("UNIQUE"));
+        if (column.isAutoIncrement()) badges.getChildren().add(ModalUi.badge("AUTO INC"));
 
-        if (columns.isEmpty()) {
-            Label emptyLabel = new Label("No columns found");
-            emptyLabel.setStyle("-fx-opacity: 0.6; -fx-font-size: 14px;");
-            container.getChildren().add(emptyLabel);
-        } else {
-            VBox tableContainer = new VBox();
-            tableContainer.setStyle("""
-                    -fx-background-color: -color-bg-default;
-                    -fx-border-radius: 8px;
-                    -fx-background-radius: 8px;
-                    -fx-border-color: -color-accent-9;
-                    -fx-border-width: 1px;
-                    """);
-
-            HBox headerRow = createColumnHeaderRow();
-            tableContainer.getChildren().add(headerRow);
-
-            for (ColumnData column : columns) {
-                HBox dataRow = createColumnDataRow(column);
-                tableContainer.getChildren().add(dataRow);
-            }
-
-            container.getChildren().add(tableContainer);
-        }
-
-        ScrollPane scrollPane = new ScrollPane(container);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background: -color-bg-default; -fx-background-color: -color-bg-default;");
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        VBox wrapper = new VBox(scrollPane);
-        wrapper.setPadding(new Insets(0, 0, 10, 0));
-        return wrapper;
+        Label type = ModalUi.mono(column.getDataType());
+        type.getStyleClass().add("modal-type");
+        type.setWrapText(true);
+        return block(column.getColumnName(), badges, type);
     }
 
-    private HBox createColumnHeaderRow() {
-        HBox headerRow = new HBox();
-        headerRow.setAlignment(Pos.CENTER_LEFT);
-        headerRow.setPadding(new Insets(12, 15, 12, 15));
-        headerRow.setStyle("""
-                -fx-background-color: -color-accent-9-alpha30;
-                -fx-border-width: 0 0 1px 0;
-                -fx-border-color: -color-accent-9;
-                """);
+    /**
+     * A list entry as a small block, since names, types and relations are too long for fixed columns: the name in
+     * bold with its badges on the right (a name that still doesn't fit is cut with the full text in a tooltip),
+     * and the detail underneath, which wraps instead of being cut off.
+     */
+    private static Node block(String title, HBox badges, Node detail) {
+        Label name = ModalUi.boldLabel(title);
+        name.setMinWidth(0);
+        name.setMaxWidth(Double.MAX_VALUE);
+        name.setTooltip(new Tooltip(title));
+        HBox.setHgrow(name, Priority.ALWAYS);
+        badges.setMinWidth(Region.USE_PREF_SIZE);
 
-        Label nameHeader = new Label("Column Name");
-        nameHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        nameHeader.setPrefWidth(250);
-        nameHeader.setMinWidth(250);
-
-        Label typeHeader = new Label("Data Type");
-        typeHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        typeHeader.setPrefWidth(250);
-        typeHeader.setMinWidth(250);
-
-        Label constraintsHeader = new Label("Constraints");
-        constraintsHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        HBox.setHgrow(constraintsHeader, Priority.ALWAYS);
-
-        headerRow.getChildren().addAll(nameHeader, typeHeader, constraintsHeader);
-        return headerRow;
+        VBox block = new VBox(5, new HBox(12, name, badges), detail);
+        block.getStyleClass().add("modal-item");
+        block.setMaxWidth(Double.MAX_VALUE);
+        return block;
     }
 
-    private HBox createColumnDataRow(ColumnData column) {
-        HBox dataRow = new HBox();
-        dataRow.setAlignment(Pos.CENTER_LEFT);
-        dataRow.setPadding(new Insets(10, 15, 10, 15));
-        dataRow.setSpacing(0);
+    // ── Foreign keys ──────────────────────────────────────────────────────────
 
-        dataRow.setStyle("""
-                -fx-background-color: transparent;
-                -fx-border-width: 0 0 1px 0;
-                -fx-border-color: -color-accent-9-alpha30;
-                """);
+    private VBox foreignKeysPane(List<ForeignKeyData> foreignKeys) {
+        if (foreignKeys.isEmpty()) return emptyPane(MaterialDesignT.TABLE_KEY, "No foreign keys defined");
 
-        HBox nameBox = new HBox(6);
-        nameBox.setAlignment(Pos.CENTER_LEFT);
-        nameBox.setPrefWidth(250);
-        nameBox.setMinWidth(250);
-
-        FontIcon columnIcon = new FontIcon(MaterialDesignT.TABLE_COLUMN);
-
-        Label nameLabel = new Label(column.getColumnName());
-        nameLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
-
-        nameBox.getChildren().addAll(columnIcon, nameLabel);
-
-        Label typeLabel = new Label(column.getDataType());
-        typeLabel.setStyle("-fx-font-size: 12px; -fx-opacity: 0.8; -fx-font-family: 'Consolas', 'Monaco', monospace;");
-        typeLabel.setPrefWidth(250);
-        typeLabel.setMinWidth(250);
-
-        HBox constraintsBox = new HBox(6);
-        constraintsBox.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(constraintsBox, Priority.ALWAYS);
-
-        if (column.isPrimaryKey()) {
-            Label badge = createConstraintBadge("PK", MaterialDesignK.KEY);
-            constraintsBox.getChildren().add(badge);
+        VBox list = new VBox();
+        ModalUi.markLast(list);
+        for (ForeignKeyData fk : foreignKeys) {
+            list.getChildren().add(foreignKeyItem(fk));
         }
-
-        if (column.isNotNull()) {
-            Label badge = createConstraintBadge("NOT NULL", MaterialDesignC.CANCEL);
-            constraintsBox.getChildren().add(badge);
-        }
-
-        if (column.isUnique()) {
-            Label badge = createConstraintBadge("UNIQUE", MaterialDesignS.STAR_OUTLINE);
-            constraintsBox.getChildren().add(badge);
-        }
-
-        if (column.isAutoIncrement()) {
-            Label badge = createConstraintBadge("AUTO_INC", MaterialDesignN.NUMERIC);
-            constraintsBox.getChildren().add(badge);
-        }
-
-        if (constraintsBox.getChildren().isEmpty()) {
-            Label noneLabel = new Label("—");
-            noneLabel.setStyle("-fx-font-size: 12px; -fx-opacity: 0.4;");
-            constraintsBox.getChildren().add(noneLabel);
-        }
-
-        dataRow.getChildren().addAll(nameBox, typeLabel, constraintsBox);
-        return dataRow;
+        return ModalUi.listTab(list);
     }
 
-    private Label createConstraintBadge(String text, Ikon icon) {
-        Label badge = new Label(text);
+    /**
+     * A foreign key: the constraint name with its actions, and under it the relation as wrapping pieces,
+     * local columns → referenced table.columns.
+     */
+    private Node foreignKeyItem(ForeignKeyData fk) {
 
-        FontIcon iconGraphic = new FontIcon(icon);
-        iconGraphic.setIconSize(11);
+        HBox badges = new HBox(6);
+        badges.setAlignment(Pos.CENTER_RIGHT);
+        if (fk.getOnDelete() != null) badges.getChildren().add(ModalUi.badge("ON DELETE " + fk.getOnDelete()));
+        if (fk.getOnUpdate() != null) badges.getChildren().add(ModalUi.badge("ON UPDATE " + fk.getOnUpdate()));
+        badges.setMinWidth(Region.USE_PREF_SIZE);
 
-        badge.setGraphic(iconGraphic);
-        badge.setGraphicTextGap(3);
-        badge.setStyle("""
-                -fx-font-size: 10px;
-                -fx-opacity: 0.85;
-                -fx-padding: 3 7 3 7;
-                -fx-background-color: -color-accent-9-alpha40;
-                -fx-background-radius: 3px;
-                -fx-font-weight: 600;
-                """);
+        String target = fk.getReferenceSchema() != null && !fk.getReferenceSchema().equals(databaseName)
+                ? fk.getReferenceSchema() + "." + fk.getReferenceTable()
+                : fk.getReferenceTable();
+        Label local = ModalUi.mono(tableName + "(" + String.join(", ", fk.allLocalColumns()) + ")");
+        Label arrow = new Label("→");
+        arrow.getStyleClass().add(Styles.TEXT_MUTED);
+        Label reference = ModalUi.mono(target + "(" + String.join(", ", fk.allReferenceColumns()) + ")");
+        reference.getStyleClass().add("modal-type");
+        FlowPane relation = new FlowPane(8, 2, local, arrow, reference);
+        relation.setAlignment(Pos.CENTER_LEFT);
 
-        return badge;
+        return block(fk.getConstraintName(), badges, relation);
     }
 
-    private VBox createForeignKeysTab(Map<String, ForeignKeyData> foreignKeys) {
-        VBox container = new VBox();
-        container.setAlignment(Pos.CENTER);
-        container.setPadding(new Insets(15));
-        container.setStyle("-fx-background-color: -color-bg-default;");
-
-        if (foreignKeys.isEmpty()) {
-            Label emptyLabel = new Label("No foreign keys defined");
-            emptyLabel.setStyle("-fx-opacity: 0.6; -fx-font-size: 14px;");
-            container.getChildren().add(emptyLabel);
-        } else {
-            VBox tableContainer = new VBox();
-            tableContainer.setStyle("""
-                    -fx-background-color: -color-bg-default;
-                    -fx-border-radius: 8px;
-                    -fx-background-radius: 8px;
-                    -fx-border-color: -color-accent-9;
-                    -fx-border-width: 1px;
-                    """);
-
-            HBox headerRow = createForeignKeyHeaderRow();
-            tableContainer.getChildren().add(headerRow);
-
-            for (Map.Entry<String, ForeignKeyData> entry : foreignKeys.entrySet()) {
-                HBox dataRow = createForeignKeyDataRow(entry.getValue());
-                tableContainer.getChildren().add(dataRow);
-            }
-
-            container.getChildren().add(tableContainer);
-        }
-
-        ScrollPane scrollPane = new ScrollPane(container);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background: -color-bg-default; -fx-background-color: -color-bg-default;");
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        VBox wrapper = new VBox(scrollPane);
-        wrapper.setPadding(new Insets(0, 0, 10, 0));
-        return wrapper;
+    private static VBox emptyPane(Ikon icon, String text) {
+        VBox content = ModalUi.content();
+        content.getChildren().add(ModalUi.emptyState(icon, text));
+        return content;
     }
 
-    private HBox createForeignKeyHeaderRow() {
-        HBox headerRow = new HBox();
-        headerRow.setAlignment(Pos.CENTER_LEFT);
-        headerRow.setPadding(new Insets(12, 15, 12, 15));
-        headerRow.setStyle("""
-                -fx-background-color: -color-accent-9-alpha30;
-                -fx-border-width: 0 0 1px 0;
-                -fx-border-color: -color-accent-9;
-                """);
+    // ── Details ───────────────────────────────────────────────────────────────
 
-        Label constraintHeader = new Label("Constraint Name");
-        constraintHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        constraintHeader.setPrefWidth(180);
-        constraintHeader.setMinWidth(180);
+    private VBox detailsPane(int columnCount, int foreignKeyCount) {
+        VBox general = ModalUi.card("General", MaterialDesignI.INFORMATION_OUTLINE);
+        GridPane generalGrid = ModalUi.infoGrid();
+        ModalUi.infoRow(generalGrid, 0, "Database", databaseName);
+        ModalUi.infoRow(generalGrid, 1, "Table name", tableName);
+        ModalUi.infoRow(generalGrid, 2, "Columns", String.valueOf(columnCount));
+        ModalUi.infoRow(generalGrid, 3, "Foreign keys", String.valueOf(foreignKeyCount));
+        general.getChildren().add(generalGrid);
 
-        Label localHeader = new Label("Local Column");
-        localHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        localHeader.setPrefWidth(140);
-        localHeader.setMinWidth(140);
-
-        Label referencesHeader = new Label("References");
-        referencesHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        referencesHeader.setPrefWidth(200);
-        referencesHeader.setMinWidth(200);
-
-        Label actionsHeader = new Label("Actions");
-        actionsHeader.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-opacity: 0.8;");
-        HBox.setHgrow(actionsHeader, Priority.ALWAYS);
-
-        headerRow.getChildren().addAll(constraintHeader, localHeader, referencesHeader, actionsHeader);
-        return headerRow;
-    }
-
-    private HBox createForeignKeyDataRow(ForeignKeyData fk) {
-        HBox dataRow = new HBox();
-        dataRow.setAlignment(Pos.CENTER_LEFT);
-        dataRow.setPadding(new Insets(10, 15, 10, 15));
-        dataRow.setSpacing(0);
-
-        dataRow.setStyle("""
-                -fx-background-color: transparent;
-                -fx-border-width: 0 0 1px 0;
-                -fx-border-color: -color-accent-9-alpha30;
-                """);
-
-        HBox constraintBox = new HBox(6);
-        constraintBox.setAlignment(Pos.CENTER_LEFT);
-        constraintBox.setPrefWidth(180);
-        constraintBox.setMinWidth(180);
-
-        FontIcon keyIcon = new FontIcon(MaterialDesignL.LABEL_VARIANT_OUTLINE);
-
-        Label constraintLabel = new Label(fk.getConstraintName());
-        constraintLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold;");
-        constraintLabel.setMaxWidth(150);
-
-        constraintBox.getChildren().addAll(keyIcon, constraintLabel);
-
-        Label localLabel = new Label(fk.getLocalColumn());
-        localLabel.setStyle("-fx-font-size: 12px; -fx-opacity: 0.8; -fx-font-family: 'Consolas', 'Monaco', monospace;");
-        localLabel.setPrefWidth(140);
-        localLabel.setMinWidth(140);
-
-        HBox refBox = new HBox(4);
-        refBox.setAlignment(Pos.CENTER_LEFT);
-        refBox.setPrefWidth(200);
-        refBox.setMinWidth(200);
-
-        FontIcon linkIcon = new FontIcon(MaterialDesignL.LINK_VARIANT);
-
-        Label refLabel = new Label(fk.getReferenceTable() + "." + fk.getReferenceColumn());
-        refLabel.setStyle("-fx-font-size: 12px; -fx-opacity: 0.8; -fx-font-family: 'Consolas', 'Monaco', monospace;");
-        refLabel.setMaxWidth(180);
-
-        refBox.getChildren().addAll(linkIcon, refLabel);
-
-        HBox actionsBox = new HBox(6);
-        actionsBox.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(actionsBox, Priority.ALWAYS);
-
-        if (fk.getOnDelete() != null) {
-            Label deleteAction = createActionBadge("DELETE: " + fk.getOnDelete(), Feather.TRASH_2);
-            actionsBox.getChildren().add(deleteAction);
-        }
-
-        if (fk.getOnUpdate() != null) {
-            Label updateAction = createActionBadge("UPDATE: " + fk.getOnUpdate(), MaterialDesignU.UPDATE);
-            actionsBox.getChildren().add(updateAction);
-        }
-
-        if (actionsBox.getChildren().isEmpty()) {
-            Label noneLabel = new Label("—");
-            noneLabel.setStyle("-fx-font-size: 12px; -fx-opacity: 0.4;");
-            actionsBox.getChildren().add(noneLabel);
-        }
-
-        dataRow.getChildren().addAll(constraintBox, localLabel, refBox, actionsBox);
-        return dataRow;
-    }
-
-    private Label createActionBadge(String text, Ikon icon) {
-        Label badge = new Label(text);
-
-        FontIcon iconGraphic = new FontIcon(icon);
-        iconGraphic.setIconSize(10);
-
-        badge.setGraphic(iconGraphic);
-        badge.setGraphicTextGap(3);
-        badge.setStyle("""
-                -fx-font-size: 10px;
-                -fx-opacity: 0.85;
-                -fx-padding: 3 7 3 7;
-                -fx-background-color: -color-accent-9-alpha40;
-                -fx-background-radius: 3px;
-                -fx-font-weight: 600;
-                """);
-
-        return badge;
-    }
-
-    private VBox createPropertiesTab(int columnCount, int foreignKeyCount) {
-        VBox container = new VBox();
-        container.setPadding(new Insets(15));
-        container.setSpacing(15);
-        container.setStyle("-fx-background-color: -color-bg-default;");
-
-        VBox generalSection = createPropertySection("General Information", new FontIcon(MaterialDesignI.INFORMATION_OUTLINE));
-
-        GridPane generalGrid = new GridPane();
-        generalGrid.setHgap(20);
-        generalGrid.setVgap(12);
-        generalGrid.setPadding(new Insets(15));
-
-        addPropertyRow(generalGrid, 0, "Database:", databaseName);
-        addPropertyRow(generalGrid, 1, "Table Name:", tableName);
-        addPropertyRow(generalGrid, 2, "Column Count:", String.valueOf(columnCount));
-        addPropertyRow(generalGrid, 3, "Foreign Keys:", String.valueOf(foreignKeyCount));
-
-        generalSection.getChildren().add(generalGrid);
-
-        VBox statsSection = createPropertySection("Statistics",
-                new FontIcon(MaterialDesignC.CHART_BAR));
-
-        GridPane statsGrid = new GridPane();
-        statsGrid.setHgap(20);
-        statsGrid.setVgap(12);
-        statsGrid.setPadding(new Insets(15));
-
+        VBox stats = ModalUi.card("Statistics", MaterialDesignC.CHART_BAR);
+        GridPane statsGrid = ModalUi.infoGrid();
+        String size;
         try {
-            double tableSizeInMB = DatabaseConnection.getInstance()
-                    .getConnectionObject()
-                    .getTableSize(databaseName, tableName);
-
-            String formattedSize = String.format("%.2f MB", tableSizeInMB);
-            addPropertyRow(statsGrid, 0, "Table Size:", formattedSize);
+            size = String.format("%.2f MB", DatabaseConnection.getInstance().getConnectionObject().getTableSize(databaseName, tableName));
         } catch (SQLException e) {
-            addPropertyRow(statsGrid, 0, "Table Size:", "N/A (Error retrieving)");
-            log.error("createPropertiesTab failed", e);
+            log.error("getTableSize failed for {}.{}", databaseName, tableName, e);
+            size = "N/A";
         }
+        ModalUi.infoRow(statsGrid, 0, "Table size", size);
+        stats.getChildren().add(statsGrid);
 
-        statsSection.getChildren().add(statsGrid);
-
-        container.getChildren().addAll(generalSection, statsSection);
-
-        ScrollPane scrollPane = new ScrollPane(container);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background: -color-bg-default; -fx-background-color: -color-bg-default;");
-        VBox.setVgrow(scrollPane, Priority.ALWAYS);
-
-        VBox wrapper = new VBox(scrollPane);
-        wrapper.setPadding(new Insets(0, 0, 10, 0));
-        return wrapper;
+        VBox content = ModalUi.content();
+        content.getChildren().addAll(general, stats);
+        return wrap(content);
     }
 
-    private VBox createPropertySection(String title, FontIcon icon) {
-        VBox section = new VBox();
-        section.setSpacing(0);
-        section.setStyle("""
-                -fx-background-color: -color-bg-default;
-                -fx-background-radius: 8px;
-                -fx-border-radius: 8px;
-                -fx-border-color: -color-accent-9;
-                -fx-border-width: 1px;
-                """);
-
-        Label titleLabel = new Label(title);
-        titleLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 15 15 10 15;");
-        titleLabel.setGraphic(icon);
-
-        section.getChildren().add(titleLabel);
-        return section;
-    }
-
-    private void addPropertyRow(GridPane grid, int row, String label, String value) {
-        Label labelNode = new Label(label);
-        labelNode.setStyle("-fx-opacity: 0.7; -fx-font-size: 13px; -fx-min-width: 120;");
-
-        Label valueNode = new Label(value);
-        valueNode.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
-
-        grid.add(labelNode, 0, row);
-        grid.add(valueNode, 1, row);
+    private static VBox wrap(VBox content) {
+        return new VBox(ModalUi.scroll(content));
     }
 }

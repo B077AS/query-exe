@@ -716,22 +716,31 @@ public class PostgresConnection extends ConnectionObject {
 
     @Override
     public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
-        Map<String, ForeignKeyData> foreignKeys = new HashMap<>();
+        Map<String, ForeignKeyData> foreignKeys = new LinkedHashMap<>();
         DatabaseMetaData metaData = DatabaseConnection.getInstance().getConnection().getMetaData();
 
-        try (ResultSet fkRs = metaData.getImportedKeys(dbName, null, tableName)) {
+        // In PostgreSQL the tree's "database" is a schema; the JDBC catalog is the real database, so pass it as the schema.
+        // getImportedKeys is ordered by PK table / key name / KEY_SEQ, so the columns of a composite key arrive in order.
+        try (ResultSet fkRs = metaData.getImportedKeys(null, dbName, tableName)) {
             while (fkRs.next()) {
-                String fkColumnName = fkRs.getString("FKCOLUMN_NAME");
-                String constraintName = fkRs.getString("FK_NAME");  // Get constraint name
-
-                foreignKeys.put(constraintName, new ForeignKeyData(
-                        constraintName,                      // Constraint name
-                        fkColumnName,                        // Local column
-                        fkRs.getString("PKTABLE_NAME"),      // Reference table
-                        fkRs.getString("PKCOLUMN_NAME"),     // Reference column
-                        fkRs.getInt("DELETE_RULE"),          // Delete rule
-                        fkRs.getInt("UPDATE_RULE")           // Update rule
-                ));
+                String constraintName = fkRs.getString("FK_NAME");
+                ForeignKeyData existing = foreignKeys.get(constraintName);
+                if (existing != null) {
+                    existing.getLocalColumns().add(fkRs.getString("FKCOLUMN_NAME"));
+                    existing.getReferenceColumns().add(fkRs.getString("PKCOLUMN_NAME"));
+                    continue;
+                }
+                ForeignKeyData fk = new ForeignKeyData(
+                        constraintName,
+                        fkRs.getString("FKCOLUMN_NAME"),
+                        fkRs.getString("PKTABLE_NAME"),
+                        fkRs.getString("PKCOLUMN_NAME"),
+                        fkRs.getInt("DELETE_RULE"),
+                        fkRs.getInt("UPDATE_RULE"));
+                fk.setReferenceSchema(fkRs.getString("PKTABLE_SCHEM"));
+                fk.setLocalColumns(new ArrayList<>(List.of(fk.getLocalColumn())));
+                fk.setReferenceColumns(new ArrayList<>(List.of(fk.getReferenceColumn())));
+                foreignKeys.put(constraintName, fk);
             }
         }
         return foreignKeys;
