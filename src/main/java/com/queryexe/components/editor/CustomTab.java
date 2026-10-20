@@ -221,7 +221,7 @@ public class CustomTab<T extends Node> extends Tab {
 
     public void setErrorHeader() {
         tabLabel.setText("Error");
-        tabLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: -color-chart-7;");
+        tabLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: -color-danger-fg;");
         error = true;
     }
 

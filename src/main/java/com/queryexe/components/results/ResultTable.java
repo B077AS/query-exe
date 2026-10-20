@@ -299,7 +299,7 @@ public class ResultTable extends TableView<TableRowData> {
                             fullValue = null;
                         } else if (item == null) {
                             setText("[NULL]");
-                            setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+                            setStyle("-fx-text-fill: -color-fg-muted; -fx-font-style: italic;");
                             fullValue = null;
                             if (getContextMenu() == null && getTableView() != null && getIndex() >= 0) {
                                 try {
@@ -377,7 +377,7 @@ public class ResultTable extends TableView<TableRowData> {
                         String item = getItem();
                         if (item == null) {
                             setText("[NULL]");
-                            setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+                            setStyle("-fx-text-fill: -color-fg-muted; -fx-font-style: italic;");
                         } else {
                             String displayText = item.length() > MAX_CELL_LENGTH
                                     ? item.substring(0, MAX_CELL_LENGTH) + "..."

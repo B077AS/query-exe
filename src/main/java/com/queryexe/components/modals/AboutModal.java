@@ -94,10 +94,10 @@ public class AboutModal extends VBox {
         appNameLabel.setStyle("-fx-font-size: 32px; -fx-font-weight: bold;");
 
         Label versionLabel = new Label("Version " + VERSION);
-        versionLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: gray;");
+        versionLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: -color-fg-muted;");
 
         Label taglineLabel = new Label(TAGLINE);
-        taglineLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: gray; -fx-font-style: italic;");
+        taglineLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: -color-fg-muted; -fx-font-style: italic;");
         taglineLabel.setTextAlignment(TextAlignment.CENTER);
 
         Region separator1 = createSeparator();
@@ -108,7 +108,7 @@ public class AboutModal extends VBox {
 
         int currentYear = Year.now().getValue();
         Label copyrightLabel = new Label("© " + currentYear + " QueryExe");
-        copyrightLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
+        copyrightLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
         copyrightLabel.setTextAlignment(TextAlignment.CENTER);
         copyrightLabel.setPadding(new Insets(0, 0, 10, 0));
 
@@ -166,7 +166,7 @@ public class AboutModal extends VBox {
         labelText.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-min-width: 140px;");
 
         Label valueText = new Label(value);
-        valueText.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
+        valueText.setStyle("-fx-font-size: 12px; -fx-text-fill: -color-fg-muted;");
         valueText.setWrapText(true);
 
         row.getChildren().addAll(labelText, valueText);

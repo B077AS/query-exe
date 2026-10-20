@@ -57,9 +57,7 @@ public class ConnectionListRow extends HBox {
         metaRow.setAlignment(Pos.CENTER_LEFT);
 
         Label dbBadge = new Label(connection.getDbType().toUpperCase());
-        dbBadge.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
-        dbBadge.setStyle("-fx-background-color: -color-border-muted; -fx-padding: 2 8 2 8; "
-                + "-fx-background-radius: 12; -fx-font-size: 10px; -fx-font-weight: bold;");
+        dbBadge.getStyleClass().add("db-type-badge");
 
         Label userLabel = new Label(connection.getUsername());
         userLabel.setGraphic(new FontIcon(MaterialDesignA.ACCOUNT));

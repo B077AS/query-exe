@@ -1,16 +1,16 @@
 .root {
 	-color-dark: #0d0e12;
 	-color-light: #f8f8f2;
-	-color-base-0: #d4d4d7;
-	-color-base-1: #bfbfc3;
-	-color-base-2: #94959b;
-	-color-base-3: #7e7f86;
-	-color-base-4: #696a72;
-	-color-base-5: #53555e;
-	-color-base-6: #3d3f4a;
-	-color-base-7: #282a36;
-	-color-base-8: #181920;
-	-color-base-9: #0d0e12;
+	-color-base-0: #f2f2f7;
+	-color-base-1: #e5e5ea;
+	-color-base-2: #d1d1d6;
+	-color-base-3: #aeaeb2;
+	-color-base-4: rgb(142, 142, 147);
+	-color-base-5: rgb(99, 99, 102);
+	-color-base-6: rgb(72, 72, 74);
+	-color-base-7: rgb(58, 58, 60);
+	-color-base-8: rgb(44, 44, 46);
+	-color-base-9: rgb(28, 28, 30);
 	-color-accent-0: #e5dfff;
 	-color-accent-1: #d5ccff;
 	-color-accent-2: #c5b9ff;
@@ -21,24 +21,6 @@
 	-color-accent-7: #685ab3;
 	-color-accent-8: #52468c;
 	-color-accent-9: #3c3366;
-	/* Translucent tints of -color-accent-9/-color-accent-7, for panel/row
-	   backgrounds that need a subtle accent wash instead of a solid fill.
-	   Named after the alpha-suffixed -color-chart-*-alphaNN tokens below. */
-	-color-accent-9-alpha10: rgba(60, 51, 102, 0.1);
-	-color-accent-9-alpha20: rgba(60, 51, 102, 0.2);
-	-color-accent-9-alpha30: rgba(60, 51, 102, 0.3);
-	-color-accent-9-alpha40: rgba(60, 51, 102, 0.4);
-	-color-accent-7-alpha10: rgba(104, 90, 179, 0.1);
-	/* Matches .styled-text-area .selection below, so text-selection and
-	   row-selection colors read as one consistent, muted accent across the
-	   query editor and the results table. */
-	-color-selection-muted: #68637c;
-	/* SQL keyword syntax-highlight color, see .paragraph-box .text.keyword below. */
-	-color-syntax-keyword: #ac80ea;
-	/* SQL function-call syntax-highlight color, see .paragraph-box .text.function below. */
-	-color-syntax-function: #41a9c9;
-	/* SQL bind-placeholder syntax-highlight color, see .paragraph-box .text.placeholder below. */
-	-color-syntax-placeholder: #c84164;
 	-color-success-0: #e2ffdf;
 	-color-success-1: #d0ffcc;
 	-color-success-2: #bfffb9;
@@ -70,17 +52,27 @@
 	-color-danger-8: #8c5246;
 	-color-danger-9: #663c33;
 	-color-fg-default: #f8f8f2;
-	-color-fg-muted: #bfbfc3;
-	-color-fg-subtle: #7e7f86;
-	-color-fg-emphasis: #0d0e12;
-	-color-bg-default: #292e35;
-	-color-bg-overlay: #24282d;
-	-color-bg-subtle: #3b424c;
-	-color-bg-inset: #191b1f;
-	-color-border-default: #685ab3;
-	-color-border-muted: #52468c;
-	-color-border-subtle: #3c3366;
-	-color-shadow-default: #0d0e12;
+	-color-fg-muted: #a6a4ae;
+	-color-fg-subtle: #6b6a73;
+	-color-fg-self: #d5ccff;
+	/*-color-fg-emphasis: #0d0e12;*/
+	/* Text/editor selection fill. Rotated per accent theme by ThemeManager. */
+	-color-highlight: #44475a;
+	-color-fg-emphasis: #252629;
+	-color-bg-default: #161616;
+	-color-bg-overlay: #161616;
+	-color-bg-subtle: rgb(28, 28, 30);
+	-color-bg-middle: rgb(36, 36, 38);
+	-color-bg-hover: rgb(48, 48, 51);
+	-color-bg-inset: #0b0b0c;
+	-color-bg-void: #0d0d0d;
+	-color-bg-elevated: #1e1e1e;
+	-color-bg-panel: #161616;
+	-color-bg-popup: #161616;
+	-color-border-default: rgb(72, 72, 74);
+	-color-border-muted: rgb(58, 58, 60);
+	-color-border-subtle: rgb(49, 49, 52);
+	-color-shadow-default: rgb(0, 0, 0);
 	-color-neutral-emphasis-plus: #94959b;
 	-color-neutral-emphasis: #7e7f86;
 	-color-neutral-muted: rgba(126, 127, 134, 0.4);
@@ -97,10 +89,10 @@
 	-color-success-emphasis: #8AFF80;
 	-color-success-muted: rgba(138, 255, 128, 0.4);
 	-color-success-subtle: rgba(138, 255, 128, 0.1);
-	-color-danger-fg: #FF9580;
-	-color-danger-emphasis: #FF9580;
-	-color-danger-muted: rgba(255, 149, 128, 0.4);
-	-color-danger-subtle: rgba(255, 149, 128, 0.1);
+	-color-danger-fg: rgba(239, 83, 80, 0.95);
+	-color-danger-emphasis: #e74c3c;
+	-color-danger-muted: rgba(239, 83, 80, 0.35);
+	-color-danger-subtle: rgba(239, 83, 80, 0.12);
 	-color-chart-1: #f3622d;
 	-color-chart-2: #fba71b;
 	-color-chart-3: #57b757;
@@ -125,6 +117,13 @@
 	-color-chart-6-alpha20: rgba(154, 66, 200, 0.2);
 	-color-chart-7-alpha20: rgba(200, 65, 100, 0.2);
 	-color-chart-8-alpha20: rgba(136, 136, 136, 0.2);
+	/* SQL editor syntax colors: the komm .code-area palette. */
+	-color-syntax-keyword: #c678dd;
+	-color-syntax-string: #98c379;
+	-color-syntax-comment: #5c6370;
+	-color-syntax-number: #d19a66;
+	-color-syntax-function: #61afef;
+	-color-syntax-placeholder: #e06c75;
 	-fx-background-color: -color-bg-default;
 	-fx-font-size: 14px;
 	-fx-background-radius: inherit;
@@ -434,7 +433,7 @@ Text {
 	-color-button-bg: -color-bg-subtle;
 	-color-button-fg: -color-fg-default;
 	-color-button-border: -color-border-default;
-	-color-button-bg-hover: -color-base-5;
+	-color-button-bg-hover: -color-bg-hover;
 	-color-button-fg-hover: -color-button-fg;
 	-color-button-border-hover: -color-button-border;
 	-color-button-bg-focused: -color-button-bg;
@@ -562,7 +561,7 @@ Text {
 .button.button-outlined {
 	-color-button-bg: -color-bg-default;
 	-color-button-fg: -color-fg-default;
-	-color-button-bg-hover: -color-base-5;
+	-color-button-bg-hover: -color-bg-hover;
 	-color-button-fg-hover: -color-button-fg;
 }
 
@@ -577,22 +576,17 @@ Text {
 	-color-button-bg-focused: -color-accent-6;
 	-color-button-fg-focused: -color-fg-emphasis;
 	-color-button-border-focused: -color-accent-emphasis;
-	/*-color-button-bg-pressed: -color-accent-emphasis;*/
-	-color-button-bg-pressed: -color-bg-default;
-	/*-color-button-fg-pressed: -color-fg-emphasis;*/
-	-color-button-fg-pressed: -color-accent-fg;
-	-color-button-border-pressed: -color-accent-fg;
-	/*-color-button-border-pressed: transparent;*/
+	-color-button-bg-pressed: -color-accent-emphasis;
+	-color-button-fg-pressed: -color-fg-emphasis;
+	-color-button-border-pressed: transparent;
 }
 
 .button:default.button-outlined,
 .button.accent.button-outlined {
 	-color-button-bg: -color-bg-default;
 	-color-button-fg: -color-accent-fg;
-	/*-color-button-bg-hover: -color-accent-emphasis;
-	-color-button-fg-hover: -color-fg-emphasis;*/
-	-color-button-bg-hover: -color-bg-default;
-	-color-button-fg-hover: -color-accent-fg;
+	-color-button-bg-hover: -color-accent-emphasis;
+	-color-button-fg-hover: -color-fg-emphasis;
 }
 
 .button:default.flat,
@@ -673,6 +667,7 @@ Text {
 
 .button.flat:hover {
 	-fx-underline: false;
+	-fx-background-color: -color-bg-hover;
 }
 
 .button.small {
@@ -704,7 +699,7 @@ Text {
 }
 
 .check-box>.box>.mark {
-	-fx-background-color: -color-bg-default;
+	-fx-background-color: transparent;
 	-fx-shape: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z";
 	-fx-scale-shape: true;
 	-fx-min-height: 0.7em;
@@ -1022,8 +1017,6 @@ Text {
 	-fx-background-insets: 0;
 	-fx-background-radius: 0;
 	-fx-padding: 0;
-	-fx-highlight-fill: -color-selection-muted;
-	-fx-highlight-text-fill: -color-fg-default;
 }
 
 .cell .check-box {
@@ -1062,9 +1055,9 @@ Text {
 .list-view {
 	-color-cell-bg: -color-bg-default;
 	-color-cell-fg: -color-fg-default;
-	-color-cell-bg-selected: -color-accent-subtle;
+	-color-cell-bg-selected: -color-accent-muted;
 	-color-cell-fg-selected: -color-fg-default;
-	-color-cell-bg-selected-focused: -color-accent-subtle;
+	-color-cell-bg-selected-focused: -color-accent-muted;
 	-color-cell-fg-selected-focused: -color-fg-default;
 	-color-cell-bg-odd: -color-bg-subtle;
 	-color-cell-border: -color-border-default;
@@ -1119,9 +1112,9 @@ Text {
 .table-view {
 	-color-cell-bg: -color-bg-default;
 	-color-cell-fg: -color-fg-default;
-	-color-cell-bg-selected: -color-accent-8;
+	-color-cell-bg-selected: -color-accent-muted;
 	-color-cell-fg-selected: -color-fg-default;
-	-color-cell-bg-selected-focused: -color-accent-8;
+	-color-cell-bg-selected-focused: -color-accent-muted;
 	-color-cell-fg-selected-focused: -color-fg-default;
 	-color-cell-bg-odd: -color-bg-subtle;
 	-color-cell-border: -color-border-default;
@@ -1316,9 +1309,9 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tree-view {
 	-color-cell-bg: -color-bg-default;
 	-color-cell-fg: -color-fg-default;
-	-color-cell-bg-selected: -color-accent-subtle;
+	-color-cell-bg-selected: -color-accent-muted;
 	-color-cell-fg-selected: -color-fg-default;
-	-color-cell-bg-selected-focused: -color-accent-subtle;
+	-color-cell-bg-selected-focused: -color-accent-muted;
 	-color-cell-fg-selected-focused: -color-fg-default;
 	-color-cell-bg-odd: -color-bg-subtle;
 	-color-cell-border: -color-border-default;
@@ -1392,9 +1385,9 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tree-table-view {
 	-color-cell-bg: -color-bg-default;
 	-color-cell-fg: -color-fg-default;
-	-color-cell-bg-selected: -color-accent-subtle;
+	-color-cell-bg-selected: -color-accent-muted;
 	-color-cell-fg-selected: -color-fg-default;
-	-color-cell-bg-selected-focused: -color-accent-subtle;
+	-color-cell-bg-selected-focused: -color-accent-muted;
 	-color-cell-fg-selected-focused: -color-fg-default;
 	-color-cell-bg-odd: -color-bg-subtle;
 	-color-cell-border: -color-border-default;
@@ -1875,7 +1868,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .menu-bar>.container>.menu-button:hover,
 .menu-bar>.container>.menu-button:focused,
 .menu-bar>.container>.menu-button:showing {
-	-fx-background-color: -color-base-5, -color-base-5;
+	-fx-background-color: -color-bg-hover, -color-bg-hover;
 }
 
 .menu {
@@ -2019,7 +2012,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-color-button-bg: -color-bg-subtle;
 	-color-button-fg: -color-fg-default;
 	-color-button-border: -color-border-default;
-	-color-button-bg-hover: -color-base-5;
+	-color-button-bg-hover: -color-bg-hover;
 	-color-button-fg-hover: -color-button-fg;
 	-color-button-border-hover: -color-button-border;
 	-color-button-bg-focused: -color-button-bg;
@@ -2236,7 +2229,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .split-menu-button.button-outlined {
 	-color-button-bg: -color-bg-default;
 	-color-button-fg: -color-fg-default;
-	-color-button-bg-hover: -color-base-5;
+	-color-button-bg-hover: -color-bg-hover;
 	-color-button-fg-hover: -color-button-fg;
 }
 
@@ -2421,7 +2414,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .radio-button {
-	-fx-background-color: -color-bg-default;
+	-fx-background-color: transparent;
 	-fx-text-fill: -color-fg-default;
 	-fx-label-padding: 2px 2px 0 6px;
 }
@@ -2787,15 +2780,13 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-color-split-divider-pressed: -color-accent-emphasis;
 	-color-split-grabber: -color-accent-4;
 	-color-split-grabber-pressed: -color-accent-emphasis;
-	/*-fx-background-color: transparent;*/
-	-fx-background-color: -color-border-default;
+	-fx-background-color: transparent;
 	-fx-background-insets: 0;
 	-fx-padding: 0;
 }
 
 .split-pane>.split-pane-divider {
-	/*-fx-background-color: -color-split-divider;*/
-	-fx-background-color: -color-accent-6;
+	-fx-background-color: -color-split-divider;
 	-fx-padding: 0 1.5px 0 1.5px;
 	-fx-opacity: 0.5;
 }
@@ -2831,7 +2822,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tab-pane {
 	-color-tab-bg-selected: -color-bg-default;
 	-color-tab-fg-selected: -color-fg-default;
-	-color-tab-border-selected: -color-accent-fg;
+	-color-tab-border-selected: -color-accent-emphasis;
 }
 
 .tab-pane>.tab-header-area {
@@ -3146,7 +3137,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-color-input-bg-focused: -color-bg-default;
 	-color-input-border-focused: -color-accent-emphasis;
 	-color-input-bg-readonly: -color-bg-subtle;
-	-color-input-bg-highlight: -color-selection-muted;
+	-color-input-bg-highlight: -color-highlight;
 	-color-input-fg-highlight: -color-fg-default;
 	-fx-background-color: -color-input-border, -color-input-bg;
 	-fx-background-insets: 0, 1px;
@@ -3270,7 +3261,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-color-button-bg: -color-bg-subtle;
 	-color-button-fg: -color-fg-default;
 	-color-button-border: -color-border-default;
-	-color-button-bg-hover: -color-base-5;
+	-color-button-bg-hover: -color-bg-hover;
 	-color-button-fg-hover: -color-button-fg;
 	-color-button-border-hover: -color-button-border;
 	-color-button-bg-focused: -color-button-bg;
@@ -3386,6 +3377,10 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-thumb-move-animation-time: 200;
 }
 
+.toggle-switch:hover {
+	-fx-cursor: hand;
+}
+
 .toggle-switch>.label-container>.label {
 	-fx-font-size: 1em;
 	-fx-text-fill: -color-fg-default;
@@ -3404,13 +3399,13 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .toggle-switch>.thumb-area {
 	-fx-background-radius: 1em;
-	-fx-background-color: -color-accent-emphasis, -color-bg-default;
+	-fx-background-color: rgb(225, 90, 90), -color-bg-default;
 	-fx-background-insets: 0, 2px;
 	-fx-padding: 0.85em 1.4em 0.85em 1.4em;
 }
 
 .toggle-switch:selected>.thumb {
-	-fx-background-color: transparent, -color-accent-emphasis;
+	-fx-background-color: transparent, -color-fg-default;
 	-fx-opacity: 1;
 }
 
@@ -3454,13 +3449,11 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tool-bar>.container>.menu-button,
 .tool-bar>.container>.split-menu-button {
 	-color-button-bg: -color-bg-subtle;
-	-color-button-bg-hover: -color-base-5;
-	-color-button-border-hover: -color-accent-muted;
+	-color-button-bg-hover: -color-bg-hover;
+	-color-button-border-hover: -color-border-default;
 	-color-button-border-focused: -color-accent-muted;
 	-fx-background-insets: 0;
 	-fx-effect: none;
-	-color-button-border: -color-bg-subtle;
-	/**/
 }
 
 .tool-bar>.container>.button:hover,
@@ -3477,8 +3470,8 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .tool-bar>.container .toggle-button {
 	-color-button-bg: -color-bg-subtle;
-	-color-button-border-hover: -color-accent-muted;
-	-color-button-bg-selected: -color-base-4;
+	-color-button-border-hover: -color-border-default;
+	-color-button-bg-selected: -color-bg-hover;
 	-color-button-fg-selected: -color-fg-default;
 	-fx-background-insets: 0;
 	-fx-effect: none;
@@ -3490,7 +3483,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .tool-bar>.container .toggle-button:hover:selected {
-	-fx-background-color: -color-button-border-hover, -color-base-4;
+	-fx-background-color: -color-button-border-hover, -color-bg-hover;
 }
 
 .tool-bar>.container .breadcrumbs {
@@ -3510,7 +3503,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .tool-bar>.container .breadcrumbs>.hyperlink:hover {
-	-fx-background-color: -color-base-5;
+	-fx-background-color: -color-bg-hover;
 	-fx-background-radius: 6px, 5px;
 }
 
@@ -3573,6 +3566,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .breadcrumbs>.hyperlink {
+	-color-link-fg: white;
 	-color-link-fg-visited: -color-link-fg;
 }
 
@@ -3581,12 +3575,11 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .card>.container {
-	/*-fx-background-color: -color-bg-default;*/
+	-fx-background-color: -color-bg-default;
 	-fx-alignment: TOP_LEFT;
 	-fx-padding: 1em 0 1em 0;
 	-fx-spacing: 1em;
-	-fx-border-color: -color-border-muted;
-	/*  -fx-border-color: -color-border-default;*/
+	-fx-border-color: -color-border-default;
 	-fx-border-width: 1px;
 	-fx-border-radius: 6px;
 }
@@ -4918,7 +4911,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .modal-pane {
 	/*-color-modal-pane-overlay: rgba(255, 255, 255, 0.2);*/
-	-color-modal-pane-overlay: rgba(10, 8, 8, 0.50);
+	-color-modal-pane-overlay: rgba(10, 8, 8, 0.75);
 }
 
 .modal-pane>.scroll-pane>.viewport>*>.scrollable-content {
@@ -4946,9 +4939,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .modal-box>.close-button:hover {
-	-fx-background-color: -color-border-muted,
-		-color-modal-box-close-bg-hover;
-	-fx-background-insets: 0, 1;
+	-fx-background-color: -color-modal-box-close-bg-hover;
 }
 
 .modal-box .tile {
@@ -5673,14 +5664,23 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 	-fx-cursor: hand;
 }
 
-.connection-card:hover {
+.connection-card:hover>.container {
 	-fx-border-color: -color-accent-emphasis;
 	-fx-border-width: 1px;
 	-fx-border-radius: 6px;
 }
 
+.db-type-badge {
+	-fx-font-size: 10px;
+	-fx-font-weight: bold;
+	-fx-padding: 2 8 2 8;
+	-fx-background-color: -color-accent-subtle;
+	-fx-background-radius: 12px;
+	-fx-text-fill: -color-accent-fg;
+}
+
 .connection-lineitem-card {
-    -fx-background-color: -color-bg-overlay;
+    -fx-background-color: -color-bg-middle;
     -fx-background-radius: 8px;
     -fx-border-color: -color-border-default;
     -fx-border-width: 1px;
@@ -5689,13 +5689,12 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .connection-lineitem-card:hover {
-    -fx-background-color: -color-accent-subtle;
-    -fx-border-color: -color-accent-muted;
+    -fx-border-color: -color-accent-emphasis;
 }
 
 .custom-results-button {
 	-fx-background-color: transparent;
-	-fx-text-fill: white;
+	-fx-text-fill: -color-fg-default;
 	-fx-alignment: CENTER;
 	-fx-cursor: hand;
 }
@@ -5738,7 +5737,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .custom-query:hover {
-	-fx-background-color: -color-bg-subtle;
+	-fx-background-color: -color-bg-middle;
 }
 
 .no-hover:hover {
@@ -5765,7 +5764,7 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-background-color: -color-bg-default;
     -fx-border-radius: 12px;
     -fx-background-radius: 12px;
-    -fx-border-color: -color-border-default;
+    -fx-border-color: -color-accent-muted;
     -fx-border-width: 1px;
 }
 
@@ -5776,24 +5775,24 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .styled-text-area .selection {
-    -fx-highlight-fill: -color-selection-muted;
+    -fx-highlight-fill: -color-highlight;
 }
 
 .paragraph-box .text {
-    -fx-fill: white;
+    -fx-fill: -color-fg-default;
 }
 
 .paragraph-box .text.string {
-    -fx-fill: #f8a027;
+    -fx-fill: -color-syntax-string;
 }
 
 .paragraph-box .text.comment {
-    -fx-fill: #808080;
+    -fx-fill: -color-syntax-comment;
     -fx-font-style: italic;
 }
 
 .paragraph-box .text.number {
-    -fx-fill: #6fa8dc;
+    -fx-fill: -color-syntax-number;
 }
 
 .paragraph-box .text.keyword {
@@ -5811,20 +5810,20 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 }
 
 .caret {
-    -fx-stroke: white;
+    -fx-stroke: -color-fg-default;
     -fx-scale-y: 0.85;
 }
 
 .lineno {
     -fx-opacity: 1;
-    -fx-background-color: -color-bg-subtle;
-    -fx-text-fill: #666;
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-fg-subtle;
     -fx-font-size: 17px;
     -fx-padding: 0 10 0 5;
 }
 
 .autocomplete-list {
-    -fx-background-color: -color-bg-default;
+    -fx-background-color: -color-bg-popup;
     -fx-border-color: -color-border-default;
     -fx-border-width: 1px;
 }
@@ -5945,7 +5944,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-padding: 10 24 10 24;
     -fx-border-color: transparent transparent -color-border-subtle transparent;
     -fx-border-width: 0 0 1px 0;
-}
 }
 
 .modal-toggle {

@@ -84,7 +84,7 @@ public class AddConnectionModal extends VBox {
     private final String activeTab = """
             -fx-background-color: transparent;
             -fx-border-width: 0 0 2px 0;
-            -fx-border-color: -color-border-default;
+            -fx-border-color: -color-accent-emphasis;
             -fx-font-weight: bold;
             """;
 
@@ -652,7 +652,7 @@ public class AddConnectionModal extends VBox {
             driversTab.setSpacing(15);
 
             VBox currentDriverBox = new VBox(8);
-            currentDriverBox.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-background-radius: 5px; -fx-padding: 15px; -fx-background-color: -color-accent-7-alpha10;");
+            currentDriverBox.setStyle("-fx-border-color: -color-border-default; -fx-border-width: 1px; -fx-border-radius: 5px; -fx-background-radius: 5px; -fx-padding: 15px; -fx-background-color: -color-bg-middle;");
 
             Label currentDriverTitle = new Label("Current Driver:");
             currentDriverTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
@@ -663,7 +663,7 @@ public class AddConnectionModal extends VBox {
             String driverVersion = currentDriverInfo.getVersion();
 
             Label currentDriverLabel = new Label(driverStatus + " - " + driverVersion);
-            currentDriverLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: " + (isUsingDefault ? "gray" : "-color-border-default") + ";");
+            currentDriverLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: " + (isUsingDefault ? "-color-fg-muted" : "-color-accent-fg") + ";");
 
             currentDriverBox.getChildren().addAll(currentDriverTitle, currentDriverLabel);
 
@@ -750,13 +750,13 @@ public class AddConnectionModal extends VBox {
             Button applyDriverButton = new Button("Apply Driver", new FontIcon(MaterialDesignC.CHECK));
             applyDriverButton.setMaxWidth(Double.MAX_VALUE);
             applyDriverButton.setDisable(true);
-            applyDriverButton.setStyle("-fx-background-color: -color-border-default;");
+            applyDriverButton.getStyleClass().add("accent");
 
             buttonBox.addRow(0, loadDriversButton, downloadButton, applyDriverButton);
 
             Label statusLabel = new Label("Click 'Check Available Drivers' to see available versions");
             statusLabel.setWrapText(true);
-            statusLabel.setStyle("-fx-text-fill: gray;");
+            statusLabel.setStyle("-fx-text-fill: -color-fg-muted;");
 
             loadDriversButton.setOnAction(e -> {
                 loadDriversButton.setDisable(true);
@@ -769,7 +769,7 @@ public class AddConnectionModal extends VBox {
                                 ObservableList<DriverInfo> driversList = FXCollections.observableArrayList(drivers);
                                 driverInfoComboBox.setItems(driversList);
                                 statusLabel.setText("Found " + drivers.size() + " driver versions. Select one to download or apply.");
-                                statusLabel.setStyle("-fx-text-fill: gray;");
+                                statusLabel.setStyle("-fx-text-fill: -color-fg-muted;");
                                 loadDriversButton.setDisable(false);
                                 if (!drivers.isEmpty()) {
                                     driverInfoComboBox.getSelectionModel().selectFirst();
@@ -779,7 +779,7 @@ public class AddConnectionModal extends VBox {
                         ex -> {
                             Platform.runLater(() -> {
                                 statusLabel.setText("Failed to load drivers: " + ex.getMessage());
-                                statusLabel.setStyle("-fx-text-fill: red;");
+                                statusLabel.setStyle("-fx-text-fill: -color-danger-fg;");
                                 loadDriversButton.setDisable(false);
                             });
                         }
@@ -799,7 +799,7 @@ public class AddConnectionModal extends VBox {
                         statusLabel.setStyle("-fx-text-fill: -color-success-emphasis;");
                     } else {
                         statusLabel.setText("Click 'Download Driver' to download version " + newVal.getVersion());
-                        statusLabel.setStyle("-fx-text-fill: gray;");
+                        statusLabel.setStyle("-fx-text-fill: -color-fg-muted;");
                     }
                 } else {
                     downloadButton.setDisable(true);
@@ -829,7 +829,7 @@ public class AddConnectionModal extends VBox {
                             ex -> {
                                 Platform.runLater(() -> {
                                     statusLabel.setText("Download failed: " + ex.getMessage());
-                                    statusLabel.setStyle("-fx-text-fill: red;");
+                                    statusLabel.setStyle("-fx-text-fill: -color-danger-fg;");
                                     downloadButton.setDisable(false);
                                 });
                             }
@@ -843,10 +843,10 @@ public class AddConnectionModal extends VBox {
                     this.selectedDriverInfo = selectedDriver;
 
                     statusLabel.setText("Driver " + selectedDriver.getVersion() + " will be applied when you save the connection.");
-                    statusLabel.setStyle("-fx-text-fill: -color-border-default; -fx-font-weight: bold;");
+                    statusLabel.setStyle("-fx-text-fill: -color-accent-fg; -fx-font-weight: bold;");
 
                     currentDriverLabel.setText("Custom Driver - " + selectedDriver.getVersion() + " (pending save)");
-                    currentDriverLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: -color-border-default;");
+                    currentDriverLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: -color-accent-fg;");
                 }
             });
 

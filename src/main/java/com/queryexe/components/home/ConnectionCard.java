@@ -96,9 +96,7 @@ public class ConnectionCard extends Card {
         connectionName.setStyle("-fx-font-size: 20px; -fx-font-weight: bold;");
 
         Label dbTypeBadge = new Label(connection.getDbType().toUpperCase());
-        dbTypeBadge.getStyleClass().addAll(Styles.TEXT_SMALL, Styles.TEXT_MUTED);
-        dbTypeBadge.setStyle("-fx-background-color: -color-border-muted; " + "-fx-padding: 2 8 2 8; "
-                + "-fx-background-radius: 12; " + "-fx-font-size: 10px; " + "-fx-font-weight: bold;");
+        dbTypeBadge.getStyleClass().add("db-type-badge");
 
         titleSection.getChildren().addAll(connectionName, dbTypeBadge);
 

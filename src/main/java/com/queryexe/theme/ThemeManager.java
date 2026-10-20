@@ -14,36 +14,22 @@ import com.queryexe.utils.ColorUtil;
 /**
  * Applies and persists the app's accent {@link AppTheme}.
  *
- * <p>The base stylesheet's {@code -color-accent-*} tokens are purple, and a
- * couple of selection/syntax tokens in style.css are also purple-tinted hex
- * literals rather than pure grays. So switching themes isn't just swapping
- * the accent ramp: those extra tokens are rotated by the same hue delta as
- * the theme's accent color, keeping their saturation/lightness identical to
- * the default theme and making the result read as a hue change rather than
- * a new palette.
+ * <p>Same scheme as the komm project: style.css defines every neutral (backgrounds,
+ * foregrounds, borders, syntax colors) once, and a theme only swaps the
+ * {@code -color-accent-*} ramp plus the accent-tinted {@code -color-highlight}
+ * (text selection). Borders deliberately stay neutral gray for every theme, so the
+ * accent shows up only where it signals something (focus, selection, primary actions).
  *
- * <p>Backgrounds ({@code -color-bg-*}) are deliberately left out of that
- * rotation and stay pure neutral grays (defined once in style.css) for
- * every theme, so the accent color shows up in controls/borders/highlights
- * without tinting the app's panels.
- *
- * <p>The override is a small {@code .root{...}} rule containing only the
- * tokens above, encoded as a {@code data:text/css;base64,...} stylesheet
- * (see {@link com.queryexe.utils.IconColorUtil} for the same technique) and
- * added to the app's single {@link Scene} after the base style.css, so it
- * wins the cascade for just those properties.
+ * <p>The override is a small {@code .root{...}} rule containing only those tokens,
+ * encoded as a {@code data:text/css;base64,...} stylesheet (see
+ * {@link com.queryexe.utils.IconColorUtil} for the same technique) and added to the
+ * app's single {@link Scene} after the base style.css, so it wins the cascade for just
+ * those properties.
  */
 @Slf4j
 public class ThemeManager {
 
     private static final ThemeManager INSTANCE = new ThemeManager();
-
-    // Purple-tinted tokens in style.css that aren't part of the accent ramp
-    // itself but still need to rotate with the chosen theme.
-    private static final String SELECTION_MUTED = "#68637c";
-    private static final String SYNTAX_KEYWORD = "#ac80ea";
-
-    private static final double BASE_HUE = ColorUtil.hueOf(AppTheme.PURPLE.getSwatchColor());
 
     private final ObjectProperty<AppTheme> currentTheme = new SimpleObjectProperty<>(AppTheme.PURPLE);
     private String appliedStylesheetUri;
@@ -103,8 +89,6 @@ public class ThemeManager {
 
     private String buildOverrideBody(AppTheme theme) {
         String[] ramp = theme.getRamp();
-        double hueShift = ColorUtil.hueOf(theme.getSwatchColor()) - BASE_HUE;
-
         StringBuilder sb = new StringBuilder();
 
         for (int i = 0; i < ramp.length; i++) {
@@ -115,17 +99,8 @@ public class ThemeManager {
         sb.append("-color-accent-emphasis:").append(ramp[5]).append(';');
         sb.append("-color-accent-muted:").append(ColorUtil.rgba(ramp[5], 0.4)).append(';');
         sb.append("-color-accent-subtle:").append(ColorUtil.rgba(ramp[5], 0.1)).append(';');
-        sb.append("-color-accent-9-alpha10:").append(ColorUtil.rgba(ramp[9], 0.1)).append(';');
-        sb.append("-color-accent-9-alpha20:").append(ColorUtil.rgba(ramp[9], 0.2)).append(';');
-        sb.append("-color-accent-9-alpha30:").append(ColorUtil.rgba(ramp[9], 0.3)).append(';');
-        sb.append("-color-accent-9-alpha40:").append(ColorUtil.rgba(ramp[9], 0.4)).append(';');
-        sb.append("-color-accent-7-alpha10:").append(ColorUtil.rgba(ramp[7], 0.1)).append(';');
-        sb.append("-color-border-default:").append(ramp[7]).append(';');
-        sb.append("-color-border-muted:").append(ramp[8]).append(';');
-        sb.append("-color-border-subtle:").append(ramp[9]).append(';');
-
-        sb.append("-color-selection-muted:").append(ColorUtil.rotateHex(SELECTION_MUTED, hueShift)).append(';');
-        sb.append("-color-syntax-keyword:").append(ColorUtil.rotateHex(SYNTAX_KEYWORD, hueShift)).append(';');
+        sb.append("-color-fg-self:").append(ramp[1]).append(';');
+        sb.append("-color-highlight:").append(theme.getHighlight()).append(';');
 
         return sb.toString();
     }

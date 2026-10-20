@@ -24,16 +24,16 @@ public class SimpleResultBox extends VBox {
         scrollPane.setHbarPolicy(ScrollBarPolicy.NEVER);
 
         Text errorQueryLabel = new Text("Query run succesfully: ");
-        errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: #42C841;");
+        errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-success-fg;");
 
         Text queryText = new Text(query.trim() + "\n\n");
-        queryText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
+        queryText.setStyle("-fx-font-style: italic; -fx-fill: -color-fg-default;");
 
         Text rowsAffectedText = new Text("Rows Affected: ");
-        rowsAffectedText.setStyle("-fx-font-weight: bold; -fx-fill: #42C841;");
+        rowsAffectedText.setStyle("-fx-font-weight: bold; -fx-fill: -color-success-fg;");
 
         Text rowsText = new Text(updateCount + "\n\n");
-        rowsText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
+        rowsText.setStyle("-fx-font-style: italic; -fx-fill: -color-fg-default;");
 
         errorFlow.getChildren().addAll(
                 errorQueryLabel,

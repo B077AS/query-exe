@@ -160,14 +160,7 @@ public class MultipleConnectionsModal extends VBox {
         metaRow.setAlignment(Pos.CENTER_LEFT);
 
         Label dbBadge = new Label(connection.getDbType().toUpperCase());
-        dbBadge.setStyle("""
-                -fx-font-size: 9px;
-                -fx-font-weight: bold;
-                -fx-background-color: -color-border-muted;
-                -fx-background-radius: 4px;
-                -fx-padding: 2 6 2 6;
-                -fx-text-fill: -color-fg-muted;
-                """);
+        dbBadge.getStyleClass().add("db-type-badge");
 
         Label urlLabel = new Label(getDisplayUrl(connection));
         urlLabel.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);

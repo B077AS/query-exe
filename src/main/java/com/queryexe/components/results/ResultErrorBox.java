@@ -35,22 +35,22 @@ public class ResultErrorBox extends HBox {
         scrollPane.setHbarPolicy(ScrollBarPolicy.NEVER);
 
         Text errorQueryLabel = new Text("Query: ");
-        errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-chart-7;");
+        errorQueryLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-danger-fg;");
 
         Text queryText = new Text(query.trim() + "\n\n");
-        queryText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
+        queryText.setStyle("-fx-font-style: italic; -fx-fill: -color-fg-default;");
 
         Text messageLabel = new Text("Message: ");
-        messageLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-chart-7;");
+        messageLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-danger-fg;");
 
         Text messageText = new Text(e.getMessage() + "\n\n");
-        messageText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
+        messageText.setStyle("-fx-font-style: italic; -fx-fill: -color-fg-default;");
 
         Text errorCodeLabel = new Text("Error Code: ");
-        errorCodeLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-chart-7;");
+        errorCodeLabel.setStyle("-fx-font-weight: bold; -fx-fill: -color-danger-fg;");
 
         Text errorCodeText = new Text(e.getErrorCode() + "\n");
-        errorCodeText.setStyle("-fx-font-style: italic; -fx-fill: -color-base-0;");
+        errorCodeText.setStyle("-fx-font-style: italic; -fx-fill: -color-fg-default;");
 
         errorFlow.getChildren().addAll(
                 errorQueryLabel,
