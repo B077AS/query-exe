@@ -6,7 +6,6 @@ import com.queryexe.components.modals.shell.SidebarModal;
 import com.queryexe.components.modals.shell.SimpleTab;
 import com.queryexe.components.editor.SQLEditor;
 import com.queryexe.model.connections.ConnectionObject;
-import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.model.data.ForeignKeyData;
 import com.queryexe.queryexe.App;
@@ -157,9 +156,7 @@ public class CreateTableModal extends SidebarModal {
     private VBox generalPane() {
         tableNameField.setMaxWidth(Double.MAX_VALUE);
 
-        // PostgreSQL lists schemas where the other engines list databases (same rule as the tree's menus).
-        String containerLabel = DatabaseConnection.getInstance().getCurrentConnectionObject().getDbType()
-                .equals(ConnectionTypes.PostgreSQL.toString()) ? "SCHEMA" : "DATABASE";
+        String containerLabel = ModalUi.containerLabel().toUpperCase();
         TextField database = new TextField(databaseName);
         database.setEditable(false);
         database.setDisable(true);

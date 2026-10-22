@@ -8,6 +8,7 @@ import com.queryexe.model.data.ForeignKeyData;
 import com.queryexe.service.DatabaseConnection;
 import javafx.geometry.Pos;
 import atlantafx.base.theme.Styles;
+import com.queryexe.utils.IconColorUtil;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
@@ -83,26 +84,7 @@ public class TablePropertiesModal extends SidebarModal {
         Label type = ModalUi.mono(column.getDataType());
         type.getStyleClass().add("modal-type");
         type.setWrapText(true);
-        return block(column.getColumnName(), badges, type);
-    }
-
-    /**
-     * A list entry as a small block, since names, types and relations are too long for fixed columns: the name in
-     * bold with its badges on the right (a name that still doesn't fit is cut with the full text in a tooltip),
-     * and the detail underneath, which wraps instead of being cut off.
-     */
-    private static Node block(String title, HBox badges, Node detail) {
-        Label name = ModalUi.boldLabel(title);
-        name.setMinWidth(0);
-        name.setMaxWidth(Double.MAX_VALUE);
-        name.setTooltip(new Tooltip(title));
-        HBox.setHgrow(name, Priority.ALWAYS);
-        badges.setMinWidth(Region.USE_PREF_SIZE);
-
-        VBox block = new VBox(5, new HBox(12, name, badges), detail);
-        block.getStyleClass().add("modal-item");
-        block.setMaxWidth(Double.MAX_VALUE);
-        return block;
+        return ModalUi.block(column.getColumnName(), badges, type);
     }
 
     // ── Foreign keys ──────────────────────────────────────────────────────────
@@ -141,7 +123,7 @@ public class TablePropertiesModal extends SidebarModal {
         FlowPane relation = new FlowPane(8, 2, local, arrow, reference);
         relation.setAlignment(Pos.CENTER_LEFT);
 
-        return block(fk.getConstraintName(), badges, relation);
+        return ModalUi.block(fk.getConstraintName(), badges, relation);
     }
 
     private static VBox emptyPane(Ikon icon, String text) {
@@ -152,17 +134,8 @@ public class TablePropertiesModal extends SidebarModal {
 
     // ── Details ───────────────────────────────────────────────────────────────
 
+    /** The three numbers that matter as even stat tiles (big value, small label), then where the table lives. */
     private VBox detailsPane(int columnCount, int foreignKeyCount) {
-        VBox general = ModalUi.card("General", MaterialDesignI.INFORMATION_OUTLINE);
-        GridPane generalGrid = ModalUi.infoGrid();
-        ModalUi.infoRow(generalGrid, 0, "Database", databaseName);
-        ModalUi.infoRow(generalGrid, 1, "Table name", tableName);
-        ModalUi.infoRow(generalGrid, 2, "Columns", String.valueOf(columnCount));
-        ModalUi.infoRow(generalGrid, 3, "Foreign keys", String.valueOf(foreignKeyCount));
-        general.getChildren().add(generalGrid);
-
-        VBox stats = ModalUi.card("Statistics", MaterialDesignC.CHART_BAR);
-        GridPane statsGrid = ModalUi.infoGrid();
         String size;
         try {
             size = String.format("%.2f MB", DatabaseConnection.getInstance().getConnectionObject().getTableSize(databaseName, tableName));
@@ -170,12 +143,33 @@ public class TablePropertiesModal extends SidebarModal {
             log.error("getTableSize failed for {}.{}", databaseName, tableName, e);
             size = "N/A";
         }
-        ModalUi.infoRow(statsGrid, 0, "Table size", size);
-        stats.getChildren().add(statsGrid);
 
-        VBox content = ModalUi.content();
-        content.getChildren().addAll(general, stats);
+        HBox stats = new HBox(12,
+                stat(MaterialDesignT.TABLE_COLUMN, String.valueOf(columnCount), columnCount == 1 ? "Column" : "Columns"),
+                stat(MaterialDesignT.TABLE_KEY, String.valueOf(foreignKeyCount), foreignKeyCount == 1 ? "Foreign key" : "Foreign keys"),
+                stat(MaterialDesignH.HARDDISK, size, "Size on disk"));
+
+        Label location = ModalUi.mono(databaseName + "." + tableName);
+        location.setStyle("-fx-font-size: 13px;");
+        location.setWrapText(true);
+        VBox where = new VBox(8, ModalUi.sectionLabel(ModalUi.containerLabel().toUpperCase() + " AND TABLE"), location);
+
+        VBox content = new VBox(32, stats, where);
+        content.setPadding(new javafx.geometry.Insets(24));
         return wrap(content);
+    }
+
+    private static Node stat(Ikon icon, String value, String label) {
+        Label number = new Label(value);
+        number.setStyle("-fx-font-size: 26px; -fx-font-weight: bold;");
+        Label caption = new Label(label);
+        caption.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+        VBox tile = new VBox(10, IconColorUtil.colored(icon, "-color-fg-muted", 18), new VBox(2, number, caption));
+        tile.setStyle("-fx-background-color: -color-bg-subtle; -fx-background-radius: 10px; -fx-padding: 16 18 16 18;");
+        tile.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(tile, Priority.ALWAYS);
+        tile.setPrefWidth(0);
+        return tile;
     }
 
     private static VBox wrap(VBox content) {

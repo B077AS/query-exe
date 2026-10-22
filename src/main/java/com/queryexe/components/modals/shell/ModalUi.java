@@ -2,6 +2,8 @@ package com.queryexe.components.modals.shell;
 
 import atlantafx.base.theme.Styles;
 import com.queryexe.components.extra.CustomNotification;
+import com.queryexe.model.connections.ConnectionTypes;
+import com.queryexe.service.DatabaseConnection;
 import com.queryexe.utils.IconColorUtil;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -9,6 +11,7 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -61,6 +64,30 @@ public final class ModalUi {
         button.setFocusTraversable(false);
         button.setOnAction(e -> action.run());
         return button;
+    }
+
+    /**
+     * A list entry as a small block, since names, types and relations are too long for fixed columns: the name in
+     * bold with its badges on the right (a name that still doesn't fit is cut with the full text in a tooltip),
+     * and the detail underneath, which wraps instead of being cut off.
+     */
+    public static Node block(String title, HBox badges, Node detail) {
+        Label name = ModalUi.boldLabel(title);
+        name.setMinWidth(0);
+        name.setMaxWidth(Double.MAX_VALUE);
+        name.setTooltip(new Tooltip(title));
+        HBox.setHgrow(name, Priority.ALWAYS);
+        badges.setMinWidth(Region.USE_PREF_SIZE);
+
+        VBox block = new VBox(5, new HBox(12, name, badges), detail);
+        block.getStyleClass().add("modal-item");
+        block.setMaxWidth(Double.MAX_VALUE);
+        return block;
+    }
+    /** "Schema" on PostgreSQL, which lists schemas where the other engines list databases (same rule as the tree's menus). */
+    public static String containerLabel() {
+        return DatabaseConnection.getInstance().getCurrentConnectionObject().getDbType()
+                .equals(ConnectionTypes.PostgreSQL.toString()) ? "Schema" : "Database";
     }
 
     public static Label accentBadge(String text) {
