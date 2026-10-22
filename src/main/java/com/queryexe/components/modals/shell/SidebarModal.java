@@ -183,21 +183,31 @@ public class SidebarModal extends HBox {
     }
 
     private HBox createHeader() {
-        titleLabel.getStyleClass().add(Styles.TITLE_3);
+        VBox titleBlock = new VBox(1, titleLabel, subtitleLabel);
+        titleLabel.getStyleClass().add(Styles.TITLE_4);
         subtitleLabel.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
+
+        // Header action and close button share one row at the top right, level with the title's first line.
         Button closeButton = new Button(null, new FontIcon(MaterialDesignC.CLOSE));
         closeButton.getStyleClass().addAll(Styles.FLAT, Styles.BUTTON_CIRCLE);
         closeButton.setOnAction(e -> App.closeModal());
-
         headerActions.setAlignment(Pos.CENTER_RIGHT);
+        // A thin divider keeps the tab's action apart from the close button; it only shows while there is an action.
+        Separator actionDivider = new Separator(Orientation.VERTICAL);
+        actionDivider.setPadding(new Insets(6, 0, 6, 0));
+        actionDivider.visibleProperty().bind(javafx.beans.binding.Bindings.isNotEmpty(headerActions.getChildren()));
+        actionDivider.managedProperty().bind(actionDivider.visibleProperty());
+        HBox trailing = new HBox(8, headerActions, actionDivider, closeButton);
+        trailing.setAlignment(Pos.CENTER_RIGHT);
 
-        HBox header = new HBox(10, new VBox(1, titleLabel, subtitleLabel), spacer, headerActions, closeButton);
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(16, 16, 12, 24));
+        titleBlock.setPadding(new Insets(4, 0, 0, 0));
+        HBox header = new HBox(10, titleBlock, spacer, trailing);
+        header.setAlignment(Pos.TOP_LEFT);
+        header.setPadding(new Insets(12, 12, 12, 24));
         header.getStyleClass().add("modal-header");
         return header;
     }

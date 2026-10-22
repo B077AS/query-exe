@@ -4,11 +4,15 @@ import atlantafx.base.theme.Styles;
 import com.queryexe.components.modals.shell.ModalUi;
 import com.queryexe.components.modals.shell.SidebarModal;
 import com.queryexe.components.modals.shell.SimpleTab;
+import com.queryexe.components.editor.SQLEditor;
+import com.queryexe.model.connections.ConnectionObject;
+import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.data.ColumnData;
 import com.queryexe.model.data.ForeignKeyData;
 import com.queryexe.queryexe.App;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.service.SQLFormatterUtils;
+import javafx.animation.PauseTransition;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -32,7 +36,9 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.util.Duration;
 import lombok.extern.slf4j.Slf4j;
+import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
@@ -68,6 +74,12 @@ public class CreateTableModal extends SidebarModal {
     private final VBox foreignKeysBox = new VBox(12);
     private final VBox foreignKeysEmpty = ModalUi.emptyState(MaterialDesignT.TABLE_KEY, "No foreign keys yet. Use “Add foreign key” to create one.");
     private List<String> tableChoices = List.of();
+
+    private final SQLEditor scriptPreview = new SQLEditor();
+    private final PauseTransition previewDelay = new PauseTransition(Duration.millis(200));
+    /** Edit mode: the table as loaded, which the ALTER script is diffed against. */
+    private ArrayList<ColumnData> originalColumns;
+    private Map<String, ForeignKeyData> originalForeignKeys;
 
     /** A column as edited in the form; the table cells bind straight to these properties. */
     private static class ColumnRow {
@@ -115,12 +127,10 @@ public class CreateTableModal extends SidebarModal {
         tableNameField.textProperty().addListener((obs, old, name) ->
                 setObjectTitle(name == null || name.isBlank() ? (isEditMode ? originalTableName : "New Table") : name.trim()));
 
-        Button addColumn = addButton("Add column", this::addColumnRow);
-        Button addForeignKey = addButton("Add foreign key", () -> addForeignKeyRow(null));
 
         addTab(new SimpleTab("General", "Name of the table", MaterialDesignI.INFORMATION_OUTLINE, generalPane()));
-        addTab(new SimpleTab("Columns", "Names, types and constraints", MaterialDesignT.TABLE_COLUMN, columnsPane(), addColumn));
-        addTab(new SimpleTab("Foreign Keys", "Links to columns in other tables", MaterialDesignT.TABLE_KEY, foreignKeysPane(), addForeignKey));
+        addTab(new SimpleTab("Columns", "Names, types and constraints", MaterialDesignT.TABLE_COLUMN, columnsPane(), ModalUi.addAction("Add column", this::addColumnRow)));
+        addTab(new SimpleTab("Foreign Keys", "Links to columns in other tables", MaterialDesignT.TABLE_KEY, foreignKeysPane(), ModalUi.addAction("Add foreign key", () -> addForeignKeyRow(null))));
 
         Button cancel = closeFooterButton("Cancel");
         Button review = footerButton(isEditMode ? "Review & Update" : "Review & Create");
@@ -135,33 +145,39 @@ public class CreateTableModal extends SidebarModal {
             addColumnRow();
         }
         updateForeignKeysEmpty();
-    }
 
-    private static Button addButton(String text, Runnable action) {
-        Button button = new Button(text, new FontIcon(MaterialDesignP.PLUS));
-        button.setFocusTraversable(false);
-        button.getStyleClass().addAll(Styles.SMALL, Styles.ACCENT);
-        button.setOnAction(e -> action.run());
-        return button;
+        previewDelay.setOnFinished(e -> updatePreview());
+        tableNameField.textProperty().addListener((obs, old, name) -> schedulePreview());
+        columnRows.addListener((javafx.collections.ListChangeListener<ColumnRow>) c -> schedulePreview());
+        updatePreview();
     }
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
 
     private VBox generalPane() {
-        VBox card = ModalUi.card("Table", MaterialDesignT.TABLE);
-        VBox form = new VBox(6, ModalUi.fieldLabel("Table name", MaterialDesignL.LABEL_OUTLINE), tableNameField);
-        form.setPadding(new Insets(0, 16, 16, 16));
         tableNameField.setMaxWidth(Double.MAX_VALUE);
 
-        Label dbValue = new Label(databaseName);
-        dbValue.setStyle("-fx-font-weight: bold;");
-        VBox dbForm = new VBox(6, ModalUi.fieldLabel("Database", MaterialDesignD.DATABASE_OUTLINE), dbValue);
-        dbForm.setPadding(new Insets(0, 16, 16, 16));
+        // PostgreSQL lists schemas where the other engines list databases (same rule as the tree's menus).
+        String containerLabel = DatabaseConnection.getInstance().getCurrentConnectionObject().getDbType()
+                .equals(ConnectionTypes.PostgreSQL.toString()) ? "SCHEMA" : "DATABASE";
+        TextField database = new TextField(databaseName);
+        database.setEditable(false);
+        database.setDisable(true);
+        database.setMaxWidth(Double.MAX_VALUE);
 
-        card.getChildren().addAll(form, dbForm);
+        VBox form = new VBox(16, labeled("TABLE NAME", tableNameField), labeled(containerLabel, database));
+
+        scriptPreview.setEditable(false);
+        scriptPreview.setWrapText(true);
+        VirtualizedScrollPane<SQLEditor> previewScroll = new VirtualizedScrollPane<>(scriptPreview);
+        VBox.setVgrow(previewScroll, Priority.ALWAYS);
+        VBox preview = new VBox(4, ModalUi.sectionLabel("SCRIPT PREVIEW"), previewScroll);
+        VBox.setVgrow(preview, Priority.ALWAYS);
+
         VBox content = ModalUi.content();
-        content.getChildren().add(card);
-        return new VBox(ModalUi.scroll(content));
+        content.getChildren().addAll(form, preview);
+        VBox.setVgrow(content, Priority.ALWAYS);
+        return new VBox(content);
     }
 
     private VBox columnsPane() {
@@ -217,6 +233,10 @@ public class CreateTableModal extends SidebarModal {
             row.unique.set(data.isUnique());
             row.autoIncrement.set(data.isAutoIncrement());
             row.originalName = data.getColumnName();
+        }
+        for (javafx.beans.value.ObservableValue<?> property : List.of(row.name, row.type, row.primaryKey,
+                row.notNull, row.unique, row.autoIncrement)) {
+            property.addListener((obs, old, value) -> schedulePreview());
         }
         row.node = columnCard(row);
         columnRows.add(row);
@@ -391,6 +411,11 @@ public class CreateTableModal extends SidebarModal {
         row.node.setMaxWidth(Double.MAX_VALUE);
         row.node.getChildren().addAll(header, grid);
 
+        for (javafx.beans.value.ObservableValue<?> property : List.of(row.constraintNameField.textProperty(),
+                row.localColumnCombo.valueProperty(), row.referenceTableCombo.valueProperty(),
+                row.referenceColumnCombo.valueProperty(), row.onDeleteCombo.valueProperty(), row.onUpdateCombo.valueProperty())) {
+            property.addListener((obs, old, value) -> schedulePreview());
+        }
         foreignKeyRows.add(row);
         foreignKeysBox.getChildren().add(row.node);
         updateForeignKeysEmpty();
@@ -426,76 +451,110 @@ public class CreateTableModal extends SidebarModal {
             return;
         }
 
-        List<ColumnData> columns = new ArrayList<>();
-        for (ColumnRow row : columnRows) {
-            String name = row.name.get();
-            String dataType = row.type.get();
-
-            if (name == null || name.trim().isEmpty()) {
-                ModalUi.error("Invalid Column", "A column name cannot be empty.");
-                return;
-            }
-            if (dataType == null || dataType.trim().isEmpty()) {
-                ModalUi.error("Invalid Column", "The data type for column '" + name + "' cannot be empty.");
-                return;
-            }
-
-            columns.add(new ColumnData(name.trim(), dataType.trim(),
-                    row.primaryKey.get(), row.notNull.get(),
-                    row.unique.get(), row.autoIncrement.get()));
-        }
-
+        List<ColumnData> columns = collectColumns(true);
+        if (columns == null) return;
         if (columns.isEmpty()) {
             ModalUi.error("Invalid Table", "At least one column is required.");
             return;
         }
 
+        try {
+            String sql = SQLFormatterUtils.format(buildScript(tableName.trim(), columns, collectForeignKeys(tableName.trim())),
+                    DatabaseConnection.getInstance().getConnectionObject());
+            App.showModal(new SQLEditorModal(sql, refreshTables));
+        } catch (SQLException e) {
+            log.error("Script generation failed", e);
+            ModalUi.error("Script Generation Failed", "Could not generate the script: " + e.getMessage());
+        }
+    }
+
+    /** The form's columns; strict mode reports the first incomplete one and returns null, otherwise incomplete rows are skipped. */
+    private List<ColumnData> collectColumns(boolean strict) {
+        List<ColumnData> columns = new ArrayList<>();
+        for (ColumnRow row : columnRows) {
+            String name = row.name.get();
+            String dataType = row.type.get();
+            boolean noName = name == null || name.trim().isEmpty();
+            boolean noType = dataType == null || dataType.trim().isEmpty();
+            if (noName || noType) {
+                if (!strict) continue;
+                ModalUi.error("Invalid Column", noName ? "A column name cannot be empty."
+                        : "The data type for column '" + name + "' cannot be empty.");
+                return null;
+            }
+            columns.add(new ColumnData(name.trim(), dataType.trim(),
+                    row.primaryKey.get(), row.notNull.get(),
+                    row.unique.get(), row.autoIncrement.get()));
+        }
+        return columns;
+    }
+
+    private List<ForeignKeyData> collectForeignKeys(String tableName) {
         List<ForeignKeyData> foreignKeys = new ArrayList<>();
         for (ForeignKeyRow row : foreignKeyRows) {
             String localCol = row.localColumnCombo.getValue();
             String refTable = row.referenceTableCombo.getValue();
             ColumnData refCol = row.referenceColumnCombo.getValue();
-
-            if (localCol == null || refTable == null || refCol == null) {
-                continue;
-            }
+            if (localCol == null || refTable == null || refCol == null) continue;
 
             String constraintName = row.constraintNameField.getText();
             if (constraintName == null || constraintName.trim().isEmpty()) {
                 constraintName = "fk_" + tableName + "_" + localCol;
             }
-
             foreignKeys.add(new ForeignKeyData(constraintName.trim(), localCol, refTable, refCol.getColumnName(),
                     row.onDeleteCombo.getValue(), row.onUpdateCombo.getValue()));
         }
+        return foreignKeys;
+    }
 
-        String sql;
-        if (isEditMode) {
-            Map<String, String> columnRenames = new HashMap<>();
-            for (ColumnRow row : columnRows) {
-                String currentName = row.name.get().trim();
-                if (row.originalName != null && !row.originalName.equals(currentName)) {
-                    columnRenames.put(row.originalName, currentName);
+    /** CREATE script, or in edit mode the ALTER script against the table as it was when the modal opened. */
+    private String buildScript(String tableName, List<ColumnData> columns, List<ForeignKeyData> foreignKeys) throws SQLException {
+        ConnectionObject connection = DatabaseConnection.getInstance().getConnectionObject();
+        if (!isEditMode) {
+            return connection.generateCreateTableSQL(databaseName, tableName, columns, foreignKeys);
+        }
+        Map<String, String> columnRenames = new HashMap<>();
+        for (ColumnRow row : columnRows) {
+            String currentName = row.name.get() == null ? "" : row.name.get().trim();
+            if (row.originalName != null && !row.originalName.equals(currentName)) {
+                columnRenames.put(row.originalName, currentName);
+            }
+        }
+        if (originalColumns == null) {
+            originalColumns = connection.getColumnsForTable(databaseName, originalTableName);
+            originalForeignKeys = connection.extractForeignKeys(databaseName, originalTableName);
+        }
+        return connection.generateAlterTableSQL(databaseName, originalTableName, tableName,
+                originalColumns, columns, originalForeignKeys, foreignKeys, columnRenames);
+    }
+
+    // ── Live preview ──────────────────────────────────────────────────────────
+
+    /** Rebuilds the General tab's script shortly after the last edit, so typing doesn't regenerate it per keystroke. */
+    private void schedulePreview() {
+        previewDelay.playFromStart();
+    }
+
+    private void updatePreview() {
+        String name = tableNameField.getText() == null ? "" : tableNameField.getText().trim();
+        String text;
+        if (name.isEmpty()) {
+            text = "-- Name the table to see its script";
+        } else {
+            List<ColumnData> columns = collectColumns(false);
+            if (columns.isEmpty()) {
+                text = "-- Add a column with a name and a type to see its script";
+            } else {
+                try {
+                    String sql = buildScript(name, columns, collectForeignKeys(name));
+                    text = sql == null || sql.isBlank() ? "-- No changes"
+                            : SQLFormatterUtils.format(sql, DatabaseConnection.getInstance().getConnectionObject());
+                } catch (Exception e) {
+                    text = "-- " + e.getMessage();
                 }
             }
-            try {
-                ArrayList<ColumnData> oldColumns = DatabaseConnection.getInstance().getConnectionObject().getColumnsForTable(databaseName, originalTableName);
-                Map<String, ForeignKeyData> oldForeignKeys = DatabaseConnection.getInstance().getConnectionObject().extractForeignKeys(databaseName, originalTableName);
-
-                sql = DatabaseConnection.getInstance().getConnectionObject()
-                        .generateAlterTableSQL(databaseName, originalTableName, tableName.trim(),
-                                oldColumns, columns, oldForeignKeys, foreignKeys, columnRenames);
-            } catch (SQLException e) {
-                log.error("generateAlterTableSQL failed", e);
-                ModalUi.error("Script Generation Failed", "Could not generate the ALTER script: " + e.getMessage());
-                return;
-            }
-        } else {
-            sql = DatabaseConnection.getInstance().getConnectionObject().generateCreateTableSQL(databaseName, tableName.trim(), columns, foreignKeys);
         }
-
-        sql = SQLFormatterUtils.format(sql, DatabaseConnection.getInstance().getConnectionObject());
-
-        App.showModal(new SQLEditorModal(sql, refreshTables));
+        scriptPreview.replaceText(text);
+        scriptPreview.highlightNow();
     }
 }

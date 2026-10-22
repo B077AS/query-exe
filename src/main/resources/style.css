@@ -5999,3 +5999,19 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .modal-type {
     -fx-text-fill: -color-accent-fg;
 }
+
+.modal-add-action {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6px;
+    -fx-padding: 5 10 5 8;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-graphic-text-gap: 4px;
+    -fx-text-fill: -color-accent-fg;
+    -fx-icon-color: -color-accent-fg;
+    -fx-cursor: hand;
+}
+
+.modal-add-action:hover {
+    -fx-background-color: -color-accent-subtle;
+}

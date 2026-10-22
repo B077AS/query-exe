@@ -6,6 +6,7 @@ import com.queryexe.utils.IconColorUtil;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.GridPane;
@@ -17,6 +18,7 @@ import javafx.scene.layout.VBox;
 import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignA;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignT;
 
 
@@ -49,6 +51,16 @@ public final class ModalUi {
     public static VBox listTab(VBox list) {
         list.setPadding(new Insets(6, 0, 16, 0));
         return new VBox(scroll(list));
+    }
+
+
+    /** Small ghost button for a tab's header: accent text, no fill until hovered. */
+    public static Button addAction(String text, Runnable action) {
+        Button button = new Button(text, new FontIcon(MaterialDesignP.PLUS));
+        button.getStyleClass().add("modal-add-action");
+        button.setFocusTraversable(false);
+        button.setOnAction(e -> action.run());
+        return button;
     }
 
     public static Label accentBadge(String text) {

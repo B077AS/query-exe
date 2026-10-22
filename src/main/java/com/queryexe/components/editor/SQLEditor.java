@@ -115,6 +115,11 @@ public class SQLEditor extends CodeArea {
         this.sqlTokenizer = dialect.func.apply(FormatConfig.builder().build()).tokenizer();
     }
 
+    /** Styles the current text right away instead of waiting for the debounced change handler. */
+    public void highlightNow() {
+        this.setStyleSpans(0, computeHighlighting(this.getText()));
+    }
+
     private void initializeEditor() {
         autocompletePopup = new AutocompletePopup(this);
         findPopup = new FindPopup(this);
