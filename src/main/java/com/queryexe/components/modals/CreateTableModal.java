@@ -182,7 +182,6 @@ public class CreateTableModal extends SidebarModal {
         columnsEmpty.managedProperty().bind(columnsEmpty.visibleProperty());
 
         columnsBox.setSpacing(0);
-        ModalUi.markLast(columnsBox);
         VBox list = new VBox(8, columnsEmpty, columnsBox);
         return ModalUi.listTab(list);
     }

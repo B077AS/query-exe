@@ -5942,8 +5942,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .modal-item {
     -fx-padding: 10 24 10 24;
-    -fx-border-color: transparent transparent -color-border-subtle transparent;
-    -fx-border-width: 0 0 1px 0;
 }
 
 .modal-toggle {
@@ -5984,10 +5982,6 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
     -fx-border-width: 1px;
 }
 
-.modal-item.last-item {
-    -fx-border-color: transparent;
-}
-
 
 .modal-badge-accent {
     -fx-background-color: -color-accent-subtle;
@@ -6014,4 +6008,41 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .modal-add-action:hover {
     -fx-background-color: -color-accent-subtle;
+}
+
+/* Two-line list entries (properties modals): hover tint, optional accent bar on key entries, hairline between details. */
+.modal-entry {
+    -fx-padding: 9 24 9 21;
+}
+
+.modal-entry:hover {
+    -fx-background-color: -color-bg-subtle;
+}
+
+.modal-entry-bar {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-background-radius: 2px;
+}
+
+.modal-entry-bar-empty {
+    -fx-background-color: transparent;
+}
+
+.modal-entry-rule {
+    -fx-background-color: -color-border-default;
+    -fx-min-width: 1px;
+    -fx-pref-width: 1px;
+    -fx-max-width: 1px;
+    -fx-min-height: 12px;
+    -fx-pref-height: 12px;
+    -fx-max-height: 12px;
+}
+
+/* Borderless list row: padding and a hover tint, no divider. */
+.modal-row {
+    -fx-padding: 10 24 10 24;
+}
+
+.modal-row:hover {
+    -fx-background-color: -color-bg-subtle;
 }

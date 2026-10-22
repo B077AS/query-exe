@@ -12,6 +12,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tooltip;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -84,6 +85,50 @@ public final class ModalUi {
         block.setMaxWidth(Double.MAX_VALUE);
         return block;
     }
+
+    /**
+     * A list entry in two lines: the name in bold, and
+     * under it the accent monospace value (a type, a target) followed by the muted details, all split by hairlines. {@code marked} puts a thin accent bar at the left edge
+     * (key columns); unmarked entries keep the same inset so names stay aligned. Entries have no dividers, only a
+     * hover tint, and a name that doesn't fit is cut with the full text in a tooltip.
+     */
+    public static Node entry(String title, String value, boolean marked, java.util.List<String> details) {
+        Label name = boldLabel(title);
+        name.setMinWidth(0);
+        name.setMaxWidth(Double.MAX_VALUE);
+        name.setTooltip(new Tooltip(title));
+        HBox.setHgrow(name, Priority.ALWAYS);
+
+        Label type = mono(value == null ? "" : value);
+        type.getStyleClass().add("modal-type");
+        type.setMinWidth(Region.USE_PREF_SIZE);
+        type.setStyle("-fx-font-size: 12px;");
+
+        FlowPane sub = new FlowPane(10, 2);
+        sub.setAlignment(Pos.CENTER_LEFT);
+        sub.getChildren().add(type);
+        for (String text : details) {
+            Region rule = new Region();
+            rule.getStyleClass().add("modal-entry-rule");
+            Label detail = new Label(text);
+            detail.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+            sub.getChildren().addAll(rule, detail);
+        }
+
+        Region bar = new Region();
+        bar.setMinWidth(3);
+        bar.setPrefWidth(3);
+        bar.setMaxWidth(3);
+        bar.getStyleClass().add(marked ? "modal-entry-bar" : "modal-entry-bar-empty");
+
+        VBox text = new VBox(3, name, sub);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        HBox entry = new HBox(14, bar, text);
+        entry.getStyleClass().add("modal-entry");
+        entry.setMaxWidth(Double.MAX_VALUE);
+        return entry;
+    }
+
     /** "Schema" on PostgreSQL, which lists schemas where the other engines list databases (same rule as the tree's menus). */
     public static String containerLabel() {
         return DatabaseConnection.getInstance().getCurrentConnectionObject().getDbType()
@@ -125,16 +170,6 @@ public final class ModalUi {
         Label label = new Label(text);
         label.setStyle("-fx-font-weight: bold;");
         return label;
-    }
-
-    /** Keeps the divider line off the last row of a list: tags the last child and follows later changes. */
-    public static void markLast(VBox box) {
-        Runnable apply = () -> {
-            box.getChildren().forEach(n -> n.getStyleClass().remove("last-item"));
-            if (!box.getChildren().isEmpty()) box.getChildren().get(box.getChildren().size() - 1).getStyleClass().add("last-item");
-        };
-        box.getChildren().addListener((javafx.collections.ListChangeListener<Node>) c -> apply.run());
-        apply.run();
     }
 
     public static Label mono(String text) {

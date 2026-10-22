@@ -115,19 +115,12 @@ public class ColumnPropertiesModal extends SidebarModal {
     }
 
 
-    /** A titled group of rows; the small caps title sits above the rows, which carry their own dividers. */
+    /** A titled group of rows; the small caps title sits above its rows. */
     private static VBox section(String title) {
         Label label = ModalUi.sectionLabel(title);
         label.setPadding(new Insets(10, 24, 6, 24));
         VBox box = new VBox(label);
-        box.getChildren().addListener((javafx.collections.ListChangeListener<Node>) c -> markLast(box));
         return box;
-    }
-
-    /** Like {@link ModalUi#markLast} but skips the section title at index 0. */
-    private static void markLast(VBox box) {
-        box.getChildren().forEach(n -> n.getStyleClass().remove("last-item"));
-        if (box.getChildren().size() > 1) box.getChildren().get(box.getChildren().size() - 1).getStyleClass().add("last-item");
     }
 
     // ── Relationships ─────────────────────────────────────────────────────────

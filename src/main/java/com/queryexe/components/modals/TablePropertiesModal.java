@@ -66,25 +66,15 @@ public class TablePropertiesModal extends SidebarModal {
         if (columns.isEmpty()) return emptyPane(MaterialDesignT.TABLE_COLUMN, "No columns found");
 
         VBox list = new VBox();
-        ModalUi.markLast(list);
         for (ColumnData column : columns) {
-            list.getChildren().add(columnItem(column));
+            List<String> details = new ArrayList<>();
+            if (column.isPrimaryKey()) details.add("Primary key");
+            if (column.isAutoIncrement()) details.add("Auto increment");
+            details.add(column.isNotNull() ? "Not null" : "Nullable");
+            if (column.isUnique()) details.add("Unique");
+            list.getChildren().add(ModalUi.entry(column.getColumnName(), column.getDataType(), column.isPrimaryKey(), details));
         }
         return ModalUi.listTab(list);
-    }
-
-    private Node columnItem(ColumnData column) {
-        HBox badges = new HBox(6);
-        badges.setAlignment(Pos.CENTER_RIGHT);
-        if (column.isPrimaryKey()) badges.getChildren().add(ModalUi.accentBadge("PK"));
-        if (column.isNotNull()) badges.getChildren().add(ModalUi.badge("NOT NULL"));
-        if (column.isUnique()) badges.getChildren().add(ModalUi.badge("UNIQUE"));
-        if (column.isAutoIncrement()) badges.getChildren().add(ModalUi.badge("AUTO INC"));
-
-        Label type = ModalUi.mono(column.getDataType());
-        type.getStyleClass().add("modal-type");
-        type.setWrapText(true);
-        return ModalUi.block(column.getColumnName(), badges, type);
     }
 
     // ── Foreign keys ──────────────────────────────────────────────────────────
@@ -93,37 +83,18 @@ public class TablePropertiesModal extends SidebarModal {
         if (foreignKeys.isEmpty()) return emptyPane(MaterialDesignT.TABLE_KEY, "No foreign keys defined");
 
         VBox list = new VBox();
-        ModalUi.markLast(list);
         for (ForeignKeyData fk : foreignKeys) {
-            list.getChildren().add(foreignKeyItem(fk));
+            String target = fk.getReferenceSchema() != null && !fk.getReferenceSchema().equals(databaseName)
+                    ? fk.getReferenceSchema() + "." + fk.getReferenceTable()
+                    : fk.getReferenceTable();
+            List<String> details = new ArrayList<>();
+            details.add(String.join(", ", fk.allLocalColumns()));
+            if (fk.getOnDelete() != null) details.add("On delete " + fk.getOnDelete().toLowerCase());
+            if (fk.getOnUpdate() != null) details.add("On update " + fk.getOnUpdate().toLowerCase());
+            list.getChildren().add(ModalUi.entry(fk.getConstraintName(),
+                    target + "(" + String.join(", ", fk.allReferenceColumns()) + ")", false, details));
         }
         return ModalUi.listTab(list);
-    }
-
-    /**
-     * A foreign key: the constraint name with its actions, and under it the relation as wrapping pieces,
-     * local columns → referenced table.columns.
-     */
-    private Node foreignKeyItem(ForeignKeyData fk) {
-
-        HBox badges = new HBox(6);
-        badges.setAlignment(Pos.CENTER_RIGHT);
-        if (fk.getOnDelete() != null) badges.getChildren().add(ModalUi.badge("ON DELETE " + fk.getOnDelete()));
-        if (fk.getOnUpdate() != null) badges.getChildren().add(ModalUi.badge("ON UPDATE " + fk.getOnUpdate()));
-        badges.setMinWidth(Region.USE_PREF_SIZE);
-
-        String target = fk.getReferenceSchema() != null && !fk.getReferenceSchema().equals(databaseName)
-                ? fk.getReferenceSchema() + "." + fk.getReferenceTable()
-                : fk.getReferenceTable();
-        Label local = ModalUi.mono(tableName + "(" + String.join(", ", fk.allLocalColumns()) + ")");
-        Label arrow = new Label("→");
-        arrow.getStyleClass().add(Styles.TEXT_MUTED);
-        Label reference = ModalUi.mono(target + "(" + String.join(", ", fk.allReferenceColumns()) + ")");
-        reference.getStyleClass().add("modal-type");
-        FlowPane relation = new FlowPane(8, 2, local, arrow, reference);
-        relation.setAlignment(Pos.CENTER_LEFT);
-
-        return ModalUi.block(fk.getConstraintName(), badges, relation);
     }
 
     private static VBox emptyPane(Ikon icon, String text) {
