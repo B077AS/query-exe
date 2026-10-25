@@ -1309,10 +1309,10 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tree-view {
 	-color-cell-bg: -color-bg-default;
 	-color-cell-fg: -color-fg-default;
-	-color-cell-bg-selected: -color-accent-muted;
-	-color-cell-fg-selected: -color-fg-default;
-	-color-cell-bg-selected-focused: -color-accent-muted;
-	-color-cell-fg-selected-focused: -color-fg-default;
+	-color-cell-bg-selected: derive(-color-accent-emphasis, -22%);
+	-color-cell-fg-selected: -color-fg-emphasis;
+	-color-cell-bg-selected-focused: derive(-color-accent-emphasis, -22%);
+	-color-cell-fg-selected-focused: -color-fg-emphasis;
 	-color-cell-bg-odd: -color-bg-subtle;
 	-color-cell-border: -color-border-default;
 	-color-disclosure: -color-fg-muted;
@@ -6045,4 +6045,16 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 
 .modal-row:hover {
     -fx-background-color: -color-bg-subtle;
+}
+
+.tree-view .tree-cell:filled:selected .label {
+	-fx-text-fill: -color-fg-emphasis;
+}
+
+.tree-view .tree-cell:filled:selected .ikonli-font-icon {
+	-fx-icon-color: -color-fg-emphasis;
+}
+
+.tree-view .tree-cell:filled:selected>.tree-disclosure-node>.arrow {
+	-fx-background-color: -color-fg-emphasis;
 }

@@ -29,6 +29,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TreeCell;
@@ -53,8 +54,9 @@ import com.queryexe.model.connections.PostgresConnection;
 @Slf4j
 public class CustomTree extends VBox {
 
-    private TreeView<String> databaseTree = new TreeView<String>();
+    private TreeView<String> databaseTree = withCells(new TreeView<String>());
     private TreeView<String> usersTree;
+    private javafx.scene.control.ContextMenu openMenu;
     private LinkedHashMap<String, DatabaseTreeItem> databasesMap;
     private DatabaseTreeItem selectedDatabase;
     private TextField searchField;
@@ -182,7 +184,7 @@ public class CustomTree extends VBox {
                         new FontIcon(MaterialDesignD.DATABASE));
                 databasesMainTreeItem.setExpanded(true);
 
-                databaseTree = new TreeView<>(databasesMainTreeItem);
+                databaseTree = withCells(new TreeView<>(databasesMainTreeItem));
 
                 for (Map.Entry<String, LinkedHashMap<String, LinkedHashMap<String, ArrayList<ColumnData>>>> database : structure.entrySet()) {
                     CustomTreeItem databaseItem = new CustomTreeItem(database.getKey(), new FontIcon(MaterialDesignH.HOCKEY_PUCK));
@@ -222,7 +224,7 @@ public class CustomTree extends VBox {
                     new FontIcon(MaterialDesignD.DATABASE));
             databasesMainTreeItem.setExpanded(true);
 
-            databaseTree = new TreeView<>(databasesMainTreeItem);
+            databaseTree = withCells(new TreeView<>(databasesMainTreeItem));
 
             for (String database : databaseStringList) {
                 DatabaseTreeItem databaseItem = new DatabaseTreeItem(database, new FontIcon(MaterialDesignH.HOCKEY_PUCK));
@@ -287,6 +289,22 @@ public class CustomTree extends VBox {
 
         VBox.setVgrow(databaseTree, Priority.ALWAYS);
 
+        // any press closes the open context menu: on another tree item, or anywhere else in the window
+        javafx.event.EventHandler<javafx.scene.input.MouseEvent> closeMenu = e -> {
+            if (openMenu != null && openMenu.isShowing()) {
+                openMenu.hide();
+            }
+        };
+        databaseTree.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, closeMenu);
+        this.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (oldScene != null) {
+                oldScene.removeEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, closeMenu);
+            }
+            if (newScene != null) {
+                newScene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, closeMenu);
+            }
+        });
+
         databaseTree.setOnMouseClicked(event -> {
             if (event.getButton() == MouseButton.SECONDARY) {
                 Node node = event.getPickResult().getIntersectedNode();
@@ -298,8 +316,13 @@ public class CustomTree extends VBox {
                     if (cell.getItem() != null) {
                         CustomTreeItem selectedItem = (CustomTreeItem) databaseTree.getSelectionModel().getSelectedItem();
                         if (selectedItem.getContextMenu() != null) {
-                            selectedItem.getContextMenu().show(selectedItem.getGraphic(),
-                                    event.getScreenX(), event.getScreenY());
+                            // one menu at a time: close whatever menu is still open before showing the next
+                            if (openMenu != null) {
+                                openMenu.hide();
+                            }
+                            openMenu = selectedItem.getContextMenu();
+                            openMenu.setAutoHide(true);
+                            openMenu.show(databaseTree, event.getScreenX(), event.getScreenY());
                         }
                     }
                 }
@@ -307,6 +330,54 @@ public class CustomTree extends VBox {
         });
 
         setupSearchField();
+    }
+
+    /**
+     * Each cell builds its own icon and title instead of showing the item's graphic node. A node can only
+     * have one parent, so when virtualised cells were recycled the shared graphic got stolen by another
+     * cell and the icon and title of the item vanished.
+     */
+    private static TreeView<String> withCells(TreeView<String> tree) {
+        tree.setCellFactory(view -> new TreeCell<>() {
+            // Built once per cell and only touched when the cell shows a different item, so expanding or
+            // collapsing a node does not tear down and recreate the rows that merely stay on screen.
+            private final FontIcon icon = new FontIcon();
+            private final Label label = new Label();
+            private final HBox box = new HBox(5, icon, label);
+            private CustomTreeItem shown;
+
+            {
+                box.setAlignment(Pos.CENTER_LEFT);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(null);
+                CustomTreeItem treeItem = !empty && getTreeItem() instanceof CustomTreeItem t ? t : null;
+                if (treeItem == null) {
+                    shown = null;
+                    label.textProperty().unbind();
+                    label.styleProperty().unbind();
+                    setGraphic(null);
+                    return;
+                }
+                if (treeItem != shown) {
+                    shown = treeItem;
+                    FontIcon source = treeItem.getIcon();
+                    icon.setIconCode(source.getIconCode());
+                    icon.setIconSize(source.getIconSize());
+                    icon.getStyleClass().setAll(source.getStyleClass());
+                    icon.setStyle(source.getStyle());
+                    label.textProperty().bind(treeItem.getTitleLabel().textProperty());
+                    label.styleProperty().bind(treeItem.getTitleLabel().styleProperty());
+                }
+                if (getGraphic() != box) {
+                    setGraphic(box);
+                }
+            }
+        });
+        return tree;
     }
 
     private void setupSearchField() {
@@ -459,7 +530,7 @@ public class CustomTree extends VBox {
                 }
             }
 
-            usersTree = new TreeView<>(usersRootItem);
+            usersTree = withCells(new TreeView<>(usersRootItem));
             VBox.setVgrow(usersTree, Priority.ALWAYS);
 
         } catch (SQLException e) {

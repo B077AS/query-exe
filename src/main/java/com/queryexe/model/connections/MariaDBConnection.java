@@ -66,7 +66,7 @@ public class MariaDBConnection extends ConnectionObject {
     @Override
     public ArrayList<String> getTablesForDatabase(String databaseName) throws SQLException {
         ArrayList<String> tableNames = new ArrayList<>();
-        String query = "SELECT table_name FROM information_schema.tables WHERE table_schema = ?";
+        String query = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE' ORDER BY table_name";
 
         try (PreparedStatement stmt = DatabaseConnection.getInstance().getConnection().prepareStatement(query);) {
             stmt.setString(1, databaseName);
