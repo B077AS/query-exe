@@ -28,6 +28,8 @@ public class AppSettings {
     private static final String CONNECTIONS_VIEW_MODE_KEY = "connectionsViewMode";
     private static final String TREE_SPLIT_WIDTH_KEY = "ui.treeSplitWidth";
     private static final String RESULT_SPLIT_HEIGHT_KEY = "ui.resultSplitHeight";
+    private static final String CONNECTION_FOLDERS_KEY = "connections.folders";
+    private static final String COLLAPSED_FOLDERS_KEY = "connections.collapsedFolders";
 
     private static volatile AppSettings instance;
 
@@ -92,6 +94,40 @@ public class AppSettings {
         JsonObject settings = read();
         settings.addProperty(RESULT_SPLIT_HEIGHT_KEY, pixelHeight);
         write(settings);
+    }
+
+    public java.util.List<String> getStringList(String key) {
+        JsonObject settings = read();
+        java.util.List<String> values = new java.util.ArrayList<>();
+        if (settings.has(key) && settings.get(key).isJsonArray()) {
+            settings.getAsJsonArray(key).forEach(e -> values.add(e.getAsString()));
+        }
+        return values;
+    }
+
+    public void setStringList(String key, java.util.List<String> values) {
+        JsonObject settings = read();
+        com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+        values.forEach(array::add);
+        settings.add(key, array);
+        write(settings);
+    }
+
+    /** Names of the home page connection folders, including empty ones. */
+    public java.util.List<String> getConnectionFolders() {
+        return getStringList(CONNECTION_FOLDERS_KEY);
+    }
+
+    public void setConnectionFolders(java.util.List<String> folders) {
+        setStringList(CONNECTION_FOLDERS_KEY, folders);
+    }
+
+    public java.util.List<String> getCollapsedFolders() {
+        return getStringList(COLLAPSED_FOLDERS_KEY);
+    }
+
+    public void setCollapsedFolders(java.util.List<String> folders) {
+        setStringList(COLLAPSED_FOLDERS_KEY, folders);
     }
 
     private JsonObject read() {

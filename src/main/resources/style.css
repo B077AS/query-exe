@@ -6058,3 +6058,28 @@ Add support for NO_HEADER tweak in tables .table-view.no-header>.column-header-b
 .tree-view .tree-cell:filled:selected>.tree-disclosure-node>.arrow {
 	-fx-background-color: -color-fg-emphasis;
 }
+
+.recent-file-item {
+	-fx-background-radius: 6px;
+	-fx-cursor: hand;
+}
+
+.recent-file-item:hover {
+	-fx-background-color: -color-bg-hover;
+}
+
+.folder-header {
+	-fx-background-radius: 6px;
+	-fx-cursor: hand;
+}
+
+.folder-header:hover {
+	-fx-background-color: -color-bg-hover;
+}
+
+.folder-header.folder-drop {
+	-fx-background-color: -color-accent-subtle;
+	-fx-border-color: -color-accent-emphasis;
+	-fx-border-radius: 6px;
+	-fx-border-style: segments(6, 4);
+}

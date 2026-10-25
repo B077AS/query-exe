@@ -363,6 +363,15 @@ public class ConnectionService {
         String username = connectionData.has("username") ? connectionData.get("username").getAsString() : "";
 
         modifyConnections(connections -> {
+            // The edit dialog knows nothing about home page organisation; keep it across edits.
+            JsonObject previous = connections.has(connectionId) ? connections.getAsJsonObject(connectionId) : null;
+            if (previous != null) {
+                for (String key : new String[]{"folder", "pinned"}) {
+                    if (!connectionData.has(key) && previous.has(key)) {
+                        connectionData.add(key, previous.get(key));
+                    }
+                }
+            }
             connections.add(connectionId, connectionData);
         });
 
@@ -403,6 +412,51 @@ public class ConnectionService {
             JsonObject connection = connections.getAsJsonObject(connectionId);
             if (connection != null) {
                 connection.addProperty(property, value);
+            }
+        });
+    }
+
+    /** Files a connection under a folder (null = ungrouped). */
+    public void setConnectionFolder(String connectionId, String folder) {
+        modifyConnections(connections -> {
+            JsonObject connection = connections.has(connectionId) ? connections.getAsJsonObject(connectionId) : null;
+            if (connection == null) {
+                return;
+            }
+            if (folder == null || folder.isBlank()) {
+                connection.remove("folder");
+            } else {
+                connection.addProperty("folder", folder);
+            }
+        });
+    }
+
+    public void setConnectionPinned(String connectionId, boolean pinned) {
+        modifyConnections(connections -> {
+            JsonObject connection = connections.has(connectionId) ? connections.getAsJsonObject(connectionId) : null;
+            if (connection == null) {
+                return;
+            }
+            if (pinned) {
+                connection.addProperty("pinned", true);
+            } else {
+                connection.remove("pinned");
+            }
+        });
+    }
+
+    /** Renames a folder on every connection in it, or ungroups them when {@code newName} is null. */
+    public void renameFolder(String oldName, String newName) {
+        modifyConnections(connections -> {
+            for (Map.Entry<String, JsonElement> entry : connections.entrySet()) {
+                JsonObject connection = entry.getValue().getAsJsonObject();
+                if (connection.has("folder") && oldName.equals(connection.get("folder").getAsString())) {
+                    if (newName == null) {
+                        connection.remove("folder");
+                    } else {
+                        connection.addProperty("folder", newName);
+                    }
+                }
             }
         });
     }

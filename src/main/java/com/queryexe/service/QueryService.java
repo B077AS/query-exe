@@ -6,10 +6,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
+import javafx.application.Platform;
 import javafx.concurrent.Task;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
@@ -190,6 +193,40 @@ public class QueryService {
         }
     }
 
+    private static String connectionIdOf(CustomTab<?> tab) {
+        return tab.getConnectionObject() == null ? null : tab.getConnectionObject().getId();
+    }
+
+    /**
+     * Connects to {@code connection} and opens {@code file} in a tab on it; used by the recent files list on
+     * the home page, where there is no editor yet. The untouched query tab a new connection starts with
+     * is replaced by the file rather than left next to it.
+     */
+    public void connectAndOpen(File file, ConnectionObject connection,
+                               Runnable onStart, Runnable onEnd, Consumer<Exception> onError) {
+        ConnectionService.getInstance().connect(
+                connection,
+                onStart,
+                onEnd,
+                () -> {
+                    App.connect();
+                    Platform.runLater(() -> openRecentFileReplacingBlankTabs(file));
+                },
+                onError
+        );
+    }
+
+    private void openRecentFileReplacingBlankTabs(File file) {
+        List<Tab> before = new ArrayList<>(App.getTabPane().getTabs());
+        openRecentFile(file);
+        for (Tab tab : before) {
+            if (!filePathMap.containsKey(tab) && tab.getContent() instanceof VirtualizedScrollPane<?> scroll
+                    && scroll.getContent() instanceof CodeArea area && area.getText().isBlank()) {
+                App.getTabPane().getTabs().remove(tab);
+            }
+        }
+    }
+
     private void openFileInTab(File file) throws IOException {
         String fileName = file.getName().split("\\.")[0];
         String content = Files.readString(file.toPath());
@@ -197,7 +234,7 @@ public class QueryService {
         filePathMap.put(newTab, file);
 
         // Add to recent files
-        RecentFilesManager.getInstance().addRecentFile(file);
+        RecentFilesManager.getInstance().addRecentFile(file, connectionIdOf(newTab));
     }
 
     public void saveQuery() {
@@ -229,7 +266,7 @@ public class QueryService {
             writer.write(content);
 
             // Add to recent files
-            RecentFilesManager.getInstance().addRecentFile(associatedFile);
+            RecentFilesManager.getInstance().addRecentFile(associatedFile, connectionIdOf(tab));
 
             CustomNotification fileSavedNotification = new CustomNotification(
                     "File Saved",
@@ -276,7 +313,7 @@ public class QueryService {
             writer.write(content);
 
             // Add to recent files
-            RecentFilesManager.getInstance().addRecentFile(newFile);
+            RecentFilesManager.getInstance().addRecentFile(newFile, connectionIdOf(tab));
 
             CustomNotification fileSavedNotification = new CustomNotification(
                     "File Saved",

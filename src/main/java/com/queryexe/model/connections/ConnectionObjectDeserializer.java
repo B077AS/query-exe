@@ -75,6 +75,9 @@ public class ConnectionObjectDeserializer implements JsonDeserializer<Connection
                 );
             }
 
+            databaseConnection.setFolder(getStringOrNull(obj, "folder"));
+            JsonElement pinned = obj.get("pinned");
+            databaseConnection.setPinned(pinned != null && pinned.isJsonPrimitive() && pinned.getAsBoolean());
             return databaseConnection;
         } catch (Exception e) {
             log.error("deserialize failed", e);

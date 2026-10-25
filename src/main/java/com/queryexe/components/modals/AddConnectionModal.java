@@ -226,29 +226,7 @@ public class AddConnectionModal extends VBox {
         dbTypeComboBox.setMaxWidth(400);
         dbTypeComboBox.getItems().addAll(connectionTypes);
         dbTypeComboBox.getSelectionModel().selectFirst();
-        dbTypeComboBox.setOnAction(event -> {
-            ConnectionTypes selectedType = dbTypeComboBox.getSelectionModel().getSelectedItem();
-            boolean wasCustomMode = useCustomUrlCheckBox.isSelected();
-
-            if (selectedType.isFileBased()) {
-                showFileBasedFields();
-                jdbcUrlField.setText(selectedType.getJdbcPrefix());
-            } else {
-                if (wasCustomMode) {
-                    showServerBasedCustomUrlFields();
-                    useCustomUrlCheckBox.setSelected(true);
-                    // Update JDBC URL when changing database type in custom mode
-                    if (this.connection == null || !this.connection.getDbType().equals(selectedType.toString())) {
-                        jdbcUrlField.setText(selectedType.getJdbcPrefix());
-                    }
-                } else {
-                    showServerBasedFields();
-                    portField.setText(selectedType.getDefaultPort());
-                }
-            }
-
-            updateDriversTab();
-        });
+        dbTypeComboBox.setOnAction(event -> onTypeChanged());
 
         nameField = new TextField();
         nameField.setMinWidth(400);
@@ -282,21 +260,19 @@ public class AddConnectionModal extends VBox {
             ConnectionTypes selectedType = dbTypeComboBox.getSelectionModel().getSelectedItem();
             if (selectedType != null && !selectedType.isFileBased()) {
                 if (useCustomUrlCheckBox.isSelected()) {
-                    // Generate JDBC URL from current fields before switching
-                    if (this.connection != null && !this.connection.isCustomJdbc()) {
-                        String baseUrl = selectedType.getBaseUrl();
-                        String host = hostField.getText().isEmpty() ? "localhost" : hostField.getText();
-                        String port = portField.getText().isEmpty() ? selectedType.getDefaultPort() : portField.getText();
-                        String dbName = databaseNameField.getText().isEmpty() ? "" : databaseNameField.getText();
-                        jdbcUrlField.setText(String.format(baseUrl, host, port, dbName));
-                    } else if (this.connection != null && this.connection.isCustomJdbc()) {
+                    if (this.connection != null && this.connection.isCustomJdbc()
+                            && this.connection.getDbType().equals(selectedType.toString())) {
                         jdbcUrlField.setText(this.connection.getFullUrl());
                     } else {
-                        jdbcUrlField.setText(selectedType.getJdbcPrefix());
+                        // Start from what is already typed, for new connections as well as edited ones.
+                        jdbcUrlField.setText(buildUrlFromFields(selectedType));
                     }
                     showServerBasedCustomUrlFields();
                 } else {
                     showServerBasedFields();
+                    if (portField.getText().isBlank()) {
+                        portField.setText(selectedType.getDefaultPort());
+                    }
                 }
             }
         });
@@ -467,6 +443,9 @@ public class AddConnectionModal extends VBox {
     }
 
     private void saveConnectionAction() {
+        if (rejectInvalidForm(true)) {
+            return;
+        }
         String connectionName = nameField.getText();
         String dbType = dbTypeComboBox.getSelectionModel().getSelectedItem().toString();
         String host = null;
@@ -564,6 +543,9 @@ public class AddConnectionModal extends VBox {
 
 
     private void testConnectionAction() {
+        if (rejectInvalidForm(false)) {
+            return;
+        }
         String username = usernameField.getText();
         String password = passwordField.getPassword();
 
@@ -594,6 +576,74 @@ public class AddConnectionModal extends VBox {
             CustomNotification notification = new CustomNotification("Connection Failed", e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
             notification.showNotificationOnCustomPane((StackPane) this.getParent());
         }
+    }
+
+    /** Preselects the engine, as if it had been picked in the combo box. */
+    public void selectType(ConnectionTypes type) {
+        dbTypeComboBox.getSelectionModel().select(type);
+        // The combo box only fires its action for user picks, so refresh the form explicitly.
+        onTypeChanged();
+    }
+
+    /** Shows the fields that apply to the engine currently selected in the combo box. */
+    private void onTypeChanged() {
+        ConnectionTypes selectedType = dbTypeComboBox.getSelectionModel().getSelectedItem();
+        if (selectedType == null) {
+            return;
+        }
+        boolean wasCustomMode = useCustomUrlCheckBox.isSelected();
+
+        if (selectedType.isFileBased()) {
+            showFileBasedFields();
+            jdbcUrlField.setText(selectedType.getJdbcPrefix());
+        } else if (wasCustomMode) {
+            showServerBasedCustomUrlFields();
+            // Keep a URL that belongs to the engine being edited; otherwise start from the new engine's prefix.
+            if (this.connection == null || !this.connection.getDbType().equals(selectedType.toString())) {
+                jdbcUrlField.setText(selectedType.getJdbcPrefix());
+            }
+        } else {
+            showServerBasedFields();
+            portField.setText(selectedType.getDefaultPort());
+        }
+
+        updateDriversTab();
+    }
+
+    /** The JDBC URL the host, port and database fields currently describe. */
+    private String buildUrlFromFields(ConnectionTypes type) {
+        String host = hostField.getText().isBlank() ? "localhost" : hostField.getText().trim();
+        String port = portField.getText().isBlank() ? type.getDefaultPort() : portField.getText().trim();
+        return String.format(type.getBaseUrl(), host, port, databaseNameField.getText().trim());
+    }
+
+    private boolean rejectInvalidForm(boolean requireName) {
+        String problem = validateForm(requireName);
+        if (problem == null) {
+            return false;
+        }
+        new CustomNotification("Missing Information", problem, new FontIcon(MaterialDesignA.ALERT_CIRCLE_OUTLINE))
+                .showNotificationOnCustomPane((StackPane) this.getParent());
+        return true;
+    }
+
+    /** Returns a message describing what is missing, or null when the form can be saved or tested. */
+    private String validateForm(boolean requireName) {
+        ConnectionTypes type = dbTypeComboBox.getSelectionModel().getSelectedItem();
+        if (requireName && nameField.getText().isBlank()) {
+            return "Give the connection a name.";
+        }
+        if (type.isFileBased() || useCustomUrlCheckBox.isSelected()) {
+            String url = jdbcUrlField.getText().trim();
+            if (url.isEmpty() || url.equalsIgnoreCase(type.getJdbcPrefix())) {
+                return type.isFileBased()
+                        ? "Enter the database location, e.g. " + type.getJdbcPrefix() + "<path>."
+                        : "Enter the full JDBC URL.";
+            }
+        } else if (hostField.getText().isBlank()) {
+            return "Enter the host.";
+        }
+        return null;
     }
 
     public void setupFields(ConnectionObject connection) {

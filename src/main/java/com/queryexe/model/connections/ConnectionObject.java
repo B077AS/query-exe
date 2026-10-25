@@ -29,6 +29,9 @@ public abstract class ConnectionObject {
     private String fullUrl;
     private boolean customJdbc;
     private DriverInfo driverInfo;
+    /** Home page folder this connection is filed under, or null when ungrouped. */
+    private String folder;
+    private boolean pinned;
 
 
     public ConnectionObject(String id, String connectionName, String dbType, String baseUrl, String host, String port,

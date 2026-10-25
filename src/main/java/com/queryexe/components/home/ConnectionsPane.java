@@ -13,9 +13,15 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToolBar;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.Dragboard;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.TransferMode;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -23,18 +29,26 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.Node;
 import com.queryexe.model.connections.ConnectionObject;
+import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.service.AppSettings;
 import com.queryexe.utils.IconColorUtil;
 
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.List;
 
 import org.kordamp.ikonli.feather.Feather;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignD;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignF;
+import org.kordamp.ikonli.materialdesign2.MaterialDesignP;
 import org.kordamp.ikonli.materialdesign2.MaterialDesignR;
 import atlantafx.base.theme.Styles;
 import com.queryexe.components.modals.AddConnectionModal;
+import com.queryexe.components.extra.CustomNotification;
+import com.queryexe.components.modals.ConfirmationModal;
+import com.queryexe.components.modals.FolderNameModal;
 import com.queryexe.service.ConnectionService;
 import com.queryexe.queryexe.App;
 
@@ -48,6 +62,9 @@ public class ConnectionsPane extends VBox {
     private ScrollPane listScrollPane;
     private StackPane contentStack;
     private ToolBar toolbar;
+    private RecentFilesPanel recentFiles;
+    private Button newFolderButton;
+    private final StackPane emptyHolder = new StackPane();
 
     private final List<ConnectionCard> allCards = new ArrayList<>();
     private List<ConnectionCard> visible = allCards;
@@ -78,9 +95,20 @@ public class ConnectionsPane extends VBox {
         pagination = buildPagination();
         listScrollPane = buildListScrollPane();
 
-        contentStack = new StackPane(pagination, listScrollPane);
-        VBox.setVgrow(contentStack, Priority.ALWAYS);
-        this.getChildren().add(contentStack);
+        emptyHolder.setAlignment(Pos.CENTER);
+        contentStack = new StackPane(pagination, listScrollPane, emptyHolder);
+        HBox.setHgrow(contentStack, Priority.ALWAYS);
+
+        recentFiles = new RecentFilesPanel();
+        HBox body = new HBox(recentFiles, contentStack);
+        VBox.setVgrow(body, Priority.ALWAYS);
+        this.getChildren().add(body);
+        // Files may have been opened or saved while a connection was active.
+        this.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                recentFiles.refresh();
+            }
+        });
 
         this.parentProperty().addListener((obs, oldParent, newParent) -> {
             if (newParent != null && newParent instanceof StackPane) {
@@ -146,7 +174,7 @@ public class ConnectionsPane extends VBox {
         listBox.setAlignment(Pos.TOP_CENTER);
         listBox.setPadding(new Insets(0, 20, 20, 20));
         listBox.setFillWidth(true);
-        listBox.setMaxWidth(900);
+        listBox.setMaxWidth(1100);
 
         StackPane centering = new StackPane(listBox);
         centering.setPadding(new Insets(10, 0, 0, 0));
@@ -192,30 +220,39 @@ public class ConnectionsPane extends VBox {
         listToggle.setOnAction(e -> setViewMode(ViewMode.LIST));
 
         Button addButton = new Button("New", new FontIcon(Feather.PLUS));
-        addButton.setOnAction(e -> {
-            StackPane tempPane = new StackPane();
-            tempPane.setOnMouseClicked(eventStack -> App.closeModal());
-
-            AddConnectionModal modal = new AddConnectionModal();
-            modal.addEventFilter(MouseEvent.MOUSE_CLICKED, eventModal -> eventModal.consume());
-
-            tempPane.getChildren().add(modal);
-
-            App.showModal(tempPane);
-            modal.requestFocus();
-        });
+        addButton.setOnAction(e -> showAddModal(null));
 
         Button refreshButton = new Button("Refresh", new FontIcon(MaterialDesignR.REFRESH));
         refreshButton.setOnAction(e -> refresh());
+
+        newFolderButton = new Button("New folder", new FontIcon(MaterialDesignF.FOLDER_PLUS_OUTLINE));
+        newFolderButton.setOnAction(e -> promptNewFolder(null));
 
         ToolBar toolBar = new ToolBar(
                 searchBox,
                 new Separator(Orientation.VERTICAL),
                 cardsToggle, listToggle,
                 new Separator(Orientation.VERTICAL),
-                addButton, refreshButton
+                newFolderButton, addButton, refreshButton
         );
         return toolBar;
+    }
+
+    /** Opens the New Connection dialog, optionally with the engine already chosen. */
+    private void showAddModal(ConnectionTypes type) {
+        StackPane tempPane = new StackPane();
+        tempPane.setOnMouseClicked(eventStack -> App.closeModal());
+
+        AddConnectionModal modal = new AddConnectionModal();
+        if (type != null) {
+            modal.selectType(type);
+        }
+        modal.addEventFilter(MouseEvent.MOUSE_CLICKED, eventModal -> eventModal.consume());
+
+        tempPane.getChildren().add(modal);
+
+        App.showModal(tempPane);
+        modal.requestFocus();
     }
 
     private void setViewMode(ViewMode mode) {
@@ -233,12 +270,33 @@ public class ConnectionsPane extends VBox {
         pagination.setManaged(cards);
         listScrollPane.setVisible(!cards);
         listScrollPane.setManaged(!cards);
+        // Folders only exist in the list view.
+        newFolderButton.setVisible(!cards);
+        newFolderButton.setManaged(!cards);
 
         if (cards) {
             updatePagination();
         } else {
             renderList();
         }
+        syncEmptyState();
+    }
+
+    /**
+     * With nothing to show, the empty state replaces the whole content area, centred, for both views;
+     * the pagination (or the list) is hidden so no stray page dots appear under it.
+     */
+    private void syncEmptyState() {
+        boolean empty = visible.isEmpty();
+        boolean cards = viewMode == ViewMode.CARDS;
+
+        emptyHolder.getChildren().setAll(empty ? new Node[]{buildEmptyState()} : new Node[0]);
+        emptyHolder.setVisible(empty);
+        emptyHolder.setManaged(empty);
+        pagination.setVisible(!empty && cards);
+        pagination.setManaged(!empty && cards);
+        listScrollPane.setVisible(!empty && !cards);
+        listScrollPane.setManaged(!empty && !cards);
     }
 
     private void updatePagination(int targetPage) {
@@ -246,7 +304,7 @@ public class ConnectionsPane extends VBox {
             return;
         }
 
-        availableWidth = this.getScene().getWindow().getWidth() - 40;
+        availableWidth = this.getScene().getWindow().getWidth() - 40 - RecentFilesPanel.WIDTH;
         availableHeight = this.getScene().getWindow().getHeight() - 220;
 
         cardsPerRow = Math.max((int) (availableWidth / 500), 1);
@@ -265,12 +323,12 @@ public class ConnectionsPane extends VBox {
             // itself changes, but a resize can change cardsPerRow/cardsPerColumn
             // while leaving the index the same (e.g. still page 1 of 1) — force
             // the grid to re-lay-out with the new dimensions in that case.
-            currentPage.setCenter(visible.isEmpty() ? buildEmptyState() : buildGrid(clampedPage));
+            currentPage.setCenter(visible.isEmpty() ? new javafx.scene.layout.Region() : buildGrid(clampedPage));
         }
     }
 
     private BorderPane buildPage(int pageIndex) {
-        Node content = visible.isEmpty() ? buildEmptyState() : buildGrid(pageIndex);
+        Node content = visible.isEmpty() ? new javafx.scene.layout.Region() : buildGrid(pageIndex);
         currentPage = new BorderPane(content);
         BorderPane.setAlignment(currentPage.getCenter(), Pos.CENTER);
         return currentPage;
@@ -338,6 +396,7 @@ public class ConnectionsPane extends VBox {
      * updates the pagination page count and the visible grid.
      */
     private void showPage(int targetPage) {
+        syncEmptyState();
         if (cardsPerPage == 0) cardsPerPage = 1;
 
         int totalPages = Math.max((int) Math.ceil((double) visible.size() / cardsPerPage), 1);
@@ -347,7 +406,7 @@ public class ConnectionsPane extends VBox {
         if (pagination.getCurrentPageIndex() != finalPage) {
             pagination.setCurrentPageIndex(finalPage);
         } else if (currentPage != null) {
-            currentPage.setCenter(visible.isEmpty() ? buildEmptyState() : buildGrid(finalPage));
+            currentPage.setCenter(visible.isEmpty() ? new javafx.scene.layout.Region() : buildGrid(finalPage));
         }
     }
 
@@ -449,13 +508,279 @@ public class ConnectionsPane extends VBox {
 
     private void renderList() {
         listBox.getChildren().clear();
+        syncEmptyState();
         if (visible.isEmpty()) {
-            listBox.getChildren().add(buildEmptyState());
             return;
         }
+
+        List<ConnectionObject> connections = new ArrayList<>();
         for (ConnectionCard card : visible) {
-            listBox.getChildren().add(new ConnectionListRow(card.getConnection()));
+            connections.add(card.getConnection());
         }
+        List<String> folders = getFolderNames();
+        boolean searching = !lastSearch.isBlank();
+        boolean grouped = !folders.isEmpty() || connections.stream().anyMatch(ConnectionObject::isPinned);
+
+        if (!grouped) {
+            for (ConnectionObject connection : connections) {
+                listBox.getChildren().add(new ConnectionListRow(connection));
+            }
+            return;
+        }
+
+        List<ConnectionObject> pinned = connections.stream().filter(ConnectionObject::isPinned).toList();
+        addGroup(FolderGroup.PINNED, "Pinned", null, pinned);
+        for (String folder : folders) {
+            List<ConnectionObject> members = connections.stream()
+                    .filter(c -> !c.isPinned() && folder.equals(c.getFolder())).toList();
+            if (!searching || !members.isEmpty()) {
+                addGroup(FolderGroup.FOLDER, folder, folder, members);
+            }
+        }
+        List<ConnectionObject> loose = connections.stream()
+                .filter(c -> !c.isPinned() && c.getFolder() == null).toList();
+        if (!searching || !loose.isEmpty()) {
+            addGroup(FolderGroup.UNGROUPED, "Ungrouped", null, loose);
+        }
+    }
+
+    // ---- folders -------------------------------------------------------------------------------
+
+    private enum FolderGroup { PINNED, FOLDER, UNGROUPED }
+
+    /** Every folder name: the ones created explicitly (so empty folders survive) plus those in use. */
+    public List<String> getFolderNames() {
+        Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        names.addAll(AppSettings.get().getConnectionFolders());
+        for (ConnectionCard card : allCards) {
+            String folder = card.getConnection().getFolder();
+            if (folder != null) {
+                names.add(folder);
+            }
+        }
+        return new ArrayList<>(names);
+    }
+
+    private void addGroup(FolderGroup kind, String title, String folderName, List<ConnectionObject> members) {
+        boolean collapsible = kind != FolderGroup.PINNED || !members.isEmpty();
+        if (kind == FolderGroup.PINNED && members.isEmpty()) {
+            return;
+        }
+        List<String> collapsed = AppSettings.get().getCollapsedFolders();
+        String key = kind == FolderGroup.FOLDER ? "f:" + folderName : kind.name();
+        boolean isCollapsed = collapsible && collapsed.contains(key);
+
+        FontIcon chevron = new FontIcon(isCollapsed ? Feather.CHEVRON_RIGHT : Feather.CHEVRON_DOWN);
+        chevron.getStyleClass().add(Styles.TEXT_MUTED);
+        FontIcon icon = new FontIcon(switch (kind) {
+            case PINNED -> MaterialDesignP.PIN;
+            case FOLDER -> MaterialDesignF.FOLDER_OUTLINE;
+            case UNGROUPED -> Feather.MENU;
+        });
+        if (kind != FolderGroup.UNGROUPED) {
+            IconColorUtil.apply(icon, "-color-accent-emphasis", 16);
+        }
+
+        Label name = new Label(title);
+        name.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+        Label count = new Label(String.valueOf(members.size()));
+        count.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+        javafx.scene.layout.Region line = new javafx.scene.layout.Region();
+        line.setMinHeight(1);
+        line.setMaxHeight(1);
+        line.setStyle("-fx-background-color: -color-border-subtle;");
+        HBox.setHgrow(line, Priority.ALWAYS);
+
+        HBox groupHeader = new HBox(8, chevron, icon, name, count, line);
+        groupHeader.setAlignment(Pos.CENTER_LEFT);
+        groupHeader.setPadding(new Insets(4, 8, 4, 8));
+        groupHeader.getStyleClass().add("folder-header");
+
+        VBox rows = new VBox(8);
+        for (ConnectionObject connection : members) {
+            rows.getChildren().add(new ConnectionListRow(connection));
+        }
+        rows.setVisible(!isCollapsed);
+        rows.setManaged(!isCollapsed);
+
+        groupHeader.setOnMouseClicked(e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) {
+                toggleCollapsed(key);
+            }
+        });
+        if (kind == FolderGroup.FOLDER) {
+            MenuItem rename = new MenuItem("Rename…", new FontIcon(Feather.EDIT_2));
+            rename.setOnAction(e -> promptRenameFolder(folderName));
+            MenuItem delete = new MenuItem("Delete folder", new FontIcon(Feather.TRASH_2));
+            delete.setOnAction(e -> confirmDeleteFolder(folderName, members.size()));
+            groupHeader.setOnContextMenuRequested(e -> {
+                new ContextMenu(rename, delete).show(groupHeader, e.getScreenX(), e.getScreenY());
+                e.consume();
+            });
+        }
+
+        VBox group = new VBox(6, groupHeader, rows);
+        installDropTarget(group, groupHeader, kind, folderName);
+        VBox.setMargin(group, new Insets(6, 0, 0, 0));
+        listBox.getChildren().add(group);
+    }
+
+    /** Dropping a row anywhere on a group files the connection there. */
+    private void installDropTarget(Node group, Node highlight, FolderGroup kind, String folderName) {
+        group.setOnDragOver((DragEvent e) -> {
+            Dragboard board = e.getDragboard();
+            if (board.hasString() && board.getString().startsWith(ConnectionListRow.DRAG_PREFIX)) {
+                e.acceptTransferModes(TransferMode.MOVE);
+                if (!highlight.getStyleClass().contains("folder-drop")) {
+                    highlight.getStyleClass().add("folder-drop");
+                }
+            }
+            e.consume();
+        });
+        group.setOnDragExited(e -> highlight.getStyleClass().remove("folder-drop"));
+        group.setOnDragDropped((DragEvent e) -> {
+            Dragboard board = e.getDragboard();
+            boolean accepted = board.hasString() && board.getString().startsWith(ConnectionListRow.DRAG_PREFIX);
+            if (accepted) {
+                String id = board.getString().substring(ConnectionListRow.DRAG_PREFIX.length());
+                switch (kind) {
+                    case PINNED -> setPinned(id, true);
+                    case FOLDER -> moveConnection(id, folderName);
+                    case UNGROUPED -> moveConnection(id, null);
+                }
+            }
+            e.setDropCompleted(accepted);
+            e.consume();
+        });
+    }
+
+    private void toggleCollapsed(String key) {
+        List<String> collapsed = new ArrayList<>(AppSettings.get().getCollapsedFolders());
+        if (!collapsed.remove(key)) {
+            collapsed.add(key);
+        }
+        AppSettings.get().setCollapsedFolders(collapsed);
+        renderList();
+    }
+
+    private ConnectionObject findConnection(String connectionId) {
+        int index = indexOfConnection(connectionId);
+        return index < 0 ? null : allCards.get(index).getConnection();
+    }
+
+    /** Files a connection under {@code folder}; null = ungrouped. Moving it also unpins it. */
+    public void moveConnection(String connectionId, String folder) {
+        ConnectionObject connection = findConnection(connectionId);
+        if (connection == null) {
+            return;
+        }
+        ConnectionService.getInstance().setConnectionFolder(connectionId, folder);
+        ConnectionService.getInstance().setConnectionPinned(connectionId, false);
+        connection.setFolder(folder);
+        connection.setPinned(false);
+        renderList();
+    }
+
+    public void setPinned(String connectionId, boolean pinned) {
+        ConnectionObject connection = findConnection(connectionId);
+        if (connection == null) {
+            return;
+        }
+        ConnectionService.getInstance().setConnectionPinned(connectionId, pinned);
+        connection.setPinned(pinned);
+        renderList();
+    }
+
+    private boolean folderExists(String name) {
+        return getFolderNames().stream().anyMatch(existing -> existing.equalsIgnoreCase(name));
+    }
+
+    private void registerFolder(String name) {
+        List<String> stored = new ArrayList<>(AppSettings.get().getConnectionFolders());
+        if (stored.stream().noneMatch(existing -> existing.equalsIgnoreCase(name))) {
+            stored.add(name);
+            AppSettings.get().setConnectionFolders(stored);
+        }
+    }
+
+    /** Asks for a name and creates the folder, optionally moving a connection into it straight away. */
+    public void promptNewFolder(String connectionToMove) {
+        FolderNameModal modal = new FolderNameModal("New folder", null, "Create", name -> {
+            if (folderExists(name)) {
+                showFolderNotification("Folder Exists", "A folder named \"" + name + "\" already exists.");
+                return;
+            }
+            registerFolder(name);
+            if (connectionToMove != null) {
+                moveConnection(connectionToMove, name);
+            } else {
+                renderList();
+            }
+        });
+        modal.setTranslateY(10);
+        App.showModal(modal);
+        Platform.runLater(modal::focusField);
+    }
+
+    private void promptRenameFolder(String oldName) {
+        FolderNameModal modal = new FolderNameModal("Rename folder", oldName, "Rename", name -> {
+            if (name.equals(oldName)) {
+                return;
+            }
+            if (folderExists(name) && !name.equalsIgnoreCase(oldName)) {
+                showFolderNotification("Folder Exists", "A folder named \"" + name + "\" already exists.");
+                return;
+            }
+            ConnectionService.getInstance().renameFolder(oldName, name);
+            List<String> stored = new ArrayList<>(AppSettings.get().getConnectionFolders());
+            stored.remove(oldName);
+            AppSettings.get().setConnectionFolders(stored);
+            registerFolder(name);
+            List<String> collapsed = new ArrayList<>(AppSettings.get().getCollapsedFolders());
+            if (collapsed.remove("f:" + oldName)) {
+                collapsed.add("f:" + name);
+                AppSettings.get().setCollapsedFolders(collapsed);
+            }
+            for (ConnectionCard card : allCards) {
+                if (oldName.equals(card.getConnection().getFolder())) {
+                    card.getConnection().setFolder(name);
+                }
+            }
+            renderList();
+        });
+        modal.setTranslateY(10);
+        App.showModal(modal);
+        Platform.runLater(modal::focusField);
+    }
+
+    private void confirmDeleteFolder(String folder, int connectionCount) {
+        String text = connectionCount == 0
+                ? "Delete the empty folder \"" + folder + "\"?"
+                : "Delete the folder \"" + folder + "\"? Its " + connectionCount + " connection(s) are kept and become ungrouped.";
+        ConfirmationModal modal = new ConfirmationModal("Delete Folder", text,
+                new FontIcon(MaterialDesignF.FOLDER_REMOVE_OUTLINE), () -> {
+            ConnectionService.getInstance().renameFolder(folder, null);
+            List<String> stored = new ArrayList<>(AppSettings.get().getConnectionFolders());
+            stored.remove(folder);
+            AppSettings.get().setConnectionFolders(stored);
+            List<String> collapsed = new ArrayList<>(AppSettings.get().getCollapsedFolders());
+            if (collapsed.remove("f:" + folder)) {
+                AppSettings.get().setCollapsedFolders(collapsed);
+            }
+            for (ConnectionCard card : allCards) {
+                if (folder.equals(card.getConnection().getFolder())) {
+                    card.getConnection().setFolder(null);
+                }
+            }
+            App.closeModal();
+            renderList();
+        });
+        modal.setTranslateY(10);
+        App.showModal(modal);
+    }
+
+    private void showFolderNotification(String title, String description) {
+        new CustomNotification(title, description, new FontIcon(MaterialDesignF.FOLDER_ALERT_OUTLINE)).showNotification();
     }
 
     private VBox buildEmptyState() {
@@ -472,11 +797,40 @@ public class ConnectionsPane extends VBox {
         Label title = new Label(searching ? "No connections match your search" : "No connections yet");
         title.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
 
-        Label subtitle = new Label(searching ? "Try a different name." : "Click \"New\" above to add your first database connection.");
+        Label subtitle = new Label(searching ? "Try a different name." : "Pick an engine below, or click \"New\" above, to add your first database connection.");
         subtitle.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
 
         box.getChildren().addAll(icon, title, subtitle);
+        if (!searching) {
+            box.getChildren().add(buildEngineTiles());
+        }
         return box;
+    }
+
+    /** One tile per supported engine; clicking opens the New Connection dialog with it preselected. */
+    private FlowPane buildEngineTiles() {
+        FlowPane tiles = new FlowPane(12, 12);
+        tiles.setAlignment(Pos.CENTER);
+        tiles.setMaxWidth(760);
+        tiles.setPadding(new Insets(24, 0, 0, 0));
+
+        for (ConnectionTypes type : ConnectionTypes.values()) {
+
+            Label name = new Label(type.name());
+            name.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+            Label detail = new Label(type.isServerBased() ? "Server · port " + type.getDefaultPort() : "Local file");
+            detail.getStyleClass().addAll(Styles.TEXT_MUTED, Styles.TEXT_SMALL);
+
+            HBox tile = new HBox(new VBox(1, name, detail));
+            tile.setAlignment(Pos.CENTER_LEFT);
+            tile.setPadding(new Insets(12, 14, 12, 14));
+            tile.setMinWidth(230);
+            tile.setPrefWidth(230);
+            tile.getStyleClass().add("connection-lineitem-card");
+            tile.setOnMouseClicked(e -> showAddModal(type));
+            tiles.getChildren().add(tile);
+        }
+        return tiles;
     }
 
     public void refresh() {
