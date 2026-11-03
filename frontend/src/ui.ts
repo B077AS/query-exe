@@ -99,6 +99,33 @@ export function answerPrompt(value: string | null): void {
   resolve?.(value);
 }
 
+// ---- new folder (a name and a colour) ----------------------------------------------------------------------------
+
+export interface FolderAnswer {
+  name: string;
+  color: string | null;
+}
+
+export const folderState = reactive({
+  open: false,
+  name: '',
+  color: null as string | null,
+  resolve: null as null | ((answer: FolderAnswer | null) => void),
+});
+
+export function askFolder(): Promise<FolderAnswer | null> {
+  return new Promise((resolve) => {
+    Object.assign(folderState, { open: true, name: '', color: null, resolve });
+  });
+}
+
+export function answerFolder(answer: FolderAnswer | null): void {
+  const resolve = folderState.resolve;
+  folderState.open = false;
+  folderState.resolve = null;
+  resolve?.(answer);
+}
+
 /** The two letters shown for an engine (tree, tabs). */
 export function engineBadge(type: string): string {
   return ({ PostgreSQL: 'PG', MySQL: 'MY', MariaDB: 'MA', SQLServer: 'MS', SQLite: 'SQ', H2: 'H2' } as Record<string, string>)[type] ?? type.slice(0, 2).toUpperCase();

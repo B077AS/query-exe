@@ -3,7 +3,7 @@ import {
   mdiChevronDown, mdiChevronRight, mdiCodeBraces, mdiCollapseAllOutline, mdiContentCopy, mdiDatabase, mdiDatabaseOutline, mdiDatabasePlusOutline,
   mdiDeleteOutline, mdiFlashOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiFormatListNumbered, mdiInformationOutline, mdiKeyVariant, mdiLanConnect,
   mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable,
-  mdiTableColumn, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline,
+  mdiTableColumn, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline,
 } from '@mdi/js';
 import {
   ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -12,8 +12,10 @@ import {
 import { computed, reactive, ref, watchEffect } from 'vue';
 import { api, type ConnectionInfo } from '../api';
 import {
-  duplicateConnection, moveConnection, moveToNewFolder, newFolder, removeConnection, removeFolder, renameFolder, toggleFolder, togglePin,
+  duplicateConnection, moveConnection, moveToNewFolder, newFolder, removeConnection, removeFolder, renameFolder, setFolderColor, toggleFolder, togglePin,
 } from '../actions';
+import { ACCENTS } from '../accents';
+import { scheme } from '../theme';
 import {
   app, connect, currentSession, dialogs, disconnect, loadTree, newTab, openFileOnConnection, openScript, openTable, refreshContainer, selectContainer, type Session,
 } from '../store';
@@ -37,7 +39,14 @@ interface Node {
   bold?: boolean;
   dim?: boolean;
   open?: boolean;
+  color?: string;
 }
+
+/** The colour a folder was given, in the shade that suits the current theme (undefined = the default grey). */
+const tint = (key: string | undefined): string | undefined => {
+  const accent = ACCENTS.find((a) => a.key === key);
+  return accent ? (scheme.value === 'dark' ? accent.dark : accent.light) : undefined;
+};
 
 const filter = ref('');
 const expanded = reactive(new Set<string>());
@@ -150,7 +159,7 @@ const nodes = computed<Node[]>(() => {
     const items = visible.filter((c) => c.folder === name).sort(byName);
     if (items.length === 0 && q !== '') continue;
     const open = q !== '' || !app.collapsedFolders.includes(name);
-    out.push({ id: 'f:' + name, kind: 'folder', label: name, depth: 0, icon: mdiFolderOutline, hasChildren: items.length > 0, meta: String(items.length), open });
+    out.push({ id: 'f:' + name, kind: 'folder', label: name, depth: 0, icon: mdiFolderOutline, hasChildren: items.length > 0, meta: String(items.length), open, color: tint(app.folderColors[name]) });
     if (open) items.forEach((c) => addConnection(c, 1));
   }
   return out;
@@ -300,7 +309,7 @@ const working = computed(() => currentSession());
             <button class="chev" tabindex="-1" @click.stop="toggle(n)">
               <Icon v-if="n.hasChildren" :path="isOpen(n) ? mdiChevronDown : mdiChevronRight" :size="16" />
             </button>
-            <Icon :path="n.icon" class="ic" :class="{ key: n.pk }" />
+            <Icon :path="n.icon" class="ic" :class="{ key: n.pk }" :style="n.color ? { color: n.color } : undefined" />
             <span class="label">{{ n.label }}</span>
             <span v-if="n.badge" class="badge">{{ n.badge }}</span>
             <span v-if="n.kind === 'connection' && app.connecting[n.connectionId!]" class="meta">connecting…</span>
@@ -337,6 +346,15 @@ const working = computed(() => currentSession());
           <ContextMenuContent v-else-if="n.kind === 'folder'" class="menu">
             <ContextMenuItem class="menu-item" @select="dialogs.connection = { folder: n.label }"><Icon :path="mdiLanConnect" /> New connection here</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="renameFolder(n.label)"><Icon :path="mdiPencilOutline" /> Rename</ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger class="menu-item"><Icon :path="mdiPaletteOutline" /> Color <Icon :path="mdiChevronRight" style="margin-left: auto" /></ContextMenuSubTrigger>
+              <ContextMenuPortal>
+                <ContextMenuSubContent class="menu">
+                  <ContextMenuItem class="menu-item" :class="{ on: !app.folderColors[n.label] }" @select="setFolderColor(n.label, null)"><span class="swatch none" />Default</ContextMenuItem>
+                  <ContextMenuItem v-for="a in ACCENTS" :key="a.key" class="menu-item" :class="{ on: app.folderColors[n.label] === a.key }" @select="setFolderColor(n.label, a.key)"><span class="swatch" :style="{ background: tint(a.key) }" />{{ a.name }}</ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuPortal>
+            </ContextMenuSub>
             <ContextMenuSeparator class="menu-sep" />
             <ContextMenuItem class="menu-item danger" @select="removeFolder(n.label)"><Icon :path="mdiDeleteOutline" /> Delete folder</ContextMenuItem>
           </ContextMenuContent>
@@ -397,6 +415,8 @@ const working = computed(() => currentSession());
 .node.bold .label { font-weight: 600; }
 .chev { width: 16px; height: 16px; display: grid; place-items: center; color: var(--text-3); flex: none; }
 .ic { color: var(--text-2); }
+.swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
+.swatch.none { border: 1px solid var(--text-3); }
 .node.sel .ic { color: var(--accent); }
 .ic.key { color: var(--text); }
 .label { overflow: hidden; text-overflow: ellipsis; }

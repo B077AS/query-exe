@@ -246,8 +246,8 @@ export const api = {
   cloneConnection: (id: string, name: string) => call<{ id: string }>('connections.clone', { id, name }),
   setConnectionFolder: (id: string, folder: string) => call<{ ok: boolean }>('connections.setFolder', { id, folder }),
   setConnectionPinned: (id: string, pinned: boolean) => call<{ ok: boolean }>('connections.setPinned', { id, pinned }),
-  folders: () => call<{ folders: string[]; collapsed: string[] }>('connections.folders'),
-  setFolders: (folders: string[], collapsed: string[]) => call<{ ok: boolean }>('connections.setFolders', { folders, collapsed }),
+  folders: () => call<{ folders: string[]; collapsed: string[]; colors: Record<string, string> }>('connections.folders'),
+  setFolders: (folders: string[], collapsed: string[], colors: Record<string, string>) => call<{ ok: boolean }>('connections.setFolders', { folders, collapsed, colors }),
   renameFolder: (from: string, to: string) => call<{ ok: boolean }>('connections.renameFolder', { from, to }),
   connect: (id: string, password?: string, remember?: boolean) =>
     call<{ needsPassword?: boolean; ok?: boolean }>('connections.connect', password === undefined ? { id } : { id, password, remember: !!remember }),

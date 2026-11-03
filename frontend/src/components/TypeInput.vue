@@ -16,9 +16,19 @@ const matches = computed(() => {
   return list.slice(0, 40);
 });
 
+// The list is as wide as the longest type the engine offers (measured with the menu's own font), never narrower than the box.
+let canvas: CanvasRenderingContext2D | null = null;
+function widest(): number {
+  canvas ??= document.createElement('canvas').getContext('2d');
+  if (!canvas) return 0;
+  canvas.font = `12px ${getComputedStyle(input.value!).fontFamily}`;
+  return Math.max(0, ...props.options.map((o) => canvas!.measureText(o).width));
+}
+
 function show(): void {
   const r = input.value!.getBoundingClientRect();
-  pos.value = { left: r.left, top: r.bottom + 2, width: Math.max(r.width, 160) };
+  const wanted = Math.ceil(widest()) + 24 /* menu + item padding */ + 14 /* scrollbar */;
+  pos.value = { left: r.left, top: r.bottom + 2, width: Math.min(Math.max(r.width, wanted), window.innerWidth - r.left - 8) };
   index.value = 0;
   open.value = true;
 }
@@ -40,12 +50,16 @@ function key(e: KeyboardEvent): void {
 <template>
   <input ref="input" class="input mono" :value="modelValue" spellcheck="false" @input="emit('update:modelValue', ($event.target as HTMLInputElement).value); show()" @focus="show" @blur="open = false" @keydown="key" />
   <Teleport to="body">
-    <div v-if="open && matches.length" class="menu suggest" :style="{ left: pos.left + 'px', top: pos.top + 'px', width: pos.width + 'px' }">
+    <!-- The menu lives in <body>, outside the dialog: a modal dialog turns body pointer events off and treats a press outside
+         itself as a dismiss. So the menu re-enables pointer events, keeps the press and wheel to itself, and (mousedown.prevent)
+         keeps the input focused so grabbing the scrollbar does not close the list. -->
+    <div v-if="open && matches.length" class="menu suggest" :style="{ left: pos.left + 'px', top: pos.top + 'px', width: pos.width + 'px' }"
+      @mousedown.prevent @pointerdown.stop @wheel.stop>
       <div v-for="(m, i) in matches" :key="m" class="menu-item" :data-highlighted="i === index ? '' : undefined" @mousedown.prevent="pick(m)">{{ m }}</div>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.suggest { position: fixed; max-height: 240px; z-index: 300; font-family: var(--mono); font-size: 12px; }
+.suggest { position: fixed; max-height: 240px; z-index: 300; font-family: var(--mono); font-size: 12px; pointer-events: auto; overscroll-behavior: contain; }
 </style>

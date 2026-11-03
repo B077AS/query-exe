@@ -56,10 +56,17 @@
 .chk.on { background: var(--accent); border-color: var(--accent); }
 .check-row { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 
-.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
-.seg button { padding: 4px 12px; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
-.seg button:hover { background: var(--bg-hover); }
-.seg button.on { background: var(--accent); color: var(--on-accent); }
+/* Switch between views (Columns / Foreign keys / SQL ...): same 28px height and 4px radius as buttons and inputs. Every option keeps
+   a 1px border (transparent when off) so the selected one, a soft accent tint, is exactly the same size as the others. */
+.seg { display: inline-flex; gap: 4px; }
+.seg button { height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--radius); color: var(--text-2); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.seg button:hover:not(.on) { background: var(--bg-hover); color: var(--text); }
+.seg button.on { background: var(--accent-tint-strong); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); font-weight: 600; }
+/* The label holds an invisible bold copy of itself, so the button is as wide as its bold text whether or not it is selected. */
+.seg-lbl { display: inline-flex; flex-direction: column; align-items: center; }
+.seg-lbl::after { content: attr(data-t); font-weight: 600; height: 0; overflow: hidden; visibility: hidden; }
+.seg .badge { background: none; padding: 0; color: var(--text-3); font-weight: 400; }
+.seg button.on .badge { color: inherit; opacity: 0.8; }
 
 /* ---- menus (reka ContextMenu / DropdownMenu content) ---- */
 .menu {
@@ -73,11 +80,23 @@
 }
 .menu-item .i { color: var(--text-2); }
 .menu-item[data-highlighted] { background: var(--accent-tint-strong); }
+/* the chosen option of a dropdown: a tinted background and accent text, never a tick */
+.menu-item.on { background: var(--accent-tint-strong); color: var(--accent); }
+.menu-item.on[data-highlighted] { background: color-mix(in srgb, var(--accent) 26%, var(--bg-raised)); }
 .menu-item[data-disabled] { opacity: 0.45; }
 .menu-item.danger, .menu-item.danger .i { color: var(--danger); }
 .menu-item .shortcut { margin-left: auto; padding-left: 20px; color: var(--text-3); font: 11px var(--mono); }
 .menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
 .menu-label { padding: 4px 8px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ---- side rail of the Settings and connection dialogs (one copy, so they cannot drift apart) ---- */
+.rail { background: var(--bg-side); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+.rail-item { position: relative; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-radius: 0; color: var(--text-2); text-align: left; outline: none; }
+.rail-item:hover, .rail-item:focus-visible { background: var(--bg-hover); color: var(--text); }
+.rail-item.on, .rail-item.on:focus-visible { background: var(--accent-tint-strong); color: var(--text); }
+/* the accent bar is a real element, not an inset box-shadow: an inset shadow draws a faint line along the top edge when the row sits on a fractional pixel */
+.rail-item.on::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+.rail-item.on .icon { color: var(--accent); }
 
 /* ---- dialogs ---- */
 .scrim { position: fixed; inset: 0; background: color-mix(in srgb, var(--bg-side) 70%, transparent); z-index: 50; }
@@ -93,10 +112,11 @@
 .dlg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-side); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 
 /* ---- toasts ---- */
-.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; width: 340px; }
+.toasts { position: fixed; right: 16px; top: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; width: 340px; }
+/* square corners, like the rows of the settings rail */
 .toast {
   display: flex; gap: 10px; padding: 10px 12px; background: var(--bg-raised); border: 1px solid var(--border-strong);
-  border-left: 3px solid var(--accent); border-radius: var(--radius-lg); box-shadow: var(--shadow);
+  border-left: 3px solid var(--accent); border-radius: 0; box-shadow: var(--shadow);
 }
 .toast.ok { border-left-color: var(--ok); }
 .toast.error { border-left-color: var(--danger); }

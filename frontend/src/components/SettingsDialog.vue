@@ -83,8 +83,8 @@ const stack = ['Java 25', 'Jolt', 'Vue 3', 'CodeMirror 6', 'Reka UI', 'Material 
 <template>
   <AppDialog title="Settings" :width="900" flush @close="dialogs.settings = false">
     <div class="settings">
-      <nav class="nav">
-        <button v-for="s in sections" :key="s.key" class="item" :class="{ on: section === s.key }" @click="section = s.key">
+      <nav class="rail">
+        <button v-for="s in sections" :key="s.key" class="rail-item" :class="{ on: section === s.key }" @click="section = s.key">
           <Icon :path="s.icon" :size="18" />{{ s.label }}
         </button>
       </nav>
@@ -214,11 +214,6 @@ const stack = ['Java 25', 'Jolt', 'Vue 3', 'CodeMirror 6', 'Reka UI', 'Material 
 
 <style scoped>
 .settings { display: grid; grid-template-columns: 210px 1fr; height: 540px; min-height: 0; }
-.nav { background: var(--bg-side); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
-.item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-radius: 0; color: var(--text-2); text-align: left; }
-.item:hover { background: var(--bg-hover); color: var(--text); }
-.item.on { background: var(--accent-tint-strong); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
-.item.on .icon { color: var(--accent); }
 .page { padding: 22px 28px; overflow: auto; min-width: 0; }
 h3 { font-size: 18px; font-weight: 600; margin-bottom: 18px; }
 .label .hint { font-weight: 400; }

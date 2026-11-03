@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  mdiCheck, mdiClose, mdiCogOutline, mdiContentSaveOutline, mdiDatabaseOutline, mdiFolderOpenOutline, mdiFormatAlignLeft, mdiLoading, mdiPlay, mdiPlayOutline,
+  mdiClose, mdiCogOutline, mdiContentSaveOutline, mdiDatabaseOutline, mdiFolderOpenOutline, mdiFormatAlignLeft, mdiLoading, mdiPlay, mdiPlayOutline,
   mdiPlus, mdiStop,
 } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
@@ -94,9 +94,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <DropdownMenuPortal>
             <DropdownMenuContent class="menu" align="start" :side-offset="4">
               <div class="menu-label">New query on</div>
-              <DropdownMenuItem v-for="s in openSessions" :key="s.connectionId" class="menu-item" @select="newTab(s.connectionId)">
+              <DropdownMenuItem v-for="s in openSessions" :key="s.connectionId" class="menu-item" :class="{ on: current?.connectionId === s.connectionId }" @select="newTab(s.connectionId)">
                 <span class="badge">{{ engineBadge(s.info.type) }}</span>{{ s.info.name }}
-                <Icon v-if="current?.connectionId === s.connectionId" :path="mdiCheck" style="margin-left: auto" />
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenuPortal>

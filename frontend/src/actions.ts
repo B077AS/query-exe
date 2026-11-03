@@ -1,11 +1,11 @@
 import { api, type ConnectionInfo } from './api';
 import { app, disconnect, reloadConnections } from './store';
-import { confirm, fail, prompt, toast } from './ui';
+import { askFolder, confirm, fail, prompt, toast } from './ui';
 
 // What the connections tree can do with folders and saved connections.
 
 export async function saveFolders(): Promise<void> {
-  await api.setFolders(app.folders, app.collapsedFolders).catch((e) => fail('Could not save folders', e));
+  await api.setFolders(app.folders, app.collapsedFolders, app.folderColors).catch((e) => fail('Could not save folders', e));
 }
 
 export function toggleFolder(name: string): void {
@@ -15,10 +15,19 @@ export function toggleFolder(name: string): void {
   void saveFolders();
 }
 
+/** Gives a folder an accent colour (a key from accents.ts), or back its default one with null. */
+export async function setFolderColor(name: string, color: string | null): Promise<void> {
+  if (color) app.folderColors[name] = color;
+  else delete app.folderColors[name];
+  await saveFolders();
+}
+
 export async function newFolder(): Promise<string | null> {
-  const name = await prompt('New folder', 'Folder name', '', 'Create');
-  if (!name) return null;
+  const answer = await askFolder();
+  if (!answer) return null;
+  const { name, color } = answer;
   if (!app.folders.includes(name)) app.folders.push(name);
+  if (color) app.folderColors[name] = color;
   await saveFolders();
   return name;
 }
@@ -30,6 +39,10 @@ export async function renameFolder(name: string): Promise<void> {
     await api.renameFolder(name, to);
     app.folders = app.folders.map((f) => (f === name ? to : f));
     app.collapsedFolders = app.collapsedFolders.map((f) => (f === name ? to : f));
+    if (app.folderColors[name]) {
+      app.folderColors[to] = app.folderColors[name];
+      delete app.folderColors[name];
+    }
     await saveFolders();
     await reloadConnections();
   } catch (e) {
@@ -42,6 +55,7 @@ export async function removeFolder(name: string): Promise<void> {
   try {
     await api.renameFolder(name, '');
     app.folders = app.folders.filter((f) => f !== name);
+    delete app.folderColors[name];
     await saveFolders();
     await reloadConnections();
   } catch (e) {

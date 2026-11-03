@@ -43,6 +43,17 @@ final class ConnectionApi {
         this.workspace = workspace;
     }
 
+    /** Keeps only well-formed colour keys ("teal", "pink", ...); the page decides which ones it knows how to draw. */
+    private static Map<String, String> folderColors(Map<String, String> requested) {
+        Map<String, String> colors = new LinkedHashMap<>();
+        requested.forEach((folder, color) -> {
+            if (!folder.isBlank() && color.matches("[a-z]{1,16}")) {
+                colors.put(folder, color);
+            }
+        });
+        return colors;
+    }
+
     void register(Rpc rpc) {
         rpc.on("connections.types", p -> types());
         rpc.on("connections.list", p -> list());
@@ -69,10 +80,12 @@ final class ConnectionApi {
         });
         rpc.on("connections.folders", p -> Map.of(
                 "folders", AppSettings.get().getStringList(FOLDERS),
-                "collapsed", AppSettings.get().getStringList(COLLAPSED)));
+                "collapsed", AppSettings.get().getStringList(COLLAPSED),
+                "colors", AppSettings.get().getFolderColors()));
         rpc.on("connections.setFolders", p -> {
             AppSettings.get().setStringList(FOLDERS, Params.optionalStrings(p, "folders"));
             AppSettings.get().setStringList(COLLAPSED, Params.optionalStrings(p, "collapsed"));
+            AppSettings.get().setFolderColors(folderColors(Params.optionalStringMap(p, "colors")));
             return Map.of("ok", true);
         });
         rpc.on("connections.renameFolder", p -> {

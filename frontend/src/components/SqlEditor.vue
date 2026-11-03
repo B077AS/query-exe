@@ -73,7 +73,7 @@ const highlight = HighlightStyle.define([
 const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'var(--bg)', color: 'var(--text)' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.65' },
+  '.cm-scroller': { fontFamily: 'var(--mono)', lineHeight: '1.65', cursor: 'text' },
   '.cm-content': { caretColor: 'var(--accent)', padding: '8px 0' },
   '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--accent)', borderLeftWidth: '2px' },
   '.cm-gutters': { backgroundColor: 'var(--bg-side)', color: 'var(--text-3)', border: 'none', borderRight: '1px solid var(--border)' },

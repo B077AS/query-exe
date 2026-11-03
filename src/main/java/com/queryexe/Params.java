@@ -4,7 +4,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Reads the parameters of an RPC request. The page is untrusted input: a missing or mistyped field is an error with a clear message. */
 public final class Params {
@@ -40,6 +42,26 @@ public final class Params {
                 throw new IllegalArgumentException(key + " must be a list of text");
             }
             result.add(item.getAsString());
+        }
+        return result;
+    }
+
+    /** A map of text to text that may be absent (then empty). */
+    public static Map<String, String> optionalStringMap(JsonObject params, String key) {
+        JsonElement value = params.get(key);
+        if (value == null || value.isJsonNull()) {
+            return Map.of();
+        }
+        if (!value.isJsonObject()) {
+            throw new IllegalArgumentException(key + " must be an object of text");
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Map.Entry<String, JsonElement> entry : value.getAsJsonObject().entrySet()) {
+            JsonElement item = entry.getValue();
+            if (!item.isJsonPrimitive() || !item.getAsJsonPrimitive().isString()) {
+                throw new IllegalArgumentException(key + " must be an object of text");
+            }
+            result.put(entry.getKey(), item.getAsString());
         }
         return result;
     }

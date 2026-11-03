@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiCheck, mdiChevronDown, mdiDownload, mdiFolderOpenOutline, mdiLightningBolt, mdiRestore } from '@mdi/js';
+import { mdiCheck, mdiCogOutline, mdiPowerPlugOutline, mdiChevronDown, mdiDownload, mdiFolderOpenOutline, mdiLightningBolt, mdiRestore } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { api, type ConnectionForm, type DriverInfo } from '../api';
@@ -7,6 +7,7 @@ import { app, dialogs, reloadConnections } from '../store';
 import { errorText, fail, toast } from '../ui';
 import AppDialog from './AppDialog.vue';
 import Icon from './Icon.vue';
+import Seg from './Seg.vue';
 
 const props = defineProps<{ id?: string; type?: string; folder?: string }>();
 const editing = computed(() => !!props.id);
@@ -18,6 +19,10 @@ const form = reactive<ConnectionForm>({
 const useUrl = ref(false);
 const hadPassword = ref(false);
 const tab = ref<'general' | 'driver'>('general');
+const pages = [
+  { key: 'general' as const, label: 'General', icon: mdiCogOutline },
+  { key: 'driver' as const, label: 'Driver', icon: mdiPowerPlugOutline },
+];
 const testing = ref(false);
 const saving = ref(false);
 const drivers = ref<DriverInfo[] | null>(null);
@@ -180,13 +185,16 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
 </script>
 
 <template>
-  <AppDialog :title="editing ? 'Edit connection' : 'New connection'" :width="560" @close="dialogs.connection = null">
-    <div class="seg" style="align-self: flex-start">
-      <button :class="{ on: tab === 'general' }" @click="tab = 'general'">General</button>
-      <button :class="{ on: tab === 'driver' }" @click="tab = 'driver'">Driver</button>
-    </div>
-
-    <template v-if="tab === 'general'">
+  <AppDialog :title="editing ? 'Edit connection' : 'New connection'" :width="720" flush @close="dialogs.connection = null">
+    <div class="conn">
+      <nav class="rail">
+        <button v-for="p in pages" :key="p.key" class="rail-item" :class="{ on: tab === p.key }" @click="tab = p.key"><Icon :path="p.icon" :size="18" />{{ p.label }}</button>
+      </nav>
+      <div class="page">
+        <h3>{{ pages.find((p) => p.key === tab)?.label }}</h3>
+        <!-- Both pages sit in the same grid cell and only one is visible, so the dialog is always as tall as the taller one and never resizes when switching. -->
+        <div class="stack">
+    <div class="pane" :class="{ off: tab !== 'general' }">
       <div class="row">
         <div class="field"><label>Name</label><input v-model="form.name" class="input" placeholder="My database" autofocus /></div>
         <div class="field" style="flex: 0 0 180px">
@@ -197,19 +205,14 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
             </DropdownMenuTrigger>
             <DropdownMenuPortal>
               <DropdownMenuContent class="menu" :side-offset="4" align="start">
-                <DropdownMenuItem v-for="t in app.types" :key="t.key" class="menu-item" @select="applyType(t.key)">
-                  <Icon :path="t.key === form.type ? mdiCheck : ''" />{{ t.key === 'SQLServer' ? 'SQL Server' : t.key }}
-                </DropdownMenuItem>
+                <DropdownMenuItem v-for="t in app.types" :key="t.key" class="menu-item" :class="{ on: t.key === form.type }" @select="applyType(t.key)">{{ t.key === 'SQLServer' ? 'SQL Server' : t.key }}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenuPortal>
           </DropdownMenuRoot>
         </div>
       </div>
 
-      <div v-if="isH2" class="seg" style="align-self: flex-start">
-        <button :class="{ on: h2Mode === 'file' }" @click="h2Mode = 'file'">File or in-memory</button>
-        <button :class="{ on: h2Mode === 'server' }" @click="h2Mode = 'server'">Server (TCP)</button>
-      </div>
+      <Seg v-if="isH2" v-model="h2Mode" style="align-self: flex-start" :options="[{ value: 'file', label: 'File or in-memory' }, { value: 'server', label: 'Server (TCP)' }]" />
 
       <template v-if="(fileBased && !h2Server) || useUrl">
         <div class="field">
@@ -246,9 +249,9 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
         <span class="chk" :class="{ on: useUrl }"><Icon v-if="useUrl" :path="mdiCheck" :size="11" /></span>
         Use a custom JDBC URL
       </label>
-    </template>
+    </div>
 
-    <template v-else>
+    <div class="pane" :class="{ off: tab !== 'driver' }">
       <div class="field">
         <label>JDBC driver in use</label>
         <div class="drv">
@@ -262,8 +265,9 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
       </div>
       <div class="field">
         <label>Other versions (from Maven Central)</label>
-        <div v-if="loadingDrivers" class="hint">Loading versions…</div>
-        <div v-else-if="driversError" class="error-text">{{ driversError }}</div>
+        <div v-if="driversError" class="error-text">{{ driversError }}</div>
+        <!-- Until the list has arrived (also the frame before the load starts) show placeholders of the same size, so the dialog does not jump. -->
+        <div v-else-if="drivers === null" class="versions skeleton" aria-busy="true"><span v-for="n in 18" :key="n" class="ver" /></div>
         <div v-else class="versions">
           <button v-for="d in drivers ?? []" :key="d.version" class="ver" :class="{ on: currentDriver?.version === d.version }" :disabled="downloading" @click="chooseDriver(d)">
             <span class="mono">{{ d.version }}</span>
@@ -273,7 +277,10 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
         </div>
         <span class="hint">Downloaded drivers are kept in the app data folder and loaded only for this connection.</span>
       </div>
-    </template>
+    </div>
+        </div>
+      </div>
+    </div>
 
     <template #footer>
       <button class="btn" :disabled="testing || !testable" @click="test"><Icon :path="mdiLightningBolt" />{{ testing ? 'Testing…' : 'Test connection' }}</button>
@@ -287,8 +294,21 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
 <style scoped>
 .drv { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
 .drv > div:first-child { flex: 1; min-width: 0; }
-.versions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 190px; overflow: auto; }
+/* the same rail and page as the Settings window */
+.conn { display: grid; grid-template-columns: 190px 1fr; min-height: 0; }
+.page { padding: 22px 28px; min-width: 0; }
+h3 { font-size: 18px; font-weight: 600; margin-bottom: 18px; }
+.stack { display: grid; }
+.pane { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pane.off { visibility: hidden; }
+.versions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 164px; overflow: auto; }
 .ver { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); }
 .ver:hover:not(:disabled) { background: var(--bg-hover); }
 .ver.on { border-color: var(--accent); background: var(--accent-tint); }
+/* placeholders while the driver versions load: same grid and cell size as the real list */
+.skeleton { overflow: hidden; pointer-events: none; }
+.skeleton .ver { background: var(--bg-hover); border-color: transparent; animation: pulse 1.2s ease-in-out infinite; }
+.skeleton .ver:nth-child(3n+2) { animation-delay: 0.1s; }
+.skeleton .ver:nth-child(3n) { animation-delay: 0.2s; }
+@keyframes pulse { 50% { opacity: 0.45; } }
 </style>

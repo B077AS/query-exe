@@ -54,6 +54,8 @@ export const app = reactive({
   connections: [] as ConnectionInfo[],
   folders: [] as string[],
   collapsedFolders: [] as string[],
+  /** Accent key chosen for a folder (see accents.ts), by folder name. */
+  folderColors: {} as Record<string, string>,
   recent: [] as RecentFile[],
   sessions: {} as Record<string, Session>,
   tabs: [] as QueryTab[],
@@ -105,6 +107,7 @@ export async function loadConnections(): Promise<void> {
     app.connections = connections;
     app.folders = folders.folders;
     app.collapsedFolders = folders.collapsed;
+    app.folderColors = folders.colors ?? {};
     app.recent = recent;
     for (const info of connections) {
       if (app.sessions[info.id]) app.sessions[info.id].info = { ...info, connected: true };

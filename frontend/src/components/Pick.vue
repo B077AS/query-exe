@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiCheck, mdiChevronDown } from '@mdi/js';
+import { mdiChevronDown } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
 import Icon from './Icon.vue';
 
@@ -16,9 +16,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
     </DropdownMenuTrigger>
     <DropdownMenuPortal>
       <DropdownMenuContent class="menu" :side-offset="4" align="start" style="min-width: var(--reka-dropdown-menu-trigger-width); max-height: 280px">
-        <DropdownMenuItem v-for="o in options" :key="o" class="menu-item" @select="emit('update:modelValue', o)">
-          <Icon :path="o === modelValue ? mdiCheck : ''" />{{ o }}
-        </DropdownMenuItem>
+        <DropdownMenuItem v-for="o in options" :key="o" class="menu-item" :class="{ on: o === modelValue }" @select="emit('update:modelValue', o)">{{ o }}</DropdownMenuItem>
         <div v-if="options.length === 0" class="menu-label">No options</div>
       </DropdownMenuContent>
     </DropdownMenuPortal>

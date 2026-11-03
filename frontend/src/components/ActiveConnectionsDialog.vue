@@ -1,27 +1,26 @@
 <script setup lang="ts">
-import { mdiAlertOutline, mdiCheckCircleOutline, mdiLanDisconnect, mdiRefresh, mdiRestart } from '@mdi/js';
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { mdiAlertOutline, mdiLanDisconnect, mdiPowerPlugOffOutline, mdiRestart } from '@mdi/js';
+import { computed, onBeforeUnmount, onMounted, reactive } from 'vue';
 import { api } from '../api';
 import { app, dialogs, disconnect, loadTree } from '../store';
-import { confirm, engineBadge, fail, toast } from '../ui';
+import { confirm, fail, toast } from '../ui';
 import AppDialog from './AppDialog.vue';
 import Icon from './Icon.vue';
 
-const status = reactive<Record<string, { alive: boolean; sessions: number }>>({});
+const status = reactive<Record<string, { alive: boolean }>>({});
 const busy = reactive<Record<string, string>>({});
-const loaded = ref(false);
 
 const rows = computed(() => Object.values(app.sessions));
-const tabsOf = (id: string): number => app.tabs.filter((t) => t.connectionId === id).length;
+const tabsOf = (id: string) => app.tabs.filter((t) => t.connectionId === id);
 const alive = (id: string): boolean | null => (status[id] ? status[id].alive : null);
+const down = computed(() => rows.value.filter((s) => alive(s.connectionId) === false).length);
+const healthy = computed(() => rows.value.filter((s) => alive(s.connectionId) !== false).length);
 
 async function check(): Promise<void> {
   try {
-    for (const s of await api.connectionStatus()) status[s.id] = { alive: s.alive, sessions: s.sessions };
+    for (const s of await api.connectionStatus()) status[s.id] = { alive: s.alive };
   } catch (e) {
     fail('Could not check the connections', e);
-  } finally {
-    loaded.value = true;
   }
 }
 
@@ -31,17 +30,6 @@ onMounted(() => {
   timer = setInterval(() => void check(), 10_000);
 });
 onBeforeUnmount(() => clearInterval(timer));
-
-async function refresh(id: string): Promise<void> {
-  busy[id] = 'refresh';
-  try {
-    await loadTree(app.sessions[id]);
-    await check();
-    toast('ok', 'Structure refreshed', app.sessions[id]?.info.name);
-  } finally {
-    delete busy[id];
-  }
-}
 
 async function reconnect(id: string): Promise<void> {
   busy[id] = 'reconnect';
@@ -60,7 +48,7 @@ async function reconnect(id: string): Promise<void> {
 
 async function kill(id: string): Promise<void> {
   const name = app.sessions[id]?.info.name ?? 'this connection';
-  const tabs = tabsOf(id);
+  const tabs = tabsOf(id).length;
   const text = tabs > 0 ? `Its ${tabs} open tab${tabs === 1 ? '' : 's'} stay open but cannot run until you connect again.` : 'Anything it is running is cancelled.';
   if (!(await confirm(`Disconnect ${name}?`, text, 'Disconnect', true))) return;
   busy[id] = 'kill';
@@ -77,40 +65,56 @@ async function killAll(): Promise<void> {
   for (const s of [...rows.value]) await disconnect(s.connectionId);
   dialogs.activeConnections = false;
 }
+
 </script>
 
 <template>
-  <AppDialog title="Active connections" :width="780" @close="dialogs.activeConnections = false">
-    <template #head><span class="pill">{{ rows.length }} open</span></template>
-    <div v-if="rows.length === 0" class="none">No active connections.<br /><span class="hint">Double-click one in the tree to connect.</span></div>
-    <div v-else class="cards">
-      <article v-for="s in rows" :key="s.connectionId" class="card" :class="{ down: alive(s.connectionId) === false }">
-        <header>
-          <span class="badge">{{ engineBadge(s.info.type) }}</span>
-          <div class="who">
-            <div class="nm">{{ s.info.name }}<span v-if="app.selected === s.connectionId" class="pill">selected</span></div>
-            <div class="hs mono" :title="s.info.target">{{ s.info.target }}</div>
-          </div>
-          <span class="state" :class="alive(s.connectionId) === null ? '' : alive(s.connectionId) ? 'ok' : 'warn'">
-            <Icon :path="alive(s.connectionId) === false ? mdiAlertOutline : mdiCheckCircleOutline" :size="16" />
-            {{ alive(s.connectionId) === null ? 'Checking…' : alive(s.connectionId) ? 'Connected' : 'Not responding' }}
-          </span>
-        </header>
-        <div class="stats">
-          <div class="stat"><b>{{ tabsOf(s.connectionId) }}</b><span>open tab{{ tabsOf(s.connectionId) === 1 ? '' : 's' }}</span></div>
-          <div class="stat"><b>{{ status[s.connectionId]?.sessions ?? '–' }}</b><span>query session{{ status[s.connectionId]?.sessions === 1 ? '' : 's' }}</span></div>
-          <div class="stat wide"><b class="mono">{{ s.current ?? '–' }}</b><span>current {{ s.info.type === 'PostgreSQL' ? 'schema' : 'database' }}</span></div>
-        </div>
-        <footer>
-          <button class="btn sm" :disabled="!!busy[s.connectionId]" @click="refresh(s.connectionId)"><Icon :path="mdiRefresh" :class="{ spin: busy[s.connectionId] === 'refresh' }" /> Refresh structure</button>
-          <button class="btn sm" :disabled="!!busy[s.connectionId]" @click="reconnect(s.connectionId)"><Icon :path="mdiRestart" :class="{ spin: busy[s.connectionId] === 'reconnect' }" /> Reconnect</button>
-          <span class="sp" />
-          <button class="btn sm danger" :disabled="!!busy[s.connectionId]" @click="kill(s.connectionId)"><Icon :path="mdiLanDisconnect" /> Disconnect</button>
-        </footer>
-      </article>
+  <AppDialog title="Active connections" :width="640" flush @close="dialogs.activeConnections = false">
+    <div v-if="rows.length === 0" class="none">
+      <Icon :path="mdiPowerPlugOffOutline" :size="44" />
+      <b>Nothing connected</b>
+      <span>Double-click a connection in the tree to open it.</span>
     </div>
+
+    <template v-else>
+      <div class="hero" :class="{ bad: down > 0 }">
+        <div class="count"><b>{{ healthy }}</b><span>/ {{ rows.length }}</span></div>
+        <div class="say">
+          <strong>{{ down > 0 ? `${down} not responding` : 'All connections healthy' }}</strong>
+          <small>{{ app.tabs.length }} open tab{{ app.tabs.length === 1 ? '' : 's' }}</small>
+        </div>
+        <svg class="ecg" viewBox="0 0 160 32" preserveAspectRatio="none" aria-hidden="true">
+          <path class="trail" d="M0 16 H40 L46 16 L51 5 L58 27 L63 16 H100 L105 16 L109 10 L114 22 L118 16 H160" />
+          <path v-if="down === 0" class="beat" pathLength="1" d="M0 16 H40 L46 16 L51 5 L58 27 L63 16 H100 L105 16 L109 10 L114 22 L118 16 H160" />
+        </svg>
+      </div>
+
+      <div class="panel">
+        <div class="cols"><span>Connection</span><span>Database</span><span>Tabs</span><span /></div>
+        <div class="list">
+        <article v-for="s in rows" :key="s.connectionId" class="row">
+          <div class="mid">
+            <div class="nm">{{ s.info.name }}<span v-if="alive(s.connectionId) === false" class="flag"><Icon :path="mdiAlertOutline" :size="14" />Not responding</span></div>
+            <div class="tg mono" :title="s.info.target">{{ s.info.target }}</div>
+          </div>
+          <span class="db" :title="s.info.type === 'PostgreSQL' ? 'Current schema' : 'Current database'">{{ s.current ?? '–' }}</span>
+          <span class="nt">{{ tabsOf(s.connectionId).length }}</span>
+          <div class="acts">
+            <button v-if="alive(s.connectionId) === false" class="btn primary sm" :disabled="!!busy[s.connectionId]" @click="reconnect(s.connectionId)">
+              <Icon :path="mdiRestart" :class="{ spin: busy[s.connectionId] === 'reconnect' }" /> Reconnect
+            </button>
+            <template v-else>
+              <button class="ib" title="Reconnect" :disabled="!!busy[s.connectionId]" @click="reconnect(s.connectionId)"><Icon :path="mdiRestart" :class="{ spin: busy[s.connectionId] === 'reconnect' }" /></button>
+            </template>
+            <button class="ib kill" title="Disconnect" :disabled="!!busy[s.connectionId]" @click="kill(s.connectionId)"><Icon :path="mdiLanDisconnect" /></button>
+          </div>
+        </article>
+        </div>
+      </div>
+    </template>
+
     <template #footer>
-      <button class="btn" :disabled="rows.length === 0" @click="killAll">Disconnect all</button>
+      <button class="link" :disabled="rows.length === 0" @click="killAll">Disconnect all</button>
       <span class="sp" />
       <button class="btn primary" @click="dialogs.activeConnections = false">Close</button>
     </template>
@@ -118,21 +122,43 @@ async function killAll(): Promise<void> {
 </template>
 
 <style scoped>
-.none { text-align: center; padding: 36px 0; color: var(--text-2); line-height: 1.8; }
-.cards { display: flex; flex-direction: column; gap: 14px; max-height: 58vh; overflow: auto; padding: 2px; }
-.card { background: var(--bg-raised); border: 1px solid var(--border); box-shadow: inset 3px 0 0 var(--accent); }
-.card.down { box-shadow: inset 3px 0 0 var(--warn); }
-.card header { display: flex; align-items: center; gap: 12px; padding: 12px 14px 10px 17px; }
-.badge { font: 700 10px var(--mono); padding: 3px 6px; background: var(--accent); color: var(--on-accent); flex: none; }
-.who { flex: 1; min-width: 0; }
-.nm { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-.hs { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
-.state { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); flex: none; }
-.state.ok { color: var(--ok); }
-.state.warn { color: var(--warn); }
-.stats { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1px; background: var(--border); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-left: 3px; }
-.stat { background: var(--bg-raised); padding: 9px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.stat b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stat span { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
-.card footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px 10px 17px; }
+.none { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 56px 0; color: var(--text-3); }
+.none b { color: var(--text); font-size: 15px; margin-top: 6px; }
+
+/* Header strip: how many are healthy, and a heartbeat that runs while they are. */
+.hero { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: linear-gradient(100deg, color-mix(in srgb, var(--ok) 10%, var(--bg-raised)), var(--bg-raised) 70%); --pulse: var(--ok); }
+.hero.bad { background: linear-gradient(100deg, color-mix(in srgb, var(--warn) 14%, var(--bg-raised)), var(--bg-raised) 70%); --pulse: var(--warn); }
+.count { display: flex; align-items: baseline; gap: 4px; font-family: var(--mono); }
+.count b { font-size: 34px; line-height: 1; font-weight: 600; color: var(--pulse); }
+.count span { color: var(--text-3); font-size: 14px; }
+.say { display: flex; flex-direction: column; gap: 2px; }
+.say strong { font-size: 14px; }
+.say small { color: var(--text-3); font-size: 12px; }
+.ecg { flex: 1; min-width: 80px; height: 34px; margin-left: 8px; overflow: visible; }
+.ecg path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.trail { stroke: var(--pulse); stroke-width: 1.5; opacity: 0.22; }
+.beat { stroke: var(--pulse); stroke-width: 2; stroke-dasharray: 0.22 1; animation: beat 2.4s linear infinite; filter: drop-shadow(0 0 4px var(--pulse)); }
+.hero.bad .trail { stroke-dasharray: 3 4; opacity: 0.5; }
+@keyframes beat { from { stroke-dashoffset: 0.22; } to { stroke-dashoffset: -1; } }
+
+/* The list is flat, like the tree: hairlines, a dot, hover background. */
+.panel { margin: 16px 20px 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); overflow: hidden; }
+.cols, .row { grid-template-columns: 1fr 140px 48px 112px; column-gap: 28px; }
+.cols { display: grid; padding: 7px 16px; background: var(--bg-side); border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); font-weight: 600; }
+.list { max-height: 44vh; overflow: auto; }
+.row { display: grid; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.mid { min-width: 0; }
+.nm { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.flag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--warn); }
+.tg { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db, .nt { font: 12px var(--mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acts { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.kill:hover { color: var(--danger); }
+.link { border: 0; background: none; color: var(--text-3); font: inherit; cursor: pointer; padding: 5px 2px; }
+.link:hover:not(:disabled) { color: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .beat { animation: none; }
+}
 </style>

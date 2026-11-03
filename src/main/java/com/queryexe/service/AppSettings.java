@@ -30,6 +30,7 @@ public class AppSettings {
     private static final String RESULT_SPLIT_HEIGHT_KEY = "ui.resultSplitHeight";
     private static final String CONNECTION_FOLDERS_KEY = "connections.folders";
     private static final String COLLAPSED_FOLDERS_KEY = "connections.collapsedFolders";
+    private static final String FOLDER_COLORS_KEY = "connections.folderColors";
 
     private static volatile AppSettings instance;
 
@@ -128,6 +129,24 @@ public class AppSettings {
 
     public void setCollapsedFolders(java.util.List<String> folders) {
         setStringList(COLLAPSED_FOLDERS_KEY, folders);
+    }
+
+    /** The colour (an accent key such as "teal") chosen for each connection folder, by folder name. */
+    public java.util.Map<String, String> getFolderColors() {
+        java.util.Map<String, String> colors = new java.util.LinkedHashMap<>();
+        JsonObject settings = read();
+        if (settings.has(FOLDER_COLORS_KEY) && settings.get(FOLDER_COLORS_KEY).isJsonObject()) {
+            settings.getAsJsonObject(FOLDER_COLORS_KEY).entrySet().forEach(e -> colors.put(e.getKey(), e.getValue().getAsString()));
+        }
+        return colors;
+    }
+
+    public void setFolderColors(java.util.Map<String, String> colors) {
+        JsonObject settings = read();
+        JsonObject object = new JsonObject();
+        colors.forEach(object::addProperty);
+        settings.add(FOLDER_COLORS_KEY, object);
+        write(settings);
     }
 
     /** Any value stored under this key, or null. */

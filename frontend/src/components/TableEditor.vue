@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiCheck, mdiDeleteOutline, mdiLinkVariantPlus, mdiPlus, mdiTable } from '@mdi/js';
+import { mdiCheck, mdiCodeBraces, mdiDeleteOutline, mdiLinkVariant, mdiLinkVariantPlus, mdiPlus, mdiTable, mdiTableColumn } from '@mdi/js';
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { api, type ForeignKeyDef, type TableDraft } from '../api';
 import { app, dialogs, refreshContainer } from '../store';
@@ -7,6 +7,7 @@ import { errorText, fail, toast } from '../ui';
 import AppDialog from './AppDialog.vue';
 import Icon from './Icon.vue';
 import Pick from './Pick.vue';
+import Seg from './Seg.vue';
 import TypeInput from './TypeInput.vue';
 
 const props = defineProps<{ connectionId: string; container: string; table?: string }>();
@@ -30,6 +31,11 @@ const dataTypes = ref<string[]>([]);
 const tables = ref<string[]>([]);
 const refColumns = reactive<Record<string, string[]>>({});
 const tab = ref<'columns' | 'keys' | 'sql'>('columns');
+const views = computed(() => [
+  { value: 'columns' as const, label: 'Columns', icon: mdiTableColumn, count: columns.length },
+  { value: 'keys' as const, label: 'Foreign keys', icon: mdiLinkVariant, count: fks.length },
+  { value: 'sql' as const, label: 'SQL', icon: mdiCodeBraces },
+]);
 const sqlText = ref('');
 /** Why there is no script to show (neutral text, not an error): nothing typed yet, nothing changed, or the engine cannot do it. */
 const sqlNote = ref('');
@@ -173,13 +179,12 @@ async function save(): Promise<void> {
     <template v-if="true">
       <div class="row">
         <div class="field"><label>Table name</label><input v-model="name" class="input mono" placeholder="table_name" autofocus /></div>
-        <div class="seg" style="align-self: flex-end">
-          <button :class="{ on: tab === 'columns' }" @click="tab = 'columns'">Columns <span class="badge">{{ columns.length }}</span></button>
-          <button :class="{ on: tab === 'keys' }" @click="tab = 'keys'">Foreign keys <span class="badge">{{ fks.length }}</span></button>
-          <button :class="{ on: tab === 'sql' }" @click="tab = 'sql'">SQL</button>
+        <Seg v-model="tab" style="align-self: flex-end" :options="views" />
+        <!-- A fixed-width slot, so the tabs stay put whether the button reads "Add column", "Add foreign key" or is hidden (SQL). -->
+        <div class="add">
+          <button v-if="tab === 'columns'" class="btn" @click="addColumn"><Icon :path="mdiPlus" /> Add column</button>
+          <button v-else-if="tab === 'keys'" class="btn" @click="addFk"><Icon :path="mdiLinkVariantPlus" /> Add foreign key</button>
         </div>
-        <button v-if="tab === 'columns'" class="btn" style="align-self: flex-end" @click="addColumn"><Icon :path="mdiPlus" /> Add column</button>
-        <button v-else-if="tab === 'keys'" class="btn" style="align-self: flex-end" @click="addFk"><Icon :path="mdiLinkVariantPlus" /> Add foreign key</button>
       </div>
 
       <div v-show="tab === 'columns'" ref="colsEl" class="cols">
@@ -233,6 +238,8 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
+.add { align-self: flex-end; width: 150px; flex: none; height: 28px; }
+.add .btn { width: 100%; }
 .cols { border: 1px solid var(--border); border-radius: var(--radius); height: 340px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
 th { text-align: left; font-weight: 600; font-size: 11.5px; color: var(--text-2); padding: 6px 6px; background: var(--bg-side); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }

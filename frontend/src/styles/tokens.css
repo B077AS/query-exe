@@ -33,7 +33,7 @@
   --syn-function: #7a4bc4;
   --syn-type: #0b7a8a;
 
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 :root[data-theme='dark'] {
@@ -55,7 +55,7 @@
   --syn-number: #f0955f;
   --syn-function: #b39cf4;
   --syn-type: #4cc2d3;
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 :root[data-theme='light'] {

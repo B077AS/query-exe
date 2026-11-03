@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { nextTick, onMounted } from 'vue';
 import { api } from './api';
 import ActiveConnectionsDialog from './components/ActiveConnectionsDialog.vue';
 import ColumnInfoDialog from './components/ColumnInfoDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ConnectionDialog from './components/ConnectionDialog.vue';
+import FolderDialog from './components/FolderDialog.vue';
 import NewContainerDialog from './components/NewContainerDialog.vue';
 import PasswordDialog from './components/PasswordDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
@@ -20,8 +21,11 @@ onMounted(async () => {
   initStore();
   await loadConnections();
   app.ready = true;
-  // the first frame is painted: now the window may appear
-  requestAnimationFrame(() => requestAnimationFrame(() => void api.windowReady().catch(() => undefined)));
+  // The content is rendered: now the window may appear. A short timeout rather than requestAnimationFrame, because the window
+  // starts hidden and a hidden web view runs no animation frames (the signal never came, so the window only appeared when
+  // Java's 10 second fallback timer fired).
+  await nextTick();
+  setTimeout(() => void api.windowReady().catch(() => undefined), 60);
 });
 </script>
 
@@ -38,6 +42,7 @@ onMounted(async () => {
   <ScriptDialog v-if="dialogs.script" />
   <NewContainerDialog v-if="dialogs.newContainer" />
   <PromptDialog />
+  <FolderDialog />
   <ConfirmDialog />
   <Toasts />
 </template>
