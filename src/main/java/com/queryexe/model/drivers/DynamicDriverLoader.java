@@ -1,7 +1,7 @@
 package com.queryexe.model.drivers;
 
 import com.queryexe.model.connections.ConnectionTypes;
-import com.queryexe.queryexe.Launcher;
+import com.queryexe.Launcher;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;

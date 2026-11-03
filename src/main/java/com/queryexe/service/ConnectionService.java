@@ -1,18 +1,10 @@
 package com.queryexe.service;
 
 import com.google.gson.*;
-import javafx.application.Platform;
-import javafx.concurrent.Task;
-import javafx.scene.layout.StackPane;
 import lombok.extern.slf4j.Slf4j;
-import org.kordamp.ikonli.javafx.FontIcon;
-import org.kordamp.ikonli.materialdesign2.MaterialDesignL;
-import com.queryexe.components.extra.CustomNotification;
-import com.queryexe.components.modals.InsertPasswordModal;
 import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionObjectDeserializer;
-import com.queryexe.queryexe.App;
-import com.queryexe.queryexe.Launcher;
+import com.queryexe.Launcher;
 import com.microsoft.credentialstorage.SecretStore;
 import com.microsoft.credentialstorage.StorageProvider;
 import com.microsoft.credentialstorage.StorageProvider.SecureOption;
@@ -34,7 +26,6 @@ import java.util.function.Consumer;
 public class ConnectionService {
 
     private static volatile ConnectionService instance;
-    private Task<Void> connectTask;
     private final Path connectionsPath;
     private final Gson gson;
     private final SecretStore<StoredCredential> credentialStore;
@@ -161,6 +152,11 @@ public class ConnectionService {
         return null;
     }
 
+    /** Removes a stored password from the OS credential store. */
+    public void forgetPassword(String connectionId) {
+        deletePassword(connectionId);
+    }
+
     private void deletePassword(String connectionId) {
         if (credentialStore == null) {
             return;
@@ -178,91 +174,19 @@ public class ConnectionService {
         return CREDENTIAL_KEY_PREFIX + connectionId;
     }
 
-    public void connect(ConnectionObject connection, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError) {
-
-        if (connection.getPassword() == null) {
-            InsertPasswordModal insertPasswordModal = new InsertPasswordModal(
-                    connection,
-                    () -> attemptConnection(connection, onConnectionStart, onConnectionEnd, onSuccess, onError, true)
-            );
-            insertPasswordModal.setTranslateY(10);
-            Platform.runLater(() -> {
-                App.showModalOnTop(insertPasswordModal);
-            });
-            return;
-        }
-        attemptConnection(connection, onConnectionStart, onConnectionEnd, onSuccess, onError, false);
+    /** Opens the shared JDBC connection for this definition (blocking; call off the UI thread). */
+    public void connect(ConnectionObject connection) throws java.sql.SQLException {
+        DatabaseConnection.getInstance().initialize(connection);
     }
 
-    private void attemptConnection(ConnectionObject connection, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError, boolean isUserInserted) {
-
-        // Only one connection attempt at a time; it can be relaunched once it finished.
-        if (connectTask != null && connectTask.isRunning()) {
-            return;
-        }
-
-        if (onConnectionStart != null) {
-            Platform.runLater(onConnectionStart);
-        }
-
-        connectTask = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                DatabaseConnection.getInstance().initialize(connection);
-                // The success callback stays on the background thread: callers build
-                // the database tree here, which performs blocking JDBC metadata calls.
-                if (onSuccess != null) {
-                    onSuccess.run();
-                }
-                return null;
-            }
-        };
-
-        connectTask.setOnFailed(event -> {
-            Throwable e = connectTask.getException();
-            handleConnectionError(e instanceof Exception ex ? ex : new Exception(e),
-                    connection, isUserInserted, onConnectionStart, onConnectionEnd, onSuccess, onError);
-            if (onConnectionEnd != null) {
-                onConnectionEnd.run();
-            }
-        });
-        connectTask.setOnSucceeded(event -> {
-            if (onConnectionEnd != null) {
-                onConnectionEnd.run();
-            }
-        });
-
-        Async.run(connectTask);
+    /** True when the secure store has a password for this connection (or none is needed). */
+    public boolean hasStoredPassword(String connectionId) {
+        return retrievePassword(connectionId, "") != null;
     }
 
-    private void handleConnectionError(Exception e, ConnectionObject connection, boolean isUserInserted, Runnable onConnectionStart, Runnable onConnectionEnd, Runnable onSuccess, Consumer<Exception> onError) {
-        log.error("Connection attempt failed for '{}'", connection.getConnectionName(), e);
-
-        Platform.runLater(() -> {
-
-            InsertPasswordModal insertPasswordModal = null;
-            if (isUserInserted) {
-                connection.setPassword(null);
-                insertPasswordModal = new InsertPasswordModal(
-                        connection,
-                        () -> attemptConnection(connection, onConnectionStart, onConnectionEnd, onSuccess, onError, true)
-                );
-                insertPasswordModal.setTranslateY(10);
-                App.showModalOnTop(insertPasswordModal);
-            } else {
-                if (onError != null) {
-                    onError.accept(e);
-                }
-            }
-
-            CustomNotification customNotification = new CustomNotification("Connection Failed", e.getMessage(), new FontIcon(MaterialDesignL.LAN_DISCONNECT));
-
-            if (insertPasswordModal != null) {
-                customNotification.showNotificationOnCustomPane((StackPane) insertPasswordModal.getParent());
-            } else {
-                customNotification.showNotification();
-            }
-        });
+    /** Stores or replaces a password in the OS credential store. */
+    public void rememberPassword(String connectionId, String username, String password) {
+        storePassword(connectionId, username, password);
     }
 
     private JsonObject readConnections() {

@@ -13,7 +13,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import lombok.extern.slf4j.Slf4j;
 
-import com.queryexe.queryexe.Launcher;
+import com.queryexe.Launcher;
 
 /**
  * Global application settings (theme, and future app-wide preferences),
@@ -128,6 +128,18 @@ public class AppSettings {
 
     public void setCollapsedFolders(java.util.List<String> folders) {
         setStringList(COLLAPSED_FOLDERS_KEY, folders);
+    }
+
+    /** Any value stored under this key, or null. */
+    public JsonElement getRaw(String key) {
+        JsonObject settings = read();
+        return settings.has(key) ? settings.get(key) : null;
+    }
+
+    public void setRaw(String key, JsonElement value) {
+        JsonObject settings = read();
+        settings.add(key, value);
+        write(settings);
     }
 
     private JsonObject read() {

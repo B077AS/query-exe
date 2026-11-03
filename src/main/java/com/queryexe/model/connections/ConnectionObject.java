@@ -6,11 +6,9 @@ import java.util.List;
 import java.util.Map;
 
 import lombok.Data;
-import javafx.collections.ObservableList;
-import javafx.scene.control.TableCell;
+import com.queryexe.model.data.RowTarget;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
-import com.queryexe.model.data.TableRowData;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
 
@@ -83,7 +81,7 @@ public abstract class ConnectionObject {
 
     public abstract String generateSelectScript(String tableName, String databaseName, int limit);
 
-    public abstract String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell);
+    public abstract String generateRowInsertScript(List<String> row, RowTarget table);
 
     public abstract String generateCreateTableSQL(String databaseName, String tableName, List<ColumnData> columns, List<ForeignKeyData> foreignKeys);
 

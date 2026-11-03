@@ -13,7 +13,7 @@ import java.util.prefs.Preferences;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import com.queryexe.queryexe.Launcher;
+import com.queryexe.Launcher;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

@@ -58,7 +58,7 @@ public class DriverAPIs {
         });
     }
 
-    private static void downloadDriverInternal(DriverInfo driver, File targetFile) throws Exception {
+    public static void downloadDriverInternal(DriverInfo driver, File targetFile) throws Exception {
         // Create parent directory if it doesn't exist
         File parentDir = targetFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
@@ -78,7 +78,7 @@ public class DriverAPIs {
         }
     }
 
-    private static List<DriverInfo> fetchAllDrivers(ConnectionTypes connectionType) throws Exception {
+    public static List<DriverInfo> fetchAllDrivers(ConnectionTypes connectionType) throws Exception {
         String groupPath = connectionType.getMavenGroupId().replace('.', '/');
         String metadataUrl = String.format("%s/%s/%s/maven-metadata.xml",
                 MAVEN_METADATA_BASE, groupPath, connectionType.getMavenArtifactId());

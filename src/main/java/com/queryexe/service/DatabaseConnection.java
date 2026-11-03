@@ -62,6 +62,13 @@ public class DatabaseConnection {
         this.currentConnectionId = connectionId;
     }
 
+    /** Opens a connection to check that the definition works, then closes it again. */
+    public void test(ConnectionObject connectionObject) throws SQLException {
+        try (Connection connection = open(connectionObject, false)) {
+            connection.isValid(5);
+        }
+    }
+
     private Connection open(ConnectionObject connectionObject, boolean forceCustomDriver) throws SQLException {
         // Check if we need to load a custom driver
         if (forceCustomDriver || shouldUseCustomDriver(connectionObject)) {
@@ -153,6 +160,22 @@ public class DatabaseConnection {
             log.debug("Could not copy the schema to a session: {}", e.getMessage());
         }
         return state;
+    }
+
+    /** How many extra connections (one per query tab that has run something) are open for this connection. */
+    public int sessionCount(String connectionId) {
+        List<Connection> open = sessions.get(connectionId);
+        return open == null ? 0 : open.size();
+    }
+
+    /** Whether the shared connection still answers (a quick check; false when it is closed or the server went away). */
+    public boolean isAlive(String connectionId) {
+        Connection connection = connections.get(connectionId);
+        try {
+            return connection != null && !connection.isClosed() && connection.isValid(3);
+        } catch (SQLException | RuntimeException e) {
+            return false;
+        }
     }
 
     /** The shared connection of a connection id, for {@link #copyDefaultSchema}. */

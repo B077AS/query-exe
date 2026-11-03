@@ -16,20 +16,16 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 
-import javafx.collections.ObservableList;
-import javafx.scene.control.TableCell;
 import com.queryexe.model.connections.sqlite.SqliteCatalog;
 import com.queryexe.model.connections.sqlite.SqliteCatalog.ColumnInfo;
 import com.queryexe.model.connections.sqlite.SqliteCatalog.ForeignKeyInfo;
 import com.queryexe.model.connections.sqlite.SqliteCatalog.IndexInfo;
+import com.queryexe.model.data.RowTarget;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
-import com.queryexe.components.results.ResultTable;
-import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
-import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class SQLiteConnection extends ConnectionObject {
@@ -395,36 +391,28 @@ public class SQLiteConnection extends ConnectionObject {
     }
 
     @Override
-    public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
+    public String generateRowInsertScript(List<String> row, RowTarget table) {
         try {
-            ResultTable table = (ResultTable) cell.getTableView();
-            String tableName = table.getTableName();
+            String tableName = table.tableName();
             StringBuilder insertScript = new StringBuilder();
 
-            ObservableList<TableColumn<TableRowData, ?>> tableColumns = table.getColumns();
+            int columnCount = table.columnNames().size();
 
             List<String> columnNames = new ArrayList<>();
             List<String> columnTypes = new ArrayList<>();
 
-            // Get column info using PRAGMA
-            String columnQuery = "PRAGMA table_info(" + tableName + ")";
-            PreparedStatement columnStmt = DatabaseConnection.getInstance().getConnection().prepareStatement(columnQuery);
-            ResultSet columns = columnStmt.executeQuery();
-
-            Map<String, String> columnTypeMap = new HashMap<>();
-            while (columns.next()) {
-                columnTypeMap.put(columns.getString("name"), columns.getString("type"));
-            }
-            columns.close();
-            columnStmt.close();
-
-            for (TableColumn<TableRowData, ?> col : tableColumns) {
-                String colName = col.getText();
-                columnNames.add(quoteIdentifier(colName));
-                columnTypes.add(columnTypeMap.getOrDefault(colName, "TEXT"));
+            // the grid already knows each column's real name and type; SQLite's own type affinity names are derived from it
+            for (int i = 0; i < columnCount; i++) {
+                columnNames.add(quoteIdentifier(table.columnNames().get(i)));
+                columnTypes.add(switch (table.columnSqlType(i)) {
+                    case java.sql.Types.INTEGER, java.sql.Types.BIGINT, java.sql.Types.SMALLINT, java.sql.Types.TINYINT, java.sql.Types.BIT, java.sql.Types.BOOLEAN -> "INT";
+                    case java.sql.Types.REAL, java.sql.Types.FLOAT, java.sql.Types.DOUBLE -> "REAL";
+                    case java.sql.Types.NUMERIC, java.sql.Types.DECIMAL -> "NUMERIC";
+                    default -> "TEXT";
+                });
             }
 
-            insertScript.append("INSERT INTO ").append(table.getQualifiedTableName())
+            insertScript.append("INSERT INTO ").append(table.qualifiedTableName())
                     .append(" (")
                     .append(String.join(", ", columnNames))
                     .append(")\nVALUES (");

@@ -6,12 +6,9 @@ import java.sql.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import javafx.collections.ObservableList;
-import javafx.scene.control.TableCell;
+import com.queryexe.model.data.RowTarget;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
-import com.queryexe.components.results.ResultTable;
-import com.queryexe.model.data.TableRowData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.connections.h2.H2Catalog;
@@ -19,7 +16,6 @@ import com.queryexe.model.connections.h2.H2Catalog.ColumnInfo;
 import com.queryexe.model.connections.h2.H2Catalog.ForeignKeyInfo;
 import com.queryexe.model.connections.h2.H2Catalog.KeyInfo;
 import com.queryexe.model.data.ForeignKeyData;
-import javafx.scene.control.TableColumn;
 
 @Slf4j
 public class H2Connection extends ConnectionObject {
@@ -64,7 +60,7 @@ public class H2Connection extends ConnectionObject {
         try {
             String schema = schemaOrCurrent(schemaName);
             H2Catalog catalog = catalog();
-            putIfAny(objects, "Sequences", catalog.sequences(schema));
+            // sequences are not listed for now (identity columns create one each, which is mostly noise)
             putIfAny(objects, "Synonyms", catalog.synonyms(schema));
         } catch (SQLException e) {
             log.warn("Could not list the sequences/synonyms of {}: {}", schemaName, e.getMessage());
@@ -606,25 +602,24 @@ public class H2Connection extends ConnectionObject {
     }
 
     @Override
-    public String generateRowInsertScript(ObservableList<String> row, TableCell<TableRowData, String> cell) {
+    public String generateRowInsertScript(List<String> row, RowTarget table) {
         try {
-            ResultTable table = (ResultTable) cell.getTableView();
-            String tableName = table.getTableName();
+            String tableName = table.tableName();
             StringBuilder insertScript = new StringBuilder();
 
-            ObservableList<TableColumn<TableRowData, ?>> tableColumns = table.getColumns();
+            int columnCount = table.columnNames().size();
 
             List<String> columnNames = new ArrayList<>();
             List<Integer> columnTypes = new ArrayList<>();
 
             // the grid already knows each column's real name and SQL type; looking them up in the metadata by
             // table name alone would ignore the schema and treat '_' as a wildcard
-            for (int i = 0; i < tableColumns.size(); i++) {
-                columnNames.add(quoteIdentifier(table.getColumnNames().get(i)));
-                columnTypes.add(table.getColumnSqlType(i));
+            for (int i = 0; i < columnCount; i++) {
+                columnNames.add(quoteIdentifier(table.columnNames().get(i)));
+                columnTypes.add(table.columnSqlType(i));
             }
 
-            insertScript.append("INSERT INTO ").append(table.getQualifiedTableName())
+            insertScript.append("INSERT INTO ").append(table.qualifiedTableName())
                     .append(" (")
                     .append(String.join(", ", columnNames))
                     .append(")\nVALUES (");

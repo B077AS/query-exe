@@ -12,11 +12,28 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
-        <javafx.version>22</javafx.version>
+        <maven.compiler.release>25</maven.compiler.release>
+        <jolt.version>0.3.2</jolt.version>
+        <queryexe.dev>false</queryexe.dev>
+        <queryexe.data></queryexe.data>
     </properties>
 
     <dependencies>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jolt-core</artifactId>
+            <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jolt-win32</artifactId>
+            <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jolt-linux</artifactId>
+            <version>${jolt.version}</version>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/com.mysql/mysql-connector-j -->
         <dependency>
             <groupId>com.mysql</groupId>
@@ -52,72 +69,6 @@
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.51.1.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.openjfx/javafx-controls -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.openjfx/javafx-graphics -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.openjfx/javafx-base -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-base</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.openjfx/javafx-swing -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-swing</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.openjfx/javafx-media -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-media</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.kordamp.ikonli/ikonli-javafx -->
-        <dependency>
-            <groupId>org.kordamp.ikonli</groupId>
-            <artifactId>ikonli-javafx</artifactId>
-            <version>12.3.1</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.kordamp.ikonli/ikonli-material2-pack -->
-        <dependency>
-            <groupId>org.kordamp.ikonli</groupId>
-            <artifactId>ikonli-material2-pack</artifactId>
-            <version>12.4.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.kordamp.ikonli/ikonli-materialdesign2-pack -->
-        <dependency>
-            <groupId>org.kordamp.ikonli</groupId>
-            <artifactId>ikonli-materialdesign2-pack</artifactId>
-            <version>12.4.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.kordamp.ikonli/ikonli-feather-pack -->
-        <dependency>
-            <groupId>org.kordamp.ikonli</groupId>
-            <artifactId>ikonli-feather-pack</artifactId>
-            <version>12.4.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/io.github.mkpaz/atlantafx-base -->
-        <dependency>
-            <groupId>io.github.mkpaz</groupId>
-            <artifactId>atlantafx-base</artifactId>
-            <version>2.1.0</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/org.fxmisc.richtext/richtextfx -->
-        <dependency>
-            <groupId>org.fxmisc.richtext</groupId>
-            <artifactId>richtextfx</artifactId>
-            <version>0.11.7</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.google.code.gson/gson -->
         <dependency>
@@ -162,12 +113,6 @@
             <artifactId>jna</artifactId>
             <version>5.18.1</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/net.java.dev.jna/jna-platform -->
-        <dependency>
-            <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna-platform</artifactId>
-            <version>5.18.1</version>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -175,43 +120,15 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-    <!-- mvn clean package -Ppackage -->
-    <profiles>
-        <profile>
-            <id>package</id>
-            <dependencies>
-                <dependency>
-                    <groupId>org.openjfx</groupId>
-                    <artifactId>javafx-graphics</artifactId>
-                    <version>${javafx.version}</version>
-                    <classifier>win</classifier>
-                </dependency>
-                <dependency>
-                    <groupId>org.openjfx</groupId>
-                    <artifactId>javafx-graphics</artifactId>
-                    <version>${javafx.version}</version>
-                    <classifier>linux</classifier>
-                </dependency>
-            </dependencies>
-        </profile>
-    </profiles>
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-maven-plugin</artifactId>
-                <version>0.0.8</version>
-                <configuration>
-                    <mainClass>com.queryexe.queryexe.Launcher</mainClass>
-                </configuration>
-            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <release>21</release>
+                    <release>25</release>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -225,6 +142,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+                <configuration>
+                    <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -240,7 +160,11 @@
                             <transformers>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.queryexe.queryexe.Launcher</mainClass>
+                                    <mainClass>com.queryexe.Launcher</mainClass>
+                                    <manifestEntries>
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                        <Multi-Release>true</Multi-Release>
+                                    </manifestEntries>
                                 </transformer>
                                 <transformer
                                         implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
@@ -259,11 +183,38 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <executable>${java.home}/bin/java</executable>
+                    <arguments>
+                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                        <argument>-Dqueryexe.dev=${queryexe.dev}</argument>
+                        <argument>-Dqueryexe.data=${queryexe.data}</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>com.queryexe.Launcher</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
         </plugins>
         <resources>
+            <!-- Only app.properties is filtered: the built UI in ui/ must reach the jar byte for byte. -->
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
+                <includes>
+                    <include>app.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>app.properties</exclude>
+                </excludes>
             </resource>
         </resources>
     </build>

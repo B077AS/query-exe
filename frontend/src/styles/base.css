@@ -1,0 +1,25 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+#app { border-top: 1px solid var(--border); }
+body {
+  font: 13px/1.45 var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+button, input, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+input, textarea, .selectable { user-select: text; }
+h1, h2, h3, p { margin: 0; }
+svg { flex: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* thin, flat scrollbars (WebView2 and WebKitGTK both honour these) */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }

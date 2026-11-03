@@ -38,3 +38,10 @@ build/
 /data/
 /dependency-reduced-pom.xml
 /CLAUDE.md
+/frontend/node_modules/
+
+### Frontend ###
+frontend/node_modules/
+src/main/resources/ui/
+vite.log
+/docs/
