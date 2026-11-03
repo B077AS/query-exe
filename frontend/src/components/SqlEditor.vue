@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
+import {
+  acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap, type Completion, type CompletionContext, type CompletionResult,
+} from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab, selectAll as cmSelectAll, toggleComment } from '@codemirror/commands';
 import { MariaSQL, MSSQL, MySQL, PostgreSQL, SQLite, StandardSQL, sql } from '@codemirror/lang-sql';
 import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from '@codemirror/language';
@@ -39,6 +41,47 @@ const dialects = { PostgreSQL, MySQL, MariaDB: MariaSQL, SQLServer: MSSQL, SQLit
 function languageFor(): ReturnType<typeof sql> {
   const dialect = dialects[props.engine as keyof typeof dialects] ?? StandardSQL;
   return sql({ dialect, schema: props.schema, upperCaseKeywords: true });
+}
+
+/** An identifier written the way the engine wants it when a plain name would not do (spaces, capitals on PostgreSQL, ...). */
+function quoted(name: string): string {
+  const plain = props.engine === 'PostgreSQL' ? /^[a-z_][a-z\d_$]*$/ : /^[A-Za-z_][\w$]*$/;
+  if (plain.test(name)) return name;
+  if (props.engine === 'MySQL' || props.engine === 'MariaDB') return '`' + name.replace(/`/g, '``') + '`';
+  if (props.engine === 'SQLServer') return '[' + name.replace(/]/g, ']]') + ']';
+  return '"' + name.replace(/"/g, '""') + '"';
+}
+
+const TABLE_REF = /\b(?:from|join|update|into)\s+((?:(?:[`"]|\[)?[\w$]+(?:[`"]|\])?\.)*(?:[`"]|\[)?[\w$]+(?:[`"]|\])?)/gi;
+
+/**
+ * Columns of the tables the statement around the caret reads or writes (FROM, JOIN, UPDATE, INSERT INTO), offered wherever a
+ * column fits: the SELECT list, WHERE, ON, ORDER BY... The SQL language alone only completes columns after `table.` or `alias.`.
+ */
+function columnSource(context: CompletionContext): CompletionResult | null {
+  const word = context.matchBefore(/[\w$]*/);
+  if (!word || (word.from === word.to && !context.explicit)) return null;
+  const doc = context.state.doc.toString();
+  const start = word.from === 0 ? 0 : doc.lastIndexOf(';', word.from - 1) + 1;
+  const semicolon = doc.indexOf(';', word.to);
+  const statement = doc.slice(start, semicolon < 0 ? doc.length : semicolon);
+  const before = doc.slice(start, word.from);
+  // after a dot the language completes the qualified name; after FROM/JOIN/INTO/UPDATE a table is wanted, not a column
+  if (/\.\s*$/.test(before) || /\b(?:from|join|into|update|table)\s+$/i.test(before)) return null;
+
+  const schema = props.schema;
+  const keys = Object.keys(schema);
+  const options: Completion[] = [];
+  const seen = new Set<string>();
+  for (const match of statement.matchAll(TABLE_REF)) {
+    const ref = match[1].replace(/[`"[\]]/g, '').toLowerCase();
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    const key = keys.find((k) => k.toLowerCase() === ref) ?? keys.find((k) => k.toLowerCase().endsWith('.' + ref.split('.').pop()!));
+    if (!key) continue;
+    for (const column of schema[key]) options.push({ label: column, apply: quoted(column), type: 'property', detail: key.split('.').pop(), boost: 2 });
+  }
+  return options.length > 0 ? { from: word.from, options, validFor: /^[\w$]*$/ } : null;
 }
 
 const setError = StateEffect.define<{ from: number; to: number } | null>();
@@ -241,9 +284,12 @@ onMounted(() => {
         search({ top: true, createPanel: () => ({ dom: Object.assign(document.createElement('div'), { hidden: true }) }) }),
         syntaxHighlighting(highlight), theme, errorField,
         language.of(languageFor()),
+        EditorState.languageData.of(() => [{ autocomplete: columnSource }]),
         wrapping.of(props.wordWrap ? EditorView.lineWrapping : []),
         sizing.of(EditorView.theme({ '.cm-scroller': { fontSize: props.fontSize + 'px' } })),
         keymap.of([
+          // Tab takes the highlighted suggestion (the first one when the list opens); with no list open it indents as before
+          { key: 'Tab', run: acceptCompletion },
           { key: 'Mod-Enter', run: () => (emit('run', request('auto')), true) },
           { key: 'Mod-Shift-Enter', run: () => (emit('run', request('statement')), true) },
           { key: 'Mod-s', run: () => (emit('save'), true) },
