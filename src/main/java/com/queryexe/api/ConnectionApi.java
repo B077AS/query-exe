@@ -57,7 +57,13 @@ final class ConnectionApi {
     void register(Rpc rpc) {
         rpc.on("connections.types", p -> types());
         rpc.on("connections.list", p -> list());
-        rpc.on("connections.get", p -> describe(load(Params.string(p, "id"))));
+        rpc.on("connections.get", p -> {
+            // the edit dialog is the only place that sees the stored password; the list never carries it
+            ConnectionObject c = load(Params.string(p, "id"));
+            Map<String, Object> out = describe(c);
+            out.put("password", c.getPassword() == null ? "" : c.getPassword());
+            return out;
+        });
         rpc.on("connections.save", this::save);
         rpc.on("connections.test", this::test);
         rpc.on("connections.delete", p -> {

@@ -111,6 +111,19 @@ public abstract class ConnectionObject {
         return new java.util.LinkedHashMap<>();
     }
 
+    /**
+     * Partitions of the tables of a database/schema, by table name (only partitioned tables appear). One catalog
+     * query per container. Engines without partitions return nothing.
+     */
+    public java.util.Map<String, java.util.List<com.queryexe.model.data.PartitionData>> getPartitions(String databaseName) {
+        return new java.util.LinkedHashMap<>();
+    }
+
+    /** True when the engine's partitions are tables of their own (PostgreSQL), so the tree nests them instead of listing them twice. */
+    public boolean partitionsAreTables() {
+        return false;
+    }
+
     public String quoteIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }

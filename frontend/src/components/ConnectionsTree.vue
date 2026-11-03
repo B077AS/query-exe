@@ -3,7 +3,7 @@ import {
   mdiChevronDown, mdiChevronRight, mdiCodeBraces, mdiCollapseAllOutline, mdiContentCopy, mdiDatabase, mdiDatabaseOutline, mdiDatabasePlusOutline,
   mdiDeleteOutline, mdiFlashOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiFormatListNumbered, mdiInformationOutline, mdiKeyVariant, mdiLanConnect,
   mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable,
-  mdiTableColumn, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline,
+  mdiTableColumn, mdiViewAgendaOutline, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline,
 } from '@mdi/js';
 import {
   ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -22,7 +22,7 @@ import {
 import { confirm, engineBadge, fail, prefs, toast } from '../ui';
 import Icon from './Icon.vue';
 
-type Kind = 'folder' | 'connection' | 'database' | 'container' | 'tables' | 'table' | 'column' | 'group' | 'object';
+type Kind = 'folder' | 'connection' | 'database' | 'container' | 'tables' | 'table' | 'column' | 'group' | 'object' | 'partition';
 interface Node {
   id: string;
   kind: Kind;
@@ -94,12 +94,41 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
     if (open(tid)) {
       for (const t of tables) {
         const id = `tb:${cid}:${c.name}:${t.name}`;
-        out.push({ id, kind: 'table', label: t.name, depth: d + 2, connectionId: cid, container: c.name, table: t.name, icon: mdiTable, hasChildren: t.columns.length > 0 });
-        if (expanded.has(id) || (q !== '' && t.columns.some((col) => col.name.toLowerCase().includes(q)) && !t.name.toLowerCase().includes(q))) {
+        out.push({ id, kind: 'table', label: t.name, depth: d + 2, connectionId: cid, container: c.name, table: t.name, icon: mdiTable,
+          hasChildren: t.columns.length > 0 || t.partitions.length > 0 });
+        const columnMatch = q !== '' && t.columns.some((col) => col.name.toLowerCase().includes(q)) && !t.name.toLowerCase().includes(q);
+        if (!(expanded.has(id) || columnMatch)) continue;
+        const columnNodes = (depth: number): void => {
           for (const col of t.columns) {
-            out.push({ id: `${id}:${col.name}`, kind: 'column', label: col.name, depth: d + 3, connectionId: cid, container: c.name, table: t.name,
+            out.push({ id: `${id}:${col.name}`, kind: 'column', label: col.name, depth, connectionId: cid, container: c.name, table: t.name,
               icon: col.primaryKey ? mdiKeyVariant : mdiTableColumn, meta: col.type, pk: col.primaryKey, hasChildren: false });
           }
+        };
+        if (t.partitions.length === 0) {
+          columnNodes(d + 3);
+          continue;
+        }
+        // a partitioned table keeps its columns and its partitions in two subtrees
+        const colsId = `${id}:#columns`;
+        out.push({ id: colsId, kind: 'group', label: 'Columns', depth: d + 3, connectionId: cid, container: c.name, table: t.name, icon: mdiTableColumn,
+          hasChildren: t.columns.length > 0, meta: String(t.columns.length) });
+        if (expanded.has(colsId) || columnMatch) columnNodes(d + 4);
+        const pid = `${id}:#partitions`;
+        const method = t.partitions.find((p) => p.method)?.method;
+        out.push({ id: pid, kind: 'group', label: 'Partitions', depth: d + 3, connectionId: cid, container: c.name, table: t.name, icon: mdiViewAgendaOutline,
+          hasChildren: true, meta: (method ? method + ' · ' : '') + t.partitions.filter((p) => !p.parent).length });
+        if (expanded.has(pid)) {
+          // Java leaves a missing parent out of the JSON, so "no parent" is undefined here, not null
+          const add = (parent: string | null, depth: number): void => {
+            for (const p of t.partitions.filter((x) => (x.parent ?? null) === parent)) {
+              const subs = t.partitions.some((x) => x.parent === p.name);
+              const partId = `${pid}:${p.name}`;
+              out.push({ id: partId, kind: 'partition', label: p.name, depth, connectionId: cid, container: c.name, table: p.table ? p.name : t.name, icon: mdiViewAgendaOutline,
+                hasChildren: subs, meta: p.rows != null ? p.rows.toLocaleString() + ' rows' : undefined });
+              if (subs && expanded.has(partId)) add(p.name, depth + 1);
+            }
+          };
+          add(null, d + 4);
         }
       }
     }
@@ -180,12 +209,10 @@ function toggle(n: Node): void {
 const sessionOf = (n: Node): Session | undefined => (n.connectionId ? app.sessions[n.connectionId] : undefined);
 const infoOf = (n: Node): ConnectionInfo | undefined => app.connections.find((c) => c.id === n.connectionId);
 
-/** One click selects. Selecting a database or schema also makes it the one queries run in; nothing expands. */
+/** One click only selects; nothing expands. A database or schema becomes the one queries run in through "Use". */
 function click(n: Node): void {
   selected.value = n.id;
   if (n.connectionId) app.selected = n.connectionId;
-  const session = sessionOf(n);
-  if (n.kind === 'container' && session && session.current !== n.container) void selectContainer(session, n.container!);
 }
 
 async function openConnection(c: ConnectionInfo): Promise<void> {
@@ -304,7 +331,7 @@ const working = computed(() => currentSession());
       </div>
       <ContextMenuRoot v-for="n in nodes" :key="n.id">
         <ContextMenuTrigger as-child>
-          <div class="node" :class="{ sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim }" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
+          <div class="node" :class="{ sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
             :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n)" @dblclick="dbl(n)" @contextmenu="click(n)">
             <button class="chev" tabindex="-1" @click.stop="toggle(n)">
               <Icon v-if="n.hasChildren" :path="isOpen(n) ? mdiChevronDown : mdiChevronRight" :size="16" />
@@ -375,17 +402,20 @@ const working = computed(() => currentSession());
             <ContextMenuItem class="menu-item" @select="copyText(n.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
           </ContextMenuContent>
           <ContextMenuContent v-else-if="n.kind === 'container' || n.kind === 'tables'" class="menu">
-            <ContextMenuItem class="menu-item" @select="selectContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiPlay" /> Use</ContextMenuItem>
+            <ContextMenuItem v-if="n.kind === 'container'" class="menu-item" @select="selectContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiPlay" /> Use</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: n.connectionId!, container: n.container! }"><Icon :path="mdiTablePlus" /> New table</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="refreshContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="copyText(n.container!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
-            <template v-if="n.kind === 'container' && sessionOf(n)?.info.type !== 'SQLite'">
-              <ContextMenuSeparator class="menu-sep" />
-              <ContextMenuItem class="menu-item danger" @select="dropContainer(n)"><Icon :path="mdiDeleteOutline" /> Drop {{ isSchema(sessionOf(n)) ? 'schema' : 'database' }}</ContextMenuItem>
+            <template v-if="n.kind === 'container'">
+              <ContextMenuItem class="menu-item" @select="copyText(n.container!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+              <template v-if="sessionOf(n)?.info.type !== 'SQLite'">
+                <ContextMenuSeparator class="menu-sep" />
+                <ContextMenuItem class="menu-item danger" @select="dropContainer(n)"><Icon :path="mdiDeleteOutline" /> Drop {{ isSchema(sessionOf(n)) ? 'schema' : 'database' }}</ContextMenuItem>
+              </template>
             </template>
           </ContextMenuContent>
-          <ContextMenuContent v-else-if="n.kind === 'object' || n.kind === 'group'" class="menu">
-            <ContextMenuItem class="menu-item" @select="copyText(n.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+          <!-- a partition is only worth a menu where it is a table of its own; the label nodes (groups, objects) have none -->
+          <ContextMenuContent v-else-if="n.kind === 'partition' && sessionOf(n)?.info.type === 'PostgreSQL'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiPlay" /> Open (SELECT *)</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenuPortal>
       </ContextMenuRoot>
@@ -413,6 +443,10 @@ const working = computed(() => currentSession());
 .node.dim .badge { background: var(--bg-hover); color: var(--text-3); }
 .focus-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node.bold .label { font-weight: 600; }
+/* the database/schema queries run in: tinted row and accent icon, without the bar an open connection has */
+.node.current { background: var(--accent-tint); }
+.node.current:hover, .node.current.sel { background: var(--accent-tint-strong); }
+.node.current .ic, .node.current .label { color: var(--accent); }
 .chev { width: 16px; height: 16px; display: grid; place-items: center; color: var(--text-3); flex: none; }
 .ic { color: var(--text-2); }
 .swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }

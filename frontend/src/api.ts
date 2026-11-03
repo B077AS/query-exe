@@ -60,9 +60,20 @@ export interface TreeColumn {
   notNull: boolean;
   autoIncrement: boolean;
 }
+export interface TreePartition {
+  name: string;
+  /** The partition this is a sub-partition of; null for a partition of the table. */
+  parent: string | null;
+  method: string | null;
+  bound: string | null;
+  rows: number | null;
+  /** A table of its own (PostgreSQL): can be opened like one. */
+  table: boolean;
+}
 export interface TreeTable {
   name: string;
   columns: TreeColumn[];
+  partitions: TreePartition[];
 }
 export interface TreeGroup {
   title: string;
@@ -239,7 +250,7 @@ export const api = {
   types: () => call<EngineType[]>('connections.types'),
   connections: () => call<ConnectionInfo[]>('connections.list'),
   connectionStatus: () => call<{ id: string; alive: boolean; sessions: number }[]>('connections.status'),
-  connection: (id: string) => call<ConnectionInfo>('connections.get', { id }),
+  connection: (id: string) => call<ConnectionInfo & { password: string }>('connections.get', { id }),
   saveConnection: (form: ConnectionForm) => call<{ id: string }>('connections.save', { ...form }),
   testConnection: (form: ConnectionForm) => call<{ ok: boolean }>('connections.test', { ...form }),
   deleteConnection: (id: string) => call<{ ok: boolean }>('connections.delete', { id }),

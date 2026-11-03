@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiCheck, mdiCogOutline, mdiPowerPlugOutline, mdiChevronDown, mdiDownload, mdiFolderOpenOutline, mdiLightningBolt, mdiRestore } from '@mdi/js';
+import { mdiCheck, mdiEyeOffOutline, mdiEyeOutline, mdiCogOutline, mdiPowerPlugOutline, mdiChevronDown, mdiDownload, mdiFolderOpenOutline, mdiLightningBolt, mdiRestore } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { api, type ConnectionForm, type DriverInfo } from '../api';
@@ -18,6 +18,7 @@ const form = reactive<ConnectionForm>({
 });
 const useUrl = ref(false);
 const hadPassword = ref(false);
+const showPassword = ref(false);
 const tab = ref<'general' | 'driver'>('general');
 const pages = [
   { key: 'general' as const, label: 'General', icon: mdiCogOutline },
@@ -51,7 +52,7 @@ onMounted(async () => {
     const info = await api.connection(props.id);
     Object.assign(form, {
       id: info.id, name: info.name, type: info.type, host: info.host ?? 'localhost', port: info.port ?? '', database: info.database ?? '',
-      username: info.username ?? '', url: info.url ?? '', driver: info.driver, savePassword: info.hasPassword || info.type === 'SQLite',
+      username: info.username ?? '', password: info.password ?? '', url: info.url ?? '', driver: info.driver, savePassword: info.hasPassword || info.type === 'SQLite',
     });
     hadPassword.value = info.hasPassword;
     useUrl.value = !!info.url && !fileBased.value;
@@ -237,8 +238,13 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
         <div class="field"><label>User</label><input v-model="form.username" class="input" autocomplete="off" /></div>
         <div class="field">
           <label>Password</label>
-          <input v-model="form.password" class="input" type="password" autocomplete="new-password"
-            :placeholder="editing && hadPassword ? 'Saved — leave empty to keep' : ''" />
+          <div class="pw">
+            <input v-model="form.password" class="input" :type="showPassword ? 'text' : 'password'" autocomplete="new-password"
+              :placeholder="editing && hadPassword ? 'Saved — leave empty to keep' : ''" />
+            <button type="button" class="ib sm pw-eye" tabindex="-1" :title="showPassword ? 'Hide password' : 'Show password'" @click="showPassword = !showPassword">
+              <Icon :path="showPassword ? mdiEyeOffOutline : mdiEyeOutline" :size="16" />
+            </button>
+          </div>
         </div>
       </div>
       <label v-if="hasCredentials" class="check-row" @click.prevent="form.savePassword = !form.savePassword">
@@ -292,6 +298,9 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
 </template>
 
 <style scoped>
+.pw { position: relative; display: flex; }
+.pw .input { flex: 1; padding-right: 32px; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
 .drv { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
 .drv > div:first-child { flex: 1; min-width: 0; }
 /* the same rail and page as the Settings window */

@@ -17,6 +17,7 @@ import java.util.Set;
 import com.queryexe.model.data.RowTarget;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.model.data.PartitionData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
@@ -188,6 +189,32 @@ public class SQLServerConnection extends ConnectionObject {
         stmt.close();
 
         return columns;
+    }
+
+    @Override
+    public Map<String, List<PartitionData>> getPartitions(String databaseName) {
+        // tables whose clustered index (or heap) sits on a partition scheme
+        String db = quoteIdentifier(databaseName);
+        String sql = "SELECT t.name, p.partition_number, p.rows, CAST(rv.value AS nvarchar(200)), f.boundary_value_on_right"
+                + " FROM " + db + ".sys.tables t"
+                + " JOIN " + db + ".sys.indexes i ON i.object_id = t.object_id AND i.index_id IN (0, 1)"
+                + " JOIN " + db + ".sys.partition_schemes ps ON ps.data_space_id = i.data_space_id"
+                + " JOIN " + db + ".sys.partition_functions f ON f.function_id = ps.function_id"
+                + " JOIN " + db + ".sys.partitions p ON p.object_id = t.object_id AND p.index_id = i.index_id"
+                + " LEFT JOIN " + db + ".sys.partition_range_values rv ON rv.function_id = f.function_id AND rv.boundary_id = p.partition_number"
+                + " ORDER BY t.name, p.partition_number";
+        Map<String, List<PartitionData>> out = new LinkedHashMap<>();
+        try (PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql);
+             ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                String upper = rs.getString(4);
+                String bound = upper == null ? "MAXVALUE" : (rs.getBoolean(5) ? "< " : "<= ") + upper;
+                out.computeIfAbsent(rs.getString(1), k -> new ArrayList<>()).add(new PartitionData("Partition " + rs.getInt(2), null, "RANGE", bound, rs.getLong(3)));
+            }
+        } catch (SQLException e) {
+            log.warn("Could not list the partitions of {}: {}", databaseName, e.getMessage());
+        }
+        return out;
     }
 
     @Override

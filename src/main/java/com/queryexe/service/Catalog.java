@@ -2,9 +2,11 @@ package com.queryexe.service;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -12,6 +14,7 @@ import com.queryexe.model.connections.ConnectionObject;
 import com.queryexe.model.connections.ConnectionTypes;
 import com.queryexe.model.connections.PostgresConnection;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.model.data.PartitionData;
 import com.queryexe.utils.SqlInspector;
 
 import lombok.Value;
@@ -46,9 +49,33 @@ public final class Catalog {
     }
 
     @Value
+    public static class Partition {
+        String name;
+        /** The partition this is a sub-partition of; null for a partition of the table. */
+        String parent;
+        String method;
+        String bound;
+        Long rows;
+        /** True when the partition is a table of its own (PostgreSQL), so the page can open it like one. */
+        boolean table;
+    }
+
+    @Value
     public static class Table {
         String name;
         List<Column> columns;
+        /** Empty for tables that are not partitioned. */
+        List<Partition> partitions;
+
+        public Table(String name, List<Column> columns) {
+            this(name, columns, List.of());
+        }
+
+        public Table(String name, List<Column> columns, List<Partition> partitions) {
+            this.name = name;
+            this.columns = columns;
+            this.partitions = partitions;
+        }
     }
 
     @Value
@@ -161,7 +188,17 @@ public final class Catalog {
         Map<String, ArrayList<ColumnData>> map = connection.getAllTablesAndColumns(name);
         List<Table> tables = new ArrayList<>();
         if (map != null) {
-            map.forEach((table, columns) -> tables.add(new Table(table, columns(columns))));
+            Map<String, List<PartitionData>> partitions = connection.getPartitions(name);
+            boolean nested = connection.partitionsAreTables();
+            Set<String> hidden = new HashSet<>();
+            if (nested) {
+                partitions.values().forEach(list -> list.forEach(p -> hidden.add(p.getName())));
+            }
+            map.forEach((table, columns) -> {
+                if (!hidden.contains(table)) {
+                    tables.add(new Table(table, columns(columns), partitionsOf(partitions.get(table), nested)));
+                }
+            });
         }
         List<Group> groups = new ArrayList<>();
         Map<String, List<String>> objects = connection.getSchemaObjects(name);
@@ -169,6 +206,16 @@ public final class Catalog {
             objects.forEach((title, items) -> groups.add(new Group(title, items)));
         }
         return new Container(name, kind, parent, tables, groups);
+    }
+
+    private static List<Partition> partitionsOf(List<PartitionData> data, boolean table) {
+        List<Partition> out = new ArrayList<>();
+        if (data != null) {
+            for (PartitionData p : data) {
+                out.add(new Partition(p.getName(), p.getParent(), p.getMethod(), p.getBound(), p.getRows(), table));
+            }
+        }
+        return out;
     }
 
     private static List<Column> columns(List<ColumnData> data) {

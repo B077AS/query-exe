@@ -13,6 +13,7 @@ import java.util.*;
 import com.queryexe.model.data.RowTarget;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.model.data.PartitionData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
@@ -57,6 +58,52 @@ public class MySQLConnection extends ConnectionObject {
             log.error("getAllTablesAndColumns failed", e);
         }
         return null;
+    }
+
+    @Override
+    public Map<String, List<PartitionData>> getPartitions(String name) {
+        String sql = """
+                SELECT TABLE_NAME, PARTITION_NAME, SUBPARTITION_NAME, PARTITION_METHOD, SUBPARTITION_METHOD,
+                       PARTITION_DESCRIPTION, TABLE_ROWS
+                FROM information_schema.PARTITIONS
+                WHERE TABLE_SCHEMA = ? AND PARTITION_NAME IS NOT NULL
+                ORDER BY TABLE_NAME, PARTITION_ORDINAL_POSITION, SUBPARTITION_ORDINAL_POSITION
+                """;
+        Map<String, List<PartitionData>> out = new LinkedHashMap<>();
+        try (PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql)) {
+            statement.setString(1, name);
+            try (ResultSet rs = statement.executeQuery()) {
+                String lastTable = null;
+                String lastPartition = null;
+                while (rs.next()) {
+                    String table = rs.getString(1);
+                    String partition = rs.getString(2);
+                    String sub = rs.getString(3);
+                    String method = rs.getString(4);
+                    String description = rs.getString(6);
+                    long rows = rs.getLong(7);
+                    Long count = rs.wasNull() ? null : rows;
+                    List<PartitionData> list = out.computeIfAbsent(table, k -> new ArrayList<>());
+                    // a sub-partitioned table has one row per sub-partition: emit the partition once
+                    if (!table.equals(lastTable) || !partition.equals(lastPartition)) {
+                        String bound = null;
+                        if (method != null && description != null) {
+                            String m = method.toUpperCase();
+                            bound = m.startsWith("RANGE") ? "< " + description : m.startsWith("LIST") ? "IN (" + description + ")" : null;
+                        }
+                        list.add(new PartitionData(partition, null, method, bound, sub == null ? count : null));
+                    }
+                    if (sub != null) {
+                        list.add(new PartitionData(sub, partition, rs.getString(5), null, count));
+                    }
+                    lastTable = table;
+                    lastPartition = partition;
+                }
+            }
+        } catch (SQLException e) {
+            log.warn("Could not list the partitions of {}: {}", name, e.getMessage());
+        }
+        return out;
     }
 
     @Override

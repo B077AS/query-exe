@@ -8,6 +8,7 @@ import java.util.*;
 import com.queryexe.model.data.RowTarget;
 import com.queryexe.model.data.DetailedColumnData;
 import com.queryexe.model.data.ColumnData;
+import com.queryexe.model.data.PartitionData;
 import com.queryexe.service.DatabaseConnection;
 import com.queryexe.model.drivers.DriverInfo;
 import com.queryexe.model.data.ForeignKeyData;
@@ -129,6 +130,52 @@ public class PostgresConnection extends ConnectionObject {
             log.error("getAllTablesAndColumns failed", e);
         }
         return null;
+    }
+
+    @Override
+    public Map<String, List<PartitionData>> getPartitions(String schemaName) {
+        // declarative partitions are child tables, found through pg_inherits
+        String sql = """
+                SELECT p.relname, c.relname, pg_get_expr(c.relpartbound, c.oid), pt.partstrat, c.reltuples::bigint
+                FROM pg_class c
+                JOIN pg_inherits i ON i.inhrelid = c.oid
+                JOIN pg_class p ON p.oid = i.inhparent
+                JOIN pg_namespace n ON n.oid = p.relnamespace AND n.oid = c.relnamespace
+                LEFT JOIN pg_partitioned_table pt ON pt.partrelid = p.oid
+                WHERE c.relispartition AND c.relkind IN ('r', 'p') AND n.nspname = ?
+                ORDER BY p.relname, c.relname
+                """;
+        Map<String, List<PartitionData>> out = new LinkedHashMap<>();
+        try (PreparedStatement statement = DatabaseConnection.getInstance().getConnection().prepareStatement(sql)) {
+            statement.setString(1, schemaName);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    long rows = rs.getLong(5);
+                    Long count = rs.wasNull() || rows < 0 ? null : rows; // reltuples is -1 until the first ANALYZE
+                    String method = switch (String.valueOf(rs.getString(4))) {
+                        case "r" -> "RANGE";
+                        case "l" -> "LIST";
+                        case "h" -> "HASH";
+                        default -> null;
+                    };
+                    String bound = rs.getString(3);
+                    if (bound != null) {
+                        // FOR VALUES FROM (1) TO (10) -> 1 .. 10; other forms only lose their FOR VALUES prefix
+                        bound = bound.replaceFirst("^FOR VALUES ", "").replaceFirst("^FROM \\((.*)\\) TO \\((.*)\\)$", "$1 .. $2");
+                    }
+                    out.computeIfAbsent(rs.getString(1), k -> new ArrayList<>())
+                            .add(new PartitionData(rs.getString(2), null, method, bound, count));
+                }
+            }
+        } catch (SQLException e) {
+            log.warn("Could not list the partitions of {}: {}", schemaName, e.getMessage());
+        }
+        return out;
+    }
+
+    @Override
+    public boolean partitionsAreTables() {
+        return true;
     }
 
     @Override
