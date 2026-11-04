@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 508 508">
   <title>QueryExe</title>
-  <rect width="36" height="36" rx="4.8" fill="#4a5565"/>
-  <g transform="translate(6 6)" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="508" height="508" rx="30" fill="#4a5666"/>
+  <g transform="translate(54.5 54.5) scale(16.625)" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
     <ellipse cx="12" cy="5" rx="9" ry="3"/>
     <path d="M3 5V19A9 3 0 0 0 15 21.84"/>
     <path d="M21 5V8"/>

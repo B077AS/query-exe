@@ -5,10 +5,11 @@ withDefaults(defineProps<{ size?: number; bare?: boolean }>(), { size: 24, bare:
 </script>
 
 <template>
-  <!-- the bare view is cropped to the glyph (it sits at 6..30 of the 36 box, plus half the stroke) -->
-  <svg class="logo" :width="size" :height="size" :viewBox="bare ? '5 5 26 26' : '0 0 36 36'" shape-rendering="geometricPrecision" aria-hidden="true">
-    <rect v-if="!bare" width="36" height="36" rx="4.8" fill="#4a5565" />
-    <g transform="translate(6 6)" fill="none" :stroke="bare ? undefined : '#fff'" :class="{ accent: bare }" :stroke-width="bare ? 1.7 : 2.3" stroke-linecap="round" stroke-linejoin="round">
+  <!-- The tile view is the icon's own 508 unit canvas. The bare view is cropped to the glyph (a 24 unit box at 54.5 on that
+       canvas, drawn 16.625 times larger) plus one glyph unit of room for the stroke on every side. -->
+  <svg class="logo" :width="size" :height="size" :viewBox="bare ? '37.9 37.9 432.2 432.2' : '0 0 508 508'" shape-rendering="geometricPrecision" aria-hidden="true">
+    <rect v-if="!bare" width="508" height="508" rx="30" fill="#4a5666" />
+    <g transform="translate(54.5 54.5) scale(16.625)" fill="none" :stroke="bare ? undefined : '#fff'" :class="{ accent: bare }" :stroke-width="bare ? 1.7 : 2.3" stroke-linecap="round" stroke-linejoin="round">
       <ellipse cx="12" cy="5" rx="9" ry="3" />
       <path d="M3 5V19A9 3 0 0 0 15 21.84" />
       <path d="M21 5V8" />
