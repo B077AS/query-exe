@@ -23,10 +23,10 @@ const label = (i: number): string => {
   return it.kind === 'error' ? 'Error' : `Result ${i + 1}`;
 };
 const summary = computed(() => {
-  if (props.tab.running) return 'Running…';
-  if (!props.tab.ran) return '';
+  if (props.tab.running) return ['Running…'];
+  if (!props.tab.ran) return [];
   const n = props.tab.items.length;
-  return `${props.tab.lastOk ? 'Done' : 'Failed'} · ${n} result${n === 1 ? '' : 's'} · ${props.tab.lastMillis} ms`;
+  return [`${n} result${n === 1 ? '' : 's'}`, `Total ${props.tab.lastMillis} ms`];
 });
 </script>
 
@@ -39,7 +39,7 @@ const summary = computed(() => {
       </div>
       <span class="sp" />
       <span class="state" :class="{ ok: tab.ran && tab.lastOk, bad: tab.ran && !tab.lastOk }">
-        <Icon v-if="tab.running" :path="mdiLoading" :size="14" class="spin" />{{ summary }}
+        <Icon v-if="tab.running" :path="mdiLoading" :size="14" class="spin" /><template v-for="(part, i) in summary" :key="i"><i v-if="i" class="vsep" />{{ part }}</template>
       </span>
     </div>
 
@@ -49,7 +49,7 @@ const summary = computed(() => {
         <Icon :path="mdiCheckCircleOutline" :size="20" />
         <div>
           <div class="t">{{ item.count }} row{{ item.count === 1 ? '' : 's' }} affected</div>
-          <div class="hint">{{ item.millis }} ms</div>
+          <div class="hint">Query {{ item.millis }} ms</div>
           <pre class="sql selectable mono">{{ item.sql }}</pre>
         </div>
       </div>

@@ -7,7 +7,6 @@ import { errorText, fail, toast } from '../ui';
 import AppDialog from './AppDialog.vue';
 import Icon from './Icon.vue';
 import Pick from './Pick.vue';
-import Seg from './Seg.vue';
 import TypeInput from './TypeInput.vue';
 
 const props = defineProps<{ connectionId: string; container: string; table?: string }>();
@@ -172,63 +171,69 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <AppDialog :title="editing ? 'Edit table' : 'New table'" :width="1120" @close="dialogs.tableEditor = null">
+  <AppDialog :title="editing ? 'Edit table' : 'New table'" :width="1120" flush @close="dialogs.tableEditor = null">
     <template #icon><Icon :path="mdiTable" style="color: var(--accent)" /></template>
     <template #head><span class="pill">{{ container }}</span></template>
 
-    <template v-if="true">
-      <div class="row">
-        <div class="field"><label>Table name</label><input v-model="name" class="input mono" placeholder="table_name" autofocus /></div>
-        <Seg v-model="tab" style="align-self: flex-end" :options="views" />
-        <!-- A fixed-width slot, so the tabs stay put whether the button reads "Add column", "Add foreign key" or is hidden (SQL). -->
-        <div class="add">
+    <div class="editor">
+      <nav class="rail">
+        <button v-for="v in views" :key="v.value" class="rail-item" :class="{ on: tab === v.value }" @click="tab = v.value">
+          <Icon :path="v.icon" :size="18" />{{ v.label }}<span v-if="v.count !== undefined" class="count">{{ v.count }}</span>
+        </button>
+      </nav>
+
+      <div class="page">
+        <div class="field name"><label>Table name</label><input v-model="name" class="input mono" placeholder="table_name" autofocus /></div>
+
+        <div class="head">
+          <h3>{{ views.find((v) => v.value === tab)?.label }}</h3>
           <button v-if="tab === 'columns'" class="btn" @click="addColumn"><Icon :path="mdiPlus" /> Add column</button>
           <button v-else-if="tab === 'keys'" class="btn" @click="addFk"><Icon :path="mdiLinkVariantPlus" /> Add foreign key</button>
         </div>
-      </div>
 
-      <div v-show="tab === 'columns'" ref="colsEl" class="cols">
-        <table>
-          <thead><tr><th>Column</th><th style="width: 190px">Type</th><th class="c">PK</th><th class="c">Not null</th><th class="c">Unique</th><th class="c">Auto</th><th style="width: 130px">Default</th><th style="width: 32px" /></tr></thead>
-          <tbody>
-            <tr v-for="(c, i) in columns" :key="i">
-              <td><input v-model="c.name" class="input mono" placeholder="name" /></td>
-              <td><TypeInput v-model="c.type" :options="dataTypes" /></td>
-              <td class="c"><button class="chk" :class="{ on: c.primaryKey }" @click="c.primaryKey = !c.primaryKey; if (c.primaryKey) c.notNull = true"><Icon v-if="c.primaryKey" :path="mdiCheck" :size="11" /></button></td>
-              <td class="c"><button class="chk" :class="{ on: c.notNull }" :disabled="c.primaryKey" @click="c.notNull = !c.notNull"><Icon v-if="c.notNull" :path="mdiCheck" :size="11" /></button></td>
-              <td class="c"><button class="chk" :class="{ on: c.unique }" @click="c.unique = !c.unique"><Icon v-if="c.unique" :path="mdiCheck" :size="11" /></button></td>
-              <td class="c"><button class="chk" :class="{ on: c.autoIncrement }" @click="c.autoIncrement = !c.autoIncrement"><Icon v-if="c.autoIncrement" :path="mdiCheck" :size="11" /></button></td>
-              <td><input v-model="c.defaultValue" class="input mono" placeholder="—" /></td>
-              <td><button class="ib sm" title="Remove column" @click="removeColumn(i)"><Icon :path="mdiDeleteOutline" /></button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div v-show="tab === 'columns'" ref="colsEl" class="cols">
+          <table>
+            <thead><tr><th>Column</th><th style="width: 190px">Type</th><th class="c">PK</th><th class="c">Not null</th><th class="c">Unique</th><th class="c">Auto</th><th style="width: 130px">Default</th><th style="width: 32px" /></tr></thead>
+            <tbody>
+              <tr v-for="(c, i) in columns" :key="i">
+                <td><input v-model="c.name" class="input mono" placeholder="name" /></td>
+                <td><TypeInput v-model="c.type" :options="dataTypes" /></td>
+                <td class="c"><button class="chk" :class="{ on: c.primaryKey }" @click="c.primaryKey = !c.primaryKey; if (c.primaryKey) c.notNull = true"><Icon v-if="c.primaryKey" :path="mdiCheck" :size="11" /></button></td>
+                <td class="c"><button class="chk" :class="{ on: c.notNull }" :disabled="c.primaryKey" @click="c.notNull = !c.notNull"><Icon v-if="c.notNull" :path="mdiCheck" :size="11" /></button></td>
+                <td class="c"><button class="chk" :class="{ on: c.unique }" @click="c.unique = !c.unique"><Icon v-if="c.unique" :path="mdiCheck" :size="11" /></button></td>
+                <td class="c"><button class="chk" :class="{ on: c.autoIncrement }" @click="c.autoIncrement = !c.autoIncrement"><Icon v-if="c.autoIncrement" :path="mdiCheck" :size="11" /></button></td>
+                <td><input v-model="c.defaultValue" class="input mono" placeholder="—" /></td>
+                <td><button class="ib sm" title="Remove column" @click="removeColumn(i)"><Icon :path="mdiDeleteOutline" /></button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      <div v-show="tab === 'keys'" class="cols">
-        <table v-if="fks.length">
-          <thead><tr><th>Name</th><th>Column</th><th>References</th><th>Column</th><th style="width: 120px">On delete</th><th style="width: 120px">On update</th><th style="width: 32px" /></tr></thead>
-          <tbody>
-            <tr v-for="(f, i) in fks" :key="i">
-              <td><input v-model="f.constraintName" class="input mono" :placeholder="`fk_${name || 'table'}_${f.localColumn || 'col'}`" /></td>
-              <td><Pick v-model="f.localColumn" :options="columnNames" /></td>
-              <td><Pick :model-value="f.referenceTable" :options="tables" @update:model-value="setRefTable(f, $event)" /></td>
-              <td><Pick v-model="f.referenceColumn" :options="refColumns[f.referenceTable] ?? []" :disabled="!f.referenceTable" /></td>
-              <td><Pick v-model="f.onDelete" :options="rules" /></td>
-              <td><Pick v-model="f.onUpdate" :options="rules" /></td>
-              <td><button class="ib sm" @click="fks.splice(i, 1)"><Icon :path="mdiDeleteOutline" /></button></td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-else class="empty">No foreign keys. Use “Add foreign key” above.</p>
-      </div>
+        <div v-show="tab === 'keys'" class="cols">
+          <table v-if="fks.length">
+            <thead><tr><th>Name</th><th>Column</th><th>References</th><th>Column</th><th style="width: 120px">On delete</th><th style="width: 120px">On update</th><th style="width: 32px" /></tr></thead>
+            <tbody>
+              <tr v-for="(f, i) in fks" :key="i">
+                <td><input v-model="f.constraintName" class="input mono" :placeholder="`fk_${name || 'table'}_${f.localColumn || 'col'}`" /></td>
+                <td><Pick v-model="f.localColumn" :options="columnNames" /></td>
+                <td><Pick :model-value="f.referenceTable" :options="tables" @update:model-value="setRefTable(f, $event)" /></td>
+                <td><Pick v-model="f.referenceColumn" :options="refColumns[f.referenceTable] ?? []" :disabled="!f.referenceTable" /></td>
+                <td><Pick v-model="f.onDelete" :options="rules" /></td>
+                <td><Pick v-model="f.onUpdate" :options="rules" /></td>
+                <td><button class="ib sm" @click="fks.splice(i, 1)"><Icon :path="mdiDeleteOutline" /></button></td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="empty">No foreign keys. Use “Add foreign key” above.</p>
+        </div>
 
-      <div v-show="tab === 'sql'" class="sqlbox">
-        <pre v-if="sqlText" class="selectable mono">{{ sqlText }}</pre>
-        <p v-else class="hint">{{ sqlNote }}</p>
+        <div v-show="tab === 'sql'" class="sqlbox">
+          <pre v-if="sqlText" class="selectable mono">{{ sqlText }}</pre>
+          <p v-else class="hint">{{ sqlNote }}</p>
+        </div>
+        <p v-if="editing && engine === 'SQLite'" class="hint">SQLite can only rename tables and columns, add nullable columns and drop columns in place.</p>
       </div>
-      <p v-if="editing && engine === 'SQLite'" class="hint">SQLite can only rename tables and columns, add nullable columns and drop columns in place.</p>
-    </template>
+    </div>
 
     <template #footer>
       <button class="btn" @click="dialogs.tableEditor = null">Cancel</button>
@@ -238,15 +243,20 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
-.add { align-self: flex-end; width: 150px; flex: none; height: 28px; }
-.add .btn { width: 100%; }
-.cols { border: 1px solid var(--border); border-radius: var(--radius); height: 340px; overflow: auto; }
+/* the same rail and page as the Settings and connection dialogs; the table name stays in the page, not the rail */
+.editor { display: grid; grid-template-columns: 190px 1fr; height: 560px; min-height: 0; }
+.page { padding: 22px 28px; min-width: 0; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.name { max-width: 360px; }
+.head { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.head h3 { flex: 1; font-size: 18px; font-weight: 600; margin: 0; }
+.count { margin-left: auto; font-size: 11px; color: var(--text-3); }
+.cols, .sqlbox { flex: 1; min-height: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
 th { text-align: left; font-weight: 600; font-size: 11.5px; color: var(--text-2); padding: 6px 6px; background: var(--bg-side); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1; }
 td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
 .c { text-align: center; width: 62px; }
 td.c .chk { cursor: pointer; }
 .chk:disabled { opacity: 0.5; }
-.sqlbox { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); padding: 10px; height: 340px; overflow: auto; }
+.sqlbox { background: var(--bg); padding: 10px; }
 pre { margin: 0; font-size: 12px; white-space: pre-wrap; user-select: text; }
 </style>

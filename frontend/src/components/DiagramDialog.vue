@@ -19,6 +19,7 @@ const ROW_H = 22;
 const PAD_Y = 6;
 const GAP_X = 90;
 const GAP_Y = 50;
+const STUB = 20;
 
 const pos = reactive<Record<string, { x: number; y: number }>>({});
 const view = reactive({ x: 20, y: 20, k: 1 });
@@ -129,11 +130,14 @@ const lines = computed<Line[]>(() => {
       const x2 = b.x + (sb > 0 ? CARD_W : 0);
       const y1 = rowY(r.from, fromColumn);
       const y2 = rowY(r.to, toColumn);
-      const reach = sa === sb ? 50 : Math.max(30, Math.min(120, Math.abs(x2 - x1) / 2));
-      const d = `M${x1},${y1} C${x1 + sa * reach},${y1} ${x2 + sb * reach},${y2} ${x2},${y2}`;
-      // crow's foot on the table holding the key, a bar on the referenced one
-      const childMark = `M${x1 + sa * 10},${y1 - 5} L${x1},${y1} L${x1 + sa * 10},${y1 + 5} M${x1 + sa * 10},${y1} L${x1},${y1}`;
-      const parentMark = `M${x2 + sb * 8},${y2 - 5} L${x2 + sb * 8},${y2 + 5}`;
+      // each end runs straight out of the card for STUB px (that is where the markers sit), then the curve joins the two stub ends
+      const s1x = x1 + sa * STUB;
+      const s2x = x2 + sb * STUB;
+      const reach = sa === sb ? 50 : Math.max(30, Math.min(120, Math.abs(s2x - s1x) / 2));
+      const d = `M${x1},${y1} L${s1x},${y1} C${s1x + sa * reach},${y1} ${s2x + sb * reach},${y2} ${s2x},${y2} L${x2},${y2}`;
+      // crow's foot on the table holding the key (toes on the card edge, joined on the line), a bar on the referenced one
+      const childMark = `M${x1},${y1 - 5} L${x1 + sa * 12},${y1} L${x1},${y1 + 5}`;
+      const parentMark = `M${x2 + sb * 9},${y2 - 5} L${x2 + sb * 9},${y2 + 5}`;
       out.push({ key: `${r.name}:${i}`, table: r.from, other: r.to, d, childMark, parentMark, name: `${r.from}.${fromColumn} → ${r.to}.${toColumn}` });
     });
   }
@@ -211,7 +215,7 @@ function wheel(e: WheelEvent): void {
     <template #icon><Icon :path="mdiGraphOutline" style="color: var(--accent)" /></template>
     <template #head>
       <span class="pill">{{ state.container }}</span>
-      <span v-if="data" class="pill">{{ data.tables.length }} tables · {{ data.relations.length }} relations</span>
+      <span v-if="data" class="pill">{{ data.tables.length }} tables<i class="vsep" />{{ data.relations.length }} relations</span>
     </template>
     <div class="bar">
       <input v-model="search" class="find" placeholder="Find a table…" spellcheck="false" />
@@ -248,7 +252,7 @@ function wheel(e: WheelEvent): void {
       </div>
     </div>
     <template #footer>
-      <span class="hint">Drag a table by its title · drag the background to pan · scroll to zoom</span>
+      <span class="hint">Drag a table by its title<i class="vsep" />drag the background to pan<i class="vsep" />scroll to zoom</span>
       <span class="sp" />
       <button class="btn primary" @click="dialogs.diagram = null">Close</button>
     </template>

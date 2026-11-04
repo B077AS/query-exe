@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   mdiCheck, mdiContentCopy, mdiContentDuplicate, mdiDeleteOutline, mdiExport, mdiEyeOutline, mdiKeyVariant, mdiPencilOutline, mdiPlus, mdiUndo, mdiCodeBraces,
-  mdiChevronRight, mdiLock,
+  mdiChevronRight, mdiLock, mdiSortAscending, mdiSortDescending, mdiArrowCollapseHorizontal, mdiCloseCircleOutline, mdiViewColumnOutline,
 } from '@mdi/js';
 import {
   ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -32,7 +32,29 @@ const editInput = ref<HTMLInputElement[] | HTMLInputElement>();
 const ctx = reactive({ row: -1, col: -1 });
 const busy = ref(false);
 
-const rows = computed(() => props.grid.rows);
+// Ordering is done here on the rows already loaded (at most the row limit), so it never re-runs the query.
+const sort = ref<{ col: number; dir: 'asc' | 'desc' } | null>(null);
+const menuKind = ref<'cell' | 'header'>('cell');
+const headerCol = ref(-1);
+
+const rows = computed(() => {
+  const source = props.grid.rows;
+  const s = sort.value;
+  if (!s) return source;
+  const numeric = props.grid.columns[s.col]?.numeric;
+  const sign = s.dir === 'asc' ? 1 : -1;
+  return [...source].sort((x, y) => {
+    const a = x.c[s.col];
+    const b = y.c[s.col];
+    if (a === b) return 0;
+    if (a === null) return 1; // NULLs always last
+    if (b === null) return -1;
+    const na = Number(a);
+    const nb = Number(b);
+    const r = numeric && !Number.isNaN(na) && !Number.isNaN(nb) ? na - nb : a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    return r * sign;
+  });
+});
 const columns = computed(() => props.grid.columns);
 const totalWidth = computed(() => GUTTER + widths.value.reduce((a, b) => a + b, 0));
 const start = computed(() => Math.max(0, Math.floor(scrollTop.value / ROW_HEIGHT) - OVERSCAN));
@@ -53,6 +75,7 @@ function initialWidths(): number[] {
 }
 
 watch(() => props.grid.id, () => {
+  sort.value = null;
   widths.value = initialWidths();
   selected.clear();
   Object.assign(active, { row: -1, col: -1 });
@@ -395,6 +418,44 @@ function onEditKey(event: KeyboardEvent): void {
   }
 }
 
+/** Decides, before the menu opens, what it is for: a cell, a column header, or nothing (empty space gets no menu). */
+function onContextIntent(event: MouseEvent): void {
+  const target = event.target as HTMLElement;
+  const head = target.closest<HTMLElement>('.hc[data-col]');
+  if (head) {
+    menuKind.value = 'header';
+    headerCol.value = Number(head.dataset.col);
+    return;
+  }
+  if (target.closest('.c')) {
+    menuKind.value = 'cell';
+    return;
+  }
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}
+
+function setSort(col: number, dir: 'asc' | 'desc' | null): void {
+  sort.value = dir ? { col, dir } : null;
+  // row positions changed: the old active cell would point at another row
+  Object.assign(active, { row: -1, col: -1 });
+  anchor.value = null;
+  if (scroller.value) scroller.value.scrollTop = 0;
+}
+
+const sortOf = (col: number): 'asc' | 'desc' | null => (sort.value?.col === col ? sort.value.dir : null);
+
+async function copyColumnName(): Promise<void> {
+  const column = columns.value[headerCol.value];
+  if (column) await writeClipboard(column.label, 'Column name');
+}
+
+async function copyColumnValues(): Promise<void> {
+  const col = headerCol.value;
+  if (col < 0 || rows.value.length === 0) return;
+  await writeClipboard(rows.value.map((r) => r.c[col] ?? 'NULL').join('\n'), `${rows.value.length.toLocaleString()} values`);
+}
+
 function onContext(index: number, col: number): void {
   ctx.row = index;
   ctx.col = col;
@@ -421,7 +482,7 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
       </template>
       <span v-else class="pill" :title="grid.table ? 'This table has no primary key.' : 'Not a single table: results can be read but not edited.'"><Icon :path="mdiLock" :size="12" /> Read-only</span>
       <span class="sp" />
-      <span class="hint count">{{ countLabel }}<template v-if="grid.table"> · {{ grid.table }}</template> · {{ grid.millis }} ms</span>
+      <span class="hint count">{{ countLabel }}<template v-if="grid.table"><i class="vsep" />{{ grid.table }}</template><i class="vsep" />Query {{ grid.millis }} ms</span>
       <DropdownMenuRoot>
         <DropdownMenuTrigger class="btn sm"><Icon :path="mdiExport" /> Export</DropdownMenuTrigger>
         <DropdownMenuPortal>
@@ -443,14 +504,15 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
 
     <ContextMenuRoot>
       <ContextMenuTrigger as-child>
-        <div ref="scroller" class="scroller" tabindex="0" @scroll="onScroll" @keydown="onKey">
+        <div ref="scroller" class="scroller" tabindex="0" @scroll="onScroll" @keydown="onKey" @contextmenu.capture="onContextIntent">
           <div class="canvas" :style="{ width: totalWidth + 'px', height: HEADER_HEIGHT + rows.length * ROW_HEIGHT + 'px' }">
             <div class="head" :style="{ height: HEADER_HEIGHT + 'px' }">
               <div class="hc gutter" :style="{ width: GUTTER + 'px' }">#</div>
-              <div v-for="(column, i) in columns" :key="i" class="hc" :style="{ width: widths[i] + 'px' }" :title="`${column.label} · ${column.typeName}`">
+              <div v-for="(column, i) in columns" :key="i" class="hc" :data-col="i" :style="{ width: widths[i] + 'px' }" :title="`${column.label} | ${column.typeName}`">
                 <Icon v-if="column.primaryKey" :path="mdiKeyVariant" :size="13" class="key" />
                 <span class="lbl">{{ column.label }}</span>
                 <small>{{ column.typeName.toLowerCase() }}</small>
+                <Icon v-if="sortOf(i)" :path="sortOf(i) === 'asc' ? mdiSortAscending : mdiSortDescending" :size="14" class="sortmark" />
                 <span class="resizer" @mousedown="startResize($event, i)" @dblclick.stop="autoSize(i)" />
               </div>
             </div>
@@ -468,11 +530,20 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
               </div>
             </div>
           </div>
-          <div v-if="rows.length === 0" class="no-rows">No rows</div>
         </div>
       </ContextMenuTrigger>
       <ContextMenuPortal>
-        <ContextMenuContent class="menu">
+        <ContextMenuContent v-if="menuKind === 'header'" class="menu">
+          <ContextMenuItem class="menu-item" :disabled="sortOf(headerCol) === 'asc'" @select="setSort(headerCol, 'asc')"><Icon :path="mdiSortAscending" /> Sort ascending</ContextMenuItem>
+          <ContextMenuItem class="menu-item" :disabled="sortOf(headerCol) === 'desc'" @select="setSort(headerCol, 'desc')"><Icon :path="mdiSortDescending" /> Sort descending</ContextMenuItem>
+          <ContextMenuItem class="menu-item" :disabled="!sortOf(headerCol)" @select="setSort(headerCol, null)"><Icon :path="mdiCloseCircleOutline" /> Clear sort</ContextMenuItem>
+          <ContextMenuSeparator class="menu-sep" />
+          <ContextMenuItem class="menu-item" @select="copyColumnName"><Icon :path="mdiContentCopy" /> Copy column name</ContextMenuItem>
+          <ContextMenuItem class="menu-item" :disabled="rows.length === 0" @select="copyColumnValues"><Icon :path="mdiViewColumnOutline" /> Copy column values</ContextMenuItem>
+          <ContextMenuSeparator class="menu-sep" />
+          <ContextMenuItem class="menu-item" @select="autoSize(headerCol)"><Icon :path="mdiArrowCollapseHorizontal" /> Fit column width</ContextMenuItem>
+        </ContextMenuContent>
+        <ContextMenuContent v-else class="menu">
           <ContextMenuItem class="menu-item" @select="copyCell"><Icon :path="mdiContentCopy" /> Copy value <span class="shortcut">Ctrl C</span></ContextMenuItem>
           <ContextMenuItem class="menu-item" @select="copyRows"><Icon :path="mdiContentCopy" /> Copy {{ selected.size > 1 ? selected.size + ' rows' : 'row' }}</ContextMenuItem>
           <ContextMenuItem class="menu-item" @select="copyInsert"><Icon :path="mdiCodeBraces" /> Copy as INSERT</ContextMenuItem>
@@ -539,6 +610,6 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
 .c.chg { background: var(--accent-tint-strong) !important; box-shadow: inset 3px 0 0 var(--accent); }
 .c.act { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
 .cell-input { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; outline: 2px solid var(--accent); outline-offset: -2px; background: var(--bg-raised); color: var(--text); padding: 0 12px; font-size: 12px; user-select: text; }
-.no-rows { position: absolute; top: 60px; left: 0; right: 0; text-align: center; color: var(--text-3); pointer-events: none; }
+.hc .sortmark { color: var(--accent); flex: none; margin-left: auto; }
 .pending { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--accent-tint); border-top: 1px solid var(--border); }
 </style>

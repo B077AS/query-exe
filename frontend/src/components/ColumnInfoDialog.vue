@@ -32,7 +32,7 @@ const facts = computed<[string, string][]>(() => {
     ['Comment', c.columnComment || '—'],
   ];
 });
-const refs = (list: Record<string, string>[] | null): string[] => (list ?? []).map((r) => Object.values(r).filter(Boolean).join(' · '));
+const refs = (list: Record<string, string>[] | null): string[][] => (list ?? []).map((r) => Object.values(r).filter(Boolean));
 </script>
 
 <template>
@@ -44,9 +44,9 @@ const refs = (list: Record<string, string>[] | null): string[] => (list ?? []).m
       <dl>
         <template v-for="[k, v] in facts" :key="k"><dt>{{ k }}</dt><dd class="mono selectable">{{ v }}</dd></template>
       </dl>
-      <template v-if="refs(d.indexes).length"><div class="label">Indexes</div><div v-for="r in refs(d.indexes)" :key="r" class="mono ref selectable">{{ r }}</div></template>
-      <template v-if="refs(d.foreignKeyReferences).length"><div class="label">References</div><div v-for="r in refs(d.foreignKeyReferences)" :key="r" class="mono ref selectable">{{ r }}</div></template>
-      <template v-if="refs(d.referencedByForeignKeys).length"><div class="label">Referenced by</div><div v-for="r in refs(d.referencedByForeignKeys)" :key="r" class="mono ref selectable">{{ r }}</div></template>
+      <template v-if="refs(d.indexes).length"><div class="label">Indexes</div><div v-for="(r, k) in refs(d.indexes)" :key="k" class="mono ref selectable"><template v-for="(part, j) in r" :key="j"><i v-if="j" class="vsep" />{{ part }}</template></div></template>
+      <template v-if="refs(d.foreignKeyReferences).length"><div class="label">References</div><div v-for="(r, k) in refs(d.foreignKeyReferences)" :key="k" class="mono ref selectable"><template v-for="(part, j) in r" :key="j"><i v-if="j" class="vsep" />{{ part }}</template></div></template>
+      <template v-if="refs(d.referencedByForeignKeys).length"><div class="label">Referenced by</div><div v-for="(r, k) in refs(d.referencedByForeignKeys)" :key="k" class="mono ref selectable"><template v-for="(part, j) in r" :key="j"><i v-if="j" class="vsep" />{{ part }}</template></div></template>
     </template>
     <template #footer><button class="btn primary" @click="dialogs.columnInfo = null">Close</button></template>
   </AppDialog>

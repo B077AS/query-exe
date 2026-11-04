@@ -110,7 +110,7 @@ const stack = ['Java 25', 'Jolt', 'Vue 3', 'CodeMirror 6', 'Reka UI', 'Material 
             </button>
           </div>
 
-          <div class="label" style="margin-top: 22px">Accent colour <span class="hint">· {{ accentName }}</span></div>
+          <div class="label" style="margin-top: 22px">Accent colour <i class="vsep" /><span class="hint">{{ accentName }}</span></div>
           <div class="swatches">
             <button v-for="a in ACCENTS" :key="a.key" class="sw" :class="{ on: theme.accent === a.key }" :style="{ background: swatch(a.key), color: onSwatch(a.key) }" :title="a.name" @click="theme.accent = a.key">
               <Icon v-if="theme.accent === a.key" :path="mdiCheck" :size="18" />
@@ -129,7 +129,7 @@ const stack = ['Java 25', 'Jolt', 'Vue 3', 'CodeMirror 6', 'Reka UI', 'Material 
 
         <!-- ================= editor ================= -->
         <template v-else-if="section === 'editor'">
-          <div class="label">Font size <span class="hint">· {{ prefs.editorFontSize }} px</span></div>
+          <div class="label">Font size <i class="vsep" /><span class="hint">{{ prefs.editorFontSize }} px</span></div>
           <div class="slider">
             <span class="mono">{{ sizeMin }}</span>
             <input type="range" :min="sizeMin" :max="sizeMax" step="1" :value="prefs.editorFontSize" @input="savePref('editorFontSize', +($event.target as HTMLInputElement).value)" />
@@ -203,7 +203,7 @@ const stack = ['Java 25', 'Jolt', 'Vue 3', 'CodeMirror 6', 'Reka UI', 'Material 
             <p class="ab-text">A database client for PostgreSQL, MySQL, MariaDB, SQL Server, H2 and SQLite. Java runs the connections and the queries, a Vue page draws the window, and both live in one process.</p>
             <div class="chips"><span v-for="s in stack" :key="s" class="chip">{{ s }}</span></div>
             <button class="btn" @click="api.openExternal('https://github.com/B077AS/query-exe')"><Icon :path="mdiOpenInNew" /> Source on GitHub</button>
-            <div v-if="info" class="hint mono sys">{{ info.os }} · Java {{ info.java }}</div>
+            <div v-if="info" class="hint mono sys">{{ info.os }}<i class="vsep" />Java {{ info.java }}</div>
           </div>
         </template>
       </div>

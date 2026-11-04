@@ -5,7 +5,7 @@
 
 <p align="center">
   <b>A free, cross-platform desktop client for working with relational databases.</b><br>
-  MySQL · MariaDB · PostgreSQL · SQL Server · H2 · SQLite · Multi-connection · SQL editor with autocomplete
+  MySQL | MariaDB | PostgreSQL | SQL Server | H2 | SQLite | Multi-connection | SQL editor with autocomplete
 </p>
 
 <p align="center">

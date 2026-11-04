@@ -116,7 +116,7 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
         const pid = `${id}:#partitions`;
         const method = t.partitions.find((p) => p.method)?.method;
         out.push({ id: pid, kind: 'group', label: 'Partitions', depth: d + 3, connectionId: cid, container: c.name, table: t.name, icon: mdiViewAgendaOutline,
-          hasChildren: true, meta: (method ? method + ' · ' : '') + t.partitions.filter((p) => !p.parent).length });
+          hasChildren: true, meta: (method ? method + ' | ' : '') + t.partitions.filter((p) => !p.parent).length });
         if (expanded.has(pid)) {
           // Java leaves a missing parent out of the JSON, so "no parent" is undefined here, not null
           const add = (parent: string | null, depth: number): void => {
@@ -340,7 +340,7 @@ const working = computed(() => currentSession());
             <span class="label">{{ n.label }}</span>
             <span v-if="n.badge" class="badge">{{ n.badge }}</span>
             <span v-if="n.kind === 'connection' && app.connecting[n.connectionId!]" class="meta">connecting…</span>
-            <span v-else-if="n.meta" class="meta mono">{{ n.meta }}</span>
+            <span v-else-if="n.meta" class="meta mono"><template v-for="(m, i) in n.meta.split(' | ')" :key="i"><i v-if="i" class="vsep" />{{ m }}</template></span>
           </div>
         </ContextMenuTrigger>
         <ContextMenuPortal>

@@ -75,7 +75,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <button class="btn" :disabled="!current || current.running" @click="view()?.runStatement()"><Icon :path="mdiPlayOutline" class="play" />Run statement <span class="kbd">Ctrl ⇧ ↵</span></button>
         <button class="btn" :disabled="!current || !current.running" @click="current && cancelTab(current)"><Icon :path="mdiStop" />Stop</button>
         <span class="sp" />
-        <span v-if="current" class="pill" title="Connection and database in use"><Icon :path="mdiDatabaseOutline" :size="13" />{{ sessionName }}<template v-if="currentDb"> · {{ currentDb }}</template></span>
+        <span v-if="current" class="pill" title="Connection and database in use"><Icon :path="mdiDatabaseOutline" :size="13" />{{ sessionName }}<template v-if="currentDb"><i class="vsep" />{{ currentDb }}</template></span>
         <button class="ib" title="Open file (Ctrl+O)" :disabled="!current" @click="view()?.openFile()"><Icon :path="mdiFolderOpenOutline" /></button>
         <button class="ib" title="Save (Ctrl+S)" :disabled="!current" @click="view()?.save()"><Icon :path="mdiContentSaveOutline" /></button>
         <button class="ib" title="Format SQL (Ctrl+Shift+F)" :disabled="!current" @click="view()?.format()"><Icon :path="mdiFormatAlignLeft" /></button>

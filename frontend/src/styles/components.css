@@ -28,6 +28,10 @@
 .kbd { font: 11px var(--mono); color: var(--text-3); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
 .btn.primary .kbd { color: inherit; border-color: color-mix(in srgb, currentColor 40%, transparent); opacity: 0.85; }
 
+/* Thin vertical separator between inline pieces of text (use this, never a middle dot). */
+.vsep { display: inline-block; flex: none; width: 1px; height: 0.95em; margin: 0 8px; background: var(--border-strong); vertical-align: -0.12em; }
+.pill .vsep { margin: 0 2px; }
+
 .pill {
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2);
   border: 1px solid var(--border); border-radius: var(--radius); padding: 1px 7px; white-space: nowrap;
