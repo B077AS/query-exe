@@ -961,6 +961,11 @@ public class PostgresConnection extends ConnectionObject {
     }
 
     @Override
+    public com.queryexe.model.monitor.ServerMonitor createMonitor() {
+        return new com.queryexe.model.monitor.PostgresMonitor();
+    }
+
+    @Override
     public SqlSyntax getSqlSyntax() {
         return SqlSyntax.POSTGRES;
     }

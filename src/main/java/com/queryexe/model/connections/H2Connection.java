@@ -589,6 +589,11 @@ public class H2Connection extends ConnectionObject {
     }
 
     @Override
+    public com.queryexe.model.monitor.ServerMonitor createMonitor() {
+        return new com.queryexe.model.monitor.H2Monitor();
+    }
+
+    @Override
     public SqlSyntax getSqlSyntax() {
         return SqlSyntax.H2;
     }

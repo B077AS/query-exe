@@ -746,6 +746,11 @@ public class MySQLConnection extends ConnectionObject {
     }
 
     @Override
+    public com.queryexe.model.monitor.ServerMonitor createMonitor() {
+        return new com.queryexe.model.monitor.MySqlMonitor(false);
+    }
+
+    @Override
     public SqlSyntax getSqlSyntax() {
         return SqlSyntax.MYSQL;
     }

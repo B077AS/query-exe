@@ -78,6 +78,7 @@ export const dialogs = reactive({
   columnInfo: null as null | { connectionId: string; container: string; table: string; column: string },
   script: null as null | { title: string; sql: string },
   diagram: null as null | { connectionId: string; container: string },
+  monitor: null as null | { connectionId: string },
   newContainer: null as null | { connectionId: string; kind: string },
   activeConnections: false,
 });

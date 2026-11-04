@@ -754,6 +754,11 @@ public class MariaDBConnection extends ConnectionObject {
     }
 
     @Override
+    public com.queryexe.model.monitor.ServerMonitor createMonitor() {
+        return new com.queryexe.model.monitor.MySqlMonitor(true);
+    }
+
+    @Override
     public SqlSyntax getSqlSyntax() {
         return SqlSyntax.MYSQL;
     }

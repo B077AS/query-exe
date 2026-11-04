@@ -103,6 +103,11 @@ public abstract class ConnectionObject {
 
     public abstract SqlSyntax getSqlSyntax();
 
+    /** What the server monitor reads for this engine, or null when there is nothing to monitor (SQLite is a file, not a server). */
+    public com.queryexe.model.monitor.ServerMonitor createMonitor() {
+        return null;
+    }
+
     /**
      * Other objects of a database/schema that the tree lists next to its tables, by group title ("Sequences",
      * "Indexes", ...), in display order. Empty groups are left out; engines without support return nothing.

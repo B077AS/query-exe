@@ -816,6 +816,11 @@ public class SQLServerConnection extends ConnectionObject {
     }
 
     @Override
+    public com.queryexe.model.monitor.ServerMonitor createMonitor() {
+        return new com.queryexe.model.monitor.SqlServerMonitor();
+    }
+
+    @Override
     public SqlSyntax getSqlSyntax() {
         return SqlSyntax.SQLSERVER;
     }

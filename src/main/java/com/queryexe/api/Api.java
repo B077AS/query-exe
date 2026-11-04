@@ -18,6 +18,7 @@ public final class Api {
         Workspace workspace = new Workspace(rpc::emit);
         new ConnectionApi(workspace).register(rpc);
         new SchemaApi().register(rpc);
+        new MonitorApi().register(rpc);
         new QueryApi(workspace, chooser).register(rpc);
     }
 }

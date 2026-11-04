@@ -3,7 +3,7 @@ import {
   mdiChevronDown, mdiChevronRight, mdiCodeBraces, mdiCollapseAllOutline, mdiContentCopy, mdiDatabase, mdiDatabaseOutline, mdiDatabasePlusOutline,
   mdiDeleteOutline, mdiFlashOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiFormatListNumbered, mdiInformationOutline, mdiKeyVariant, mdiLanConnect,
   mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable,
-  mdiTableColumn, mdiViewAgendaOutline, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline, mdiGraphOutline,
+  mdiTableColumn, mdiViewAgendaOutline, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline, mdiGraphOutline, mdiChartLine,
 } from '@mdi/js';
 import {
   ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -348,6 +348,7 @@ const working = computed(() => currentSession());
             <ContextMenuItem v-if="!sessionOf(n)" class="menu-item" @select="openConnection(infoOf(n)!)"><Icon :path="mdiLanConnect" /> Connect</ContextMenuItem>
             <template v-else>
               <ContextMenuItem class="menu-item" @select="newTab(n.connectionId!)"><Icon :path="mdiPlay" /> New query</ContextMenuItem>
+              <ContextMenuItem v-if="infoOf(n)?.type !== 'SQLite'" class="menu-item" @select="dialogs.monitor = { connectionId: n.connectionId! }"><Icon :path="mdiChartLine" /> Server monitor</ContextMenuItem>
               <ContextMenuItem class="menu-item" @select="loadTree(sessionOf(n)!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
               <ContextMenuItem class="menu-item" @select="disconnectNode(n)"><Icon :path="mdiLanDisconnect" /> Disconnect</ContextMenuItem>
             </template>

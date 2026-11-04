@@ -6,6 +6,7 @@ import ColumnInfoDialog from './components/ColumnInfoDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ConnectionDialog from './components/ConnectionDialog.vue';
 import DiagramDialog from './components/DiagramDialog.vue';
+import MonitorDialog from './components/MonitorDialog.vue';
 import FolderDialog from './components/FolderDialog.vue';
 import NewContainerDialog from './components/NewContainerDialog.vue';
 import PasswordDialog from './components/PasswordDialog.vue';
@@ -41,6 +42,7 @@ onMounted(async () => {
   <TableInfoDialog v-if="dialogs.tableInfo" />
   <ColumnInfoDialog v-if="dialogs.columnInfo" />
   <DiagramDialog v-if="dialogs.diagram" />
+  <MonitorDialog v-if="dialogs.monitor" :key="dialogs.monitor.connectionId" />
   <ScriptDialog v-if="dialogs.script" />
   <NewContainerDialog v-if="dialogs.newContainer" />
   <PromptDialog />

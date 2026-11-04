@@ -228,6 +228,43 @@ export interface DiagramData {
   relations: { name: string; from: string; fromColumns: string[]; to: string; toColumns: string[]; onDelete: string; onUpdate: string }[];
 }
 
+export interface MonitorChartDef {
+  id: string;
+  title: string;
+  /** "" (a count), "/s", "B/s" or "s". */
+  unit: string;
+}
+
+export interface MonitorMetric {
+  key: string;
+  label: string;
+  /** The chart it is drawn on; null when it is only a number. */
+  chart: string | null;
+  kind: 'GAUGE' | 'RATE';
+  headline: boolean;
+  unit: string;
+}
+
+export interface MonitorOpen {
+  supported: boolean;
+  reason?: string;
+  charts?: MonitorChartDef[];
+  metrics?: MonitorMetric[];
+}
+
+export interface MonitorTable {
+  columns: string[];
+  rows: (string | null)[][];
+  /** Why there is nothing to show (the server's own message, for example a missing privilege). */
+  note: string | null;
+}
+
+export interface MonitorSample {
+  values: Record<string, number>;
+  sessions?: MonitorTable;
+  locks?: MonitorTable;
+}
+
 export interface StatementRange {
   text: string;
   from: number;
@@ -279,6 +316,9 @@ export const api = {
   script: (connectionId: string, container: string, table: string, kind: 'select' | 'create' | 'insert') =>
     call<{ sql: string }>('schema.script', { connectionId, container, table, kind }),
   tableInfo: (connectionId: string, container: string, table: string) => call<TableInfo>('schema.tableInfo', { connectionId, container, table }),
+  monitorOpen: (connectionId: string) => call<MonitorOpen>('monitor.open', { connectionId }),
+  monitorSample: (connectionId: string, tables: boolean) => call<MonitorSample>('monitor.sample', { connectionId, tables }),
+  monitorClose: (connectionId: string) => call<{ ok: boolean }>('monitor.close', { connectionId }),
   diagram: (connectionId: string, container: string) => call<DiagramData>('schema.diagram', { connectionId, container }),
   columnInfo: (connectionId: string, container: string, table: string, column: string) =>
     call<ColumnDetails>('schema.columnInfo', { connectionId, container, table, column }),
