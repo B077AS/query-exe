@@ -23,7 +23,7 @@ async function openScript(): Promise<void> {
 
 <template>
   <div class="empty-main">
-    <Logo :size="44" />
+    <Logo :size="88" bare />
     <h3>{{ app.connections.length ? 'Pick a connection to start' : 'Add your first connection' }}</h3>
     <p v-if="app.connections.length">Double-click one on the left to connect and browse it, or:</p>
     <p v-else>QueryExe connects to PostgreSQL, MySQL, MariaDB, SQL Server, H2 and SQLite.</p>

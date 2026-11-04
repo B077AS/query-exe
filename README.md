@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="src/main/resources/icon.png" alt="QueryExe icon" width="80"><br>
+  <img src="src/main/resources/icon.svg" alt="QueryExe icon" width="80" height="80"><br>
   QueryExe
 </h1>
 

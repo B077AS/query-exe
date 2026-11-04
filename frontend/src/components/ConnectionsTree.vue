@@ -299,7 +299,6 @@ const working = computed(() => currentSession());
     <div class="sh">
       <template v-if="focusSession">
         <button class="ib" title="Back to all connections" @click="app.focused = null"><Icon :path="mdiArrowLeft" /></button>
-        <span class="badge">{{ engineBadge(focusSession.info.type) }}</span>
         <span class="t focus-name" :title="focusSession.info.name">{{ focusSession.info.name }}</span>
       </template>
       <span v-else class="t">Connections</span>
