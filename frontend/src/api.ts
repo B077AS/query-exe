@@ -223,6 +223,11 @@ export interface RecentFile {
   lastOpened: number;
 }
 
+export interface DiagramData {
+  tables: { name: string; columns: { name: string; type: string; primaryKey: boolean; notNull: boolean }[] }[];
+  relations: { name: string; from: string; fromColumns: string[]; to: string; toColumns: string[]; onDelete: string; onUpdate: string }[];
+}
+
 export interface StatementRange {
   text: string;
   from: number;
@@ -274,6 +279,7 @@ export const api = {
   script: (connectionId: string, container: string, table: string, kind: 'select' | 'create' | 'insert') =>
     call<{ sql: string }>('schema.script', { connectionId, container, table, kind }),
   tableInfo: (connectionId: string, container: string, table: string) => call<TableInfo>('schema.tableInfo', { connectionId, container, table }),
+  diagram: (connectionId: string, container: string) => call<DiagramData>('schema.diagram', { connectionId, container }),
   columnInfo: (connectionId: string, container: string, table: string, column: string) =>
     call<ColumnDetails>('schema.columnInfo', { connectionId, container, table, column }),
   createContainer: (connectionId: string, name: string) => call<{ ok: boolean }>('schema.createContainer', { connectionId, name }),

@@ -5,6 +5,7 @@ import ActiveConnectionsDialog from './components/ActiveConnectionsDialog.vue';
 import ColumnInfoDialog from './components/ColumnInfoDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ConnectionDialog from './components/ConnectionDialog.vue';
+import DiagramDialog from './components/DiagramDialog.vue';
 import FolderDialog from './components/FolderDialog.vue';
 import NewContainerDialog from './components/NewContainerDialog.vue';
 import PasswordDialog from './components/PasswordDialog.vue';
@@ -39,6 +40,7 @@ onMounted(async () => {
   <TableEditor v-if="dialogs.tableEditor" :connection-id="dialogs.tableEditor.connectionId" :container="dialogs.tableEditor.container" :table="dialogs.tableEditor.table" />
   <TableInfoDialog v-if="dialogs.tableInfo" />
   <ColumnInfoDialog v-if="dialogs.columnInfo" />
+  <DiagramDialog v-if="dialogs.diagram" />
   <ScriptDialog v-if="dialogs.script" />
   <NewContainerDialog v-if="dialogs.newContainer" />
   <PromptDialog />

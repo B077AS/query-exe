@@ -49,6 +49,7 @@ final class SchemaApi {
         });
         rpc.on("schema.script", this::script);
         rpc.on("schema.tableInfo", this::tableInfo);
+        rpc.on("schema.diagram", this::diagram);
         rpc.on("schema.columnInfo", p -> catalog.call(Params.string(p, "connectionId"), c ->
                 c.getDetailedColumnInfo(Params.string(p, "container"), Params.string(p, "table"), Params.string(p, "column"))));
         rpc.on("schema.createContainer", p -> {
@@ -118,6 +119,60 @@ final class SchemaApi {
             }
             out.put("sizeMb", size);
             return out;
+        });
+    }
+
+    /**
+     * The entity-relationship data of one database/schema: every table with its columns and every foreign key
+     * between tables of it. Keys pointing into another schema are left out (the table is not in the diagram).
+     */
+    private Object diagram(JsonObject p) throws SQLException {
+        String container = Params.string(p, "container");
+        return catalog.call(Params.string(p, "connectionId"), c -> {
+            Map<String, ArrayList<ColumnData>> all = c.getAllTablesAndColumns(container);
+            List<Map<String, Object>> tables = new ArrayList<>();
+            List<Map<String, Object>> relations = new ArrayList<>();
+            if (all == null) {
+                return Map.of("tables", tables, "relations", relations);
+            }
+            for (Map.Entry<String, ArrayList<ColumnData>> table : all.entrySet()) {
+                List<Map<String, Object>> columns = new ArrayList<>();
+                for (ColumnData column : table.getValue()) {
+                    Map<String, Object> o = new LinkedHashMap<>();
+                    o.put("name", column.getColumnName());
+                    o.put("type", column.getDataType());
+                    o.put("primaryKey", column.isPrimaryKey());
+                    o.put("notNull", column.isNotNull());
+                    columns.add(o);
+                }
+                tables.add(Map.of("name", table.getKey(), "columns", columns));
+            }
+            for (String table : all.keySet()) {
+                Map<String, ForeignKeyData> keys;
+                try {
+                    keys = c.extractForeignKeys(container, table);
+                } catch (SQLException | RuntimeException e) {
+                    log.debug("No foreign keys for {}: {}", table, e.getMessage());
+                    continue;
+                }
+                for (ForeignKeyData fk : keys.values()) {
+                    String schema = fk.getReferenceSchema();
+                    boolean sameContainer = schema == null || schema.isBlank() || schema.equals(container);
+                    if (!sameContainer || !all.containsKey(fk.getReferenceTable())) {
+                        continue;
+                    }
+                    Map<String, Object> o = new LinkedHashMap<>();
+                    o.put("name", fk.getConstraintName());
+                    o.put("from", table);
+                    o.put("fromColumns", fk.allLocalColumns());
+                    o.put("to", fk.getReferenceTable());
+                    o.put("toColumns", fk.allReferenceColumns());
+                    o.put("onDelete", fk.getOnDelete());
+                    o.put("onUpdate", fk.getOnUpdate());
+                    relations.add(o);
+                }
+            }
+            return Map.of("tables", tables, "relations", relations);
         });
     }
 
