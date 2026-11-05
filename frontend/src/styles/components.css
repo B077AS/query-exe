@@ -11,7 +11,8 @@
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
 .btn.danger { color: var(--danger); }
-.btn.danger.solid { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.danger.solid { background: var(--danger-solid); border-color: var(--danger-solid); color: var(--on-danger); }
+.btn.danger.solid:hover:not(:disabled) { background: var(--danger-solid); filter: brightness(1.12); }
 .btn.ghost { border-color: transparent; background: transparent; }
 .btn.ghost:hover:not(:disabled) { background: var(--bg-hover); }
 .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
@@ -94,7 +95,7 @@
 .menu-label { padding: 4px 8px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 
 /* ---- side rail of the Settings and connection dialogs (one copy, so they cannot drift apart) ---- */
-.rail { background: var(--bg-side); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+.rail { background: color-mix(in srgb, var(--bg-raised) 72%, var(--bg-side)); border-right: 1px solid var(--border); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
 .rail-item { position: relative; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px; border-radius: 0; color: var(--text-2); text-align: left; outline: none; }
 .rail-item:hover, .rail-item:focus-visible { background: var(--bg-hover); color: var(--text); }
 .rail-item.on, .rail-item.on:focus-visible { background: var(--accent-tint-strong); color: var(--text); }
@@ -113,7 +114,7 @@
 .dlg-head h2 { font-size: 14px; font-weight: 600; }
 .dlg-head .sp, .sp { flex: 1; }
 .dlg-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; min-height: 0; }
-.dlg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-side); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+.dlg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 
 /* ---- toasts ---- */
 .toasts { position: fixed; right: 16px; top: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; width: 340px; }
@@ -131,3 +132,36 @@
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .mono { font-family: var(--mono); }
+
+/* ---- tables inside dialogs: the same look as the result grid (filled header, a hairline around every cell, 26px rows, row numbers) ---- */
+.dgrid { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dgrid th {
+  position: sticky; top: 0; z-index: 1; height: 26px; padding: 0 12px; text-align: left; white-space: nowrap;
+  font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--th-bg);
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border-strong);
+}
+.dgrid td { height: 26px; padding: 0 12px; font-family: var(--mono); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); user-select: text; }
+.dgrid tbody tr:hover td:not(.g) { background: var(--bg-hover); }
+/* row number column, like the grid's gutter */
+.dgrid th.g, .dgrid td.g { width: 40px; padding: 0; text-align: center; font: 400 11px var(--font); color: var(--text-3); background: var(--bg-side); border-right: 1px solid var(--border-strong); user-select: none; }
+.dgrid th.g { font-weight: 400; background: var(--th-bg); }
+/* a row header: the left column of a key/value table */
+.dgrid th.row { position: static; width: 150px; border-bottom: 1px solid var(--border); font-family: var(--font); }
+.dgrid td.yes { color: var(--text); }
+.dgrid td.no, .dgrid td.nul { color: var(--text-3); }
+.dgrid td.nul { font-style: italic; }
+/* tables with form controls in the cells (table editor): rows grow to fit the controls */
+.dgrid.edit td { height: auto; padding: 3px 6px; font-family: var(--font); }
+.dgrid.edit th { padding: 0 8px; }
+.dgrid.edit td.c, .dgrid.edit th.c { text-align: center; }
+/* long values (queries, hosts) are cut with an ellipsis; the full text is in the cell title */
+.dgrid.trunc td { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dgrid.trunc td.q { max-width: 460px; }
+.dgrid th.num, .dgrid td.num { text-align: right; }
+/* a cell holding small buttons */
+/* a cell holding one small button, centred */
+.dgrid td.act { width: 44px; padding: 0; text-align: center; }
+/* tables whose rows are not clickable: no row highlight (their buttons keep their own hover) */
+.dgrid.static tbody tr:hover td:not(.g) { background: transparent; }
+/* a little more air per row (the active connections list) */
+.dgrid.roomy td { height: 32px; }

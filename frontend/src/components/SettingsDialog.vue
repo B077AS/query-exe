@@ -229,7 +229,7 @@ h3 { font-size: 18px; font-weight: 600; margin-bottom: 18px; }
 .cap.strong { font-weight: 600; }
 .mini { position: relative; display: grid; grid-template-columns: 26% 1fr; height: 92px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
 .mini.light, .mini-layer.light { --m-bg: #fcfcfb; --m-side: #f0f0ed; --m-line: #d8d8d3; }
-.mini.dark, .mini-layer.dark { --m-bg: #2b2d30; --m-side: #25272a; --m-line: #494c52; }
+.mini.dark, .mini-layer.dark { --m-bg: #1e1f22; --m-side: #2b2d30; --m-line: #3d3f45; }
 .mini .mside, .mini-layer .mside { background: var(--m-side); }
 .mini .mmain, .mini-layer .mmain { background: var(--m-bg); display: flex; flex-direction: column; gap: 7px; padding: 12px 10px; }
 .mini b, .mini-layer b { display: block; height: 6px; border-radius: 3px; background: var(--m-line); }

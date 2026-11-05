@@ -1,0 +1,76 @@
+### syntax
+SqlSyntax(backslashEscapes=true, eStrings=false, backtickIdentifiers=true, bracketIdentifiers=false, hashComments=true, dashDashNeedsSpace=true, executableComments=true, dollarQuoting=false, nestedBlockComments=false, delimiterCommand=true, goSeparator=false, beginEndObjects=[EVENT, FUNCTION, PROCEDURE, TRIGGER], batchScopedObjects=[])
+
+### dataTypes
+INT, VARCHAR(255), DECIMAL, BINARY(8), BLOB, LONGBLOB, MEDIUMBLOB, TINYBLOB, VARBINARY(255), DATE, DATETIME, TIME, TIMESTAMP, YEAR, GEOMETRY, GEOMETRYCOLLECTION, LINESTRING, MULTILINESTRING, MULTIPOINT, MULTIPOLYGON, POINT, POLYGON, BIGINT, DOUBLE, FLOAT, MEDIUMINT, REAL, SMALLINT, TINYINT, CHAR, JSON, NCHAR, NVARCHAR(255), VARCHAR, LONGTEXT, MEDIUMTEXT, TEXT, TINYTEXT, BIT, BOOLEAN, ENUM, SET
+
+### quoteIdentifier plain
+`orders`
+
+### quoteIdentifier hostile
+`a"b``c]d'e`
+
+### qualifyTable catalog+schema
+`cat`.`orders`
+
+### qualifyTable schema only
+`orders`
+
+### qualifyTable catalog only
+`cat`.`orders`
+
+### qualifyTable table only
+`orders`
+
+### defaultsOnlyInsert
+INSERT INTO `orders` () VALUES ()
+
+### select
+SELECT * FROM `shop`.`orders` LIMIT 100;
+
+### create table
+CREATE TABLE `shop`.`orders` (
+    `id` INT AUTO_INCREMENT NOT NULL,
+    `email` VARCHAR(120) NOT NULL UNIQUE,
+    `price` DECIMAL(10,2),
+    `order` VARCHAR(20),
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+### create table with fk
+CREATE TABLE `shop`.`orders` (
+    `id` INT AUTO_INCREMENT NOT NULL,
+    `email` VARCHAR(120) NOT NULL UNIQUE,
+    `price` DECIMAL(10,2),
+    `order` VARCHAR(20),
+    `owner_id` INT,
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_orders_owner` FOREIGN KEY (`owner_id`) REFERENCES `owners` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+### alter: add column
+ALTER TABLE `shop`.`orders`
+  ADD COLUMN `owner_id` INT;
+
+### alter: drop column
+ALTER TABLE `shop`.`orders`
+  DROP COLUMN `order`;
+
+### alter: rename table
+RENAME TABLE `shop`.`orders` TO `shop`.`orders2`;
+
+### alter: rename column
+ALTER TABLE `shop`.`orders`
+  CHANGE COLUMN `email` `mail` VARCHAR(120) NOT NULL;
+
+### alter: change type
+ALTER TABLE `shop`.`orders`
+  MODIFY COLUMN `email` VARCHAR(255) NOT NULL;
+
+### alter: add fk
+ALTER TABLE `shop`.`orders` ADD CONSTRAINT `fk_orders_owner` FOREIGN KEY (`owner_id`) REFERENCES `owners`(`id`) ON DELETE CASCADE ON UPDATE NO ACTION;
+
+### row insert
+INSERT INTO `orders` (`id`, `email`, `price`, `order`)
+VALUES (1, 'a@b.c', 9.50, 'it\'s');
+

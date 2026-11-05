@@ -45,14 +45,15 @@ onMounted(async () => {
         <div v-if="!info" class="empty">Loading…</div>
 
         <div v-else-if="tab === 'columns'" class="box">
-          <table>
-            <thead><tr><th /><th>Column</th><th>Type</th><th>Not null</th><th>Unique</th><th>Auto</th><th>Default</th></tr></thead>
+          <table class="dgrid">
+            <thead><tr><th class="g">#</th><th colspan="2">Column</th><th>Type</th><th>Not null</th><th>Unique</th><th>Auto</th><th>Default</th></tr></thead>
             <tbody>
-              <tr v-for="c in info.columns" :key="c.columnName">
-                <td style="width: 28px"><Icon v-if="c.primaryKey" :path="mdiKeyVariant" :size="14" /></td>
-                <td class="mono">{{ c.columnName }}</td><td class="mono">{{ c.dataType }}</td>
-                <td>{{ c.notNull ? 'yes' : '' }}</td><td>{{ c.unique ? 'yes' : '' }}</td><td>{{ c.autoIncrement ? 'yes' : '' }}</td>
-                <td class="mono">{{ c.defaultValue ?? '' }}</td>
+              <tr v-for="(c, n) in info.columns" :key="c.columnName">
+                <td class="g">{{ n + 1 }}</td>
+                <td style="width: 34px; text-align: center"><Icon v-if="c.primaryKey" :path="mdiKeyVariant" :size="14" /></td>
+                <td>{{ c.columnName }}</td><td>{{ c.dataType }}</td>
+                <td :class="c.notNull ? 'yes' : 'no'">{{ c.notNull ? 'yes' : 'no' }}</td><td :class="c.unique ? 'yes' : 'no'">{{ c.unique ? 'yes' : 'no' }}</td><td :class="c.autoIncrement ? 'yes' : 'no'">{{ c.autoIncrement ? 'yes' : 'no' }}</td>
+                <td :class="{ nul: c.defaultValue == null }">{{ c.defaultValue ?? 'NULL' }}</td>
               </tr>
             </tbody>
           </table>
@@ -61,12 +62,13 @@ onMounted(async () => {
         <template v-else-if="tab === 'foreignKeys'">
           <div v-if="!info.foreignKeys.length" class="empty">This table has no foreign keys.</div>
           <div v-else class="box">
-            <table>
-              <thead><tr><th>Name</th><th>Column</th><th>References</th><th>On delete</th><th>On update</th></tr></thead>
+            <table class="dgrid">
+              <thead><tr><th class="g">#</th><th>Name</th><th>Column</th><th>References</th><th>On delete</th><th>On update</th></tr></thead>
               <tbody>
-                <tr v-for="f in info.foreignKeys" :key="f.constraintName">
-                  <td class="mono">{{ f.constraintName }}</td><td class="mono">{{ f.localColumn }}</td>
-                  <td class="mono">{{ f.referenceTable }}({{ f.referenceColumn }})</td><td>{{ f.onDelete }}</td><td>{{ f.onUpdate }}</td>
+                <tr v-for="(f, n) in info.foreignKeys" :key="f.constraintName">
+                  <td class="g">{{ n + 1 }}</td>
+                  <td>{{ f.constraintName }}</td><td>{{ f.localColumn }}</td>
+                  <td>{{ f.referenceTable }}({{ f.referenceColumn }})</td><td>{{ f.onDelete }}</td><td>{{ f.onUpdate }}</td>
                 </tr>
               </tbody>
             </table>
@@ -76,13 +78,14 @@ onMounted(async () => {
         <template v-else>
           <div v-if="!info.indexes.length" class="empty">This table has no indexes.</div>
           <div v-else class="box">
-            <table>
-              <thead><tr><th /><th>Name</th><th>Columns</th><th>Unique</th><th>Type</th></tr></thead>
+            <table class="dgrid">
+              <thead><tr><th class="g">#</th><th colspan="2">Name</th><th>Columns</th><th>Unique</th><th>Type</th></tr></thead>
               <tbody>
-                <tr v-for="i in info.indexes" :key="i.name">
-                  <td style="width: 28px"><Icon v-if="i.primary" :path="mdiKeyVariant" :size="14" /></td>
-                  <td class="mono">{{ i.name }}</td><td class="mono">{{ i.columns.join(', ') }}</td>
-                  <td>{{ i.unique ? 'yes' : '' }}</td><td>{{ i.type ?? '' }}</td>
+                <tr v-for="(i, n) in info.indexes" :key="i.name">
+                  <td class="g">{{ n + 1 }}</td>
+                  <td style="width: 34px; text-align: center"><Icon v-if="i.primary" :path="mdiKeyVariant" :size="14" /></td>
+                  <td>{{ i.name }}</td><td>{{ i.columns.join(', ') }}</td>
+                  <td :class="i.unique ? 'yes' : 'no'">{{ i.unique ? 'yes' : 'no' }}</td><td :class="{ nul: !i.type }">{{ i.type ?? '' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -104,7 +107,4 @@ onMounted(async () => {
 .head h3 { font-size: 18px; font-weight: 600; margin: 0; margin-right: 4px; }
 .n { font-size: 11px; color: var(--text-3); }
 .box { flex: 1; min-height: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: auto; }
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; font-weight: 600; font-size: 11.5px; color: var(--text-2); padding: 6px 10px; background: var(--bg-side); border-bottom: 1px solid var(--border); position: sticky; top: 0; }
-td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-size: 12px; user-select: text; }
 </style>

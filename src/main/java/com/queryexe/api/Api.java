@@ -1,13 +1,13 @@
 package com.queryexe.api;
 
-import com.queryexe.Rpc;
-import com.queryexe.service.Workspace;
+import com.queryexe.app.Rpc;
+import com.queryexe.query.Workspace;
 
 /** Registers everything the page can ask of Java besides the window itself. */
-public final class Api {
+public class Api {
 
-    private final Rpc rpc;
-    private final FileChooser chooser;
+    private Rpc rpc;
+    private FileChooser chooser;
 
     public Api(Rpc rpc, FileChooser chooser) {
         this.rpc = rpc;

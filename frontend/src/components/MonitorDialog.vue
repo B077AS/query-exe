@@ -189,10 +189,11 @@ const isQuery = (column: string): boolean => column === 'query' || column.endsWi
           <!-- sessions -->
           <div v-show="tab === 'sessions'" class="scroll box">
             <p v-if="sessions.note" class="note selectable"><Icon :path="mdiAlertOutline" :size="14" /> {{ sessions.note }}</p>
-            <table v-else-if="shownSessions.length">
-              <thead><tr><th v-for="c in sessions.columns" :key="c">{{ pretty(c) }}</th></tr></thead>
+            <table v-else-if="shownSessions.length" class="dgrid trunc">
+              <thead><tr><th class="g">#</th><th v-for="c in sessions.columns" :key="c">{{ pretty(c) }}</th></tr></thead>
               <tbody>
                 <tr v-for="(r, i) in shownSessions" :key="i">
+                  <td class="g">{{ i + 1 }}</td>
                   <td v-for="(cell, k) in r" :key="k" :class="{ q: isQuery(sessions.columns[k]), mono: isQuery(sessions.columns[k]) }" :title="cell ?? ''">{{ cell ?? '' }}</td>
                 </tr>
               </tbody>
@@ -203,10 +204,11 @@ const isQuery = (column: string): boolean => column === 'query' || column.endsWi
           <!-- locks: who waits for whom -->
           <div v-show="tab === 'locks'" class="scroll box">
             <p v-if="locks.note" class="note selectable"><Icon :path="mdiAlertOutline" :size="14" /> {{ locks.note }}</p>
-            <table v-else-if="locks.rows.length">
-              <thead><tr><th v-for="c in locks.columns" :key="c">{{ pretty(c) }}</th></tr></thead>
+            <table v-else-if="locks.rows.length" class="dgrid trunc">
+              <thead><tr><th class="g">#</th><th v-for="c in locks.columns" :key="c">{{ pretty(c) }}</th></tr></thead>
               <tbody>
                 <tr v-for="(r, i) in locks.rows" :key="i">
+                  <td class="g">{{ i + 1 }}</td>
                   <td v-for="(cell, k) in r" :key="k" :class="{ q: isQuery(locks.columns[k]), mono: isQuery(locks.columns[k]) }" :title="cell ?? ''">{{ cell ?? '' }}</td>
                 </tr>
               </tbody>
@@ -246,10 +248,6 @@ const isQuery = (column: string): boolean => column === 'query' || column.endsWi
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px 8px; background: var(--bg); }
 .box { border: 1px solid var(--border); border-radius: var(--radius); }
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; font-weight: 600; font-size: 11.5px; color: var(--text-2); padding: 6px 10px; background: var(--bg-side); border-bottom: 1px solid var(--border); position: sticky; top: 0; white-space: nowrap; }
-td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-size: 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
-td.q { max-width: 460px; font-size: 11.5px; }
 .none, .note { padding: 28px; text-align: center; color: var(--text-3); margin: 0; }
 .note { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--warn); }
 </style>

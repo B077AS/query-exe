@@ -71,17 +71,6 @@ Every JDBC driver can be swapped out for a different version or a custom build f
 
 Download the **launcher** — a Windows installer or Linux AppImage — from [this repo's releases page](https://github.com/B077AS/query-exe/releases). It's built by this repo's release pipeline (using query-exe-launcher's source), and it installs the client into your app data directory and updates it automatically on every start, so install once and forget about it. query-exe-launcher's own releases page only publishes self-update payloads for a launcher you've already installed — it's not where the installer/AppImage comes from.
 
-## Keeping the launcher up to date
-
-There's no hub or server behind QueryExe — the launcher and client each query **GitHub Releases directly** for updates, using the release tag as the version. The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the [query-exe-launcher](https://github.com/B077AS/query-exe-launcher) that started it is out of date, and if so, downloads and swaps its files in the background. It has to be the client that does this — by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
-
-- It reads `System.getProperty("launcher.version")` — forwarded by the launcher when it spawns the client — and compares it against the launcher repo's latest GitHub release tag. A missing value (an old launcher, from before this existed) is always treated as outdated.
-- Every downloaded file is verified against a `.sha256` sidecar published alongside it in the same release, before it replaces anything.
-- On Windows it overwrites `app/query-exe-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit — there's no "just the launcher part" to update). Both are safe to replace while in use, since the launcher process that loaded them has already exited.
-- It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt.
-
-See [query-exe-launcher's README](https://github.com/B077AS/query-exe-launcher#how-the-launcher-updates-itself) for the full mechanics.
-
 ## Building from source (developers)
 
 Requirements: **Java 21** and Maven.
@@ -107,7 +96,6 @@ There's no hub URL to bake in and no `prod` profile — the client is entirely s
 | `model/` | Connection definitions per database type, result/column/query data, JDBC driver loading |
 | `service/` | Connection lifecycle, query execution, app settings, recent files, export |
 | `theme/` | AtlantaFX theme wiring and light/dark switching |
-| `update/` | `LauncherUpdateService` — checks and self-updates the launcher that started this client (see above) |
 | `utils/` | Icon coloring, Windows theme integration, tab-scroll chevrons, misc helpers |
 
 ## Tech stack

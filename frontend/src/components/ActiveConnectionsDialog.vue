@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { mdiAlertOutline, mdiLanDisconnect, mdiPowerPlugOffOutline, mdiRestart } from '@mdi/js';
+import { mdiDotsVertical, mdiLanDisconnect, mdiPowerPlugOffOutline, mdiRestart } from '@mdi/js';
+import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuTrigger } from 'reka-ui';
 import { computed, onBeforeUnmount, onMounted, reactive } from 'vue';
 import { api } from '../api';
 import { app, dialogs, disconnect, loadTree } from '../store';
@@ -69,7 +70,7 @@ async function killAll(): Promise<void> {
 </script>
 
 <template>
-  <AppDialog title="Active connections" :width="640" flush @close="dialogs.activeConnections = false">
+  <AppDialog title="Active connections" :width="780" flush @close="dialogs.activeConnections = false">
     <div v-if="rows.length === 0" class="none">
       <Icon :path="mdiPowerPlugOffOutline" :size="44" />
       <b>Nothing connected</b>
@@ -90,25 +91,35 @@ async function killAll(): Promise<void> {
       </div>
 
       <div class="panel">
-        <div class="cols"><span>Connection</span><span>Database</span><span>Tabs</span><span /></div>
         <div class="list">
-        <article v-for="s in rows" :key="s.connectionId" class="row">
-          <div class="mid">
-            <div class="nm">{{ s.info.name }}<span v-if="alive(s.connectionId) === false" class="flag"><Icon :path="mdiAlertOutline" :size="14" />Not responding</span></div>
-            <div class="tg mono" :title="s.info.target">{{ s.info.target }}</div>
-          </div>
-          <span class="db" :title="s.info.type === 'PostgreSQL' ? 'Current schema' : 'Current database'">{{ s.current ?? '–' }}</span>
-          <span class="nt">{{ tabsOf(s.connectionId).length }}</span>
-          <div class="acts">
-            <button v-if="alive(s.connectionId) === false" class="btn primary sm" :disabled="!!busy[s.connectionId]" @click="reconnect(s.connectionId)">
-              <Icon :path="mdiRestart" :class="{ spin: busy[s.connectionId] === 'reconnect' }" /> Reconnect
-            </button>
-            <template v-else>
-              <button class="ib" title="Reconnect" :disabled="!!busy[s.connectionId]" @click="reconnect(s.connectionId)"><Icon :path="mdiRestart" :class="{ spin: busy[s.connectionId] === 'reconnect' }" /></button>
-            </template>
-            <button class="ib kill" title="Disconnect" :disabled="!!busy[s.connectionId]" @click="kill(s.connectionId)"><Icon :path="mdiLanDisconnect" /></button>
-          </div>
-        </article>
+          <table class="dgrid static roomy">
+            <thead><tr><th class="g">#</th><th>Connection</th><th>Target</th><th>{{ rows.some((r) => r.info.type === 'PostgreSQL') ? 'Database / schema' : 'Database' }}</th><th class="num">Tabs</th><th colspan="2">Status</th></tr></thead>
+            <tbody>
+              <tr v-for="(s, n) in rows" :key="s.connectionId">
+                <td class="g">{{ n + 1 }}</td>
+                <td class="nm">{{ s.info.name }}</td>
+                <td class="trunc" :title="s.info.target">{{ s.info.target }}</td>
+                <td :class="{ nul: !s.current }" :title="s.info.type === 'PostgreSQL' ? 'Current schema' : 'Current database'">{{ s.current ?? 'NULL' }}</td>
+                <td class="num">{{ tabsOf(s.connectionId).length }}</td>
+                <td class="st">
+                  <span class="dot" :class="busy[s.connectionId] ? 'wait' : alive(s.connectionId) === false ? 'bad' : alive(s.connectionId) === true ? 'ok' : 'wait'" />
+                  {{ busy[s.connectionId] === 'reconnect' ? 'Reconnecting…' : busy[s.connectionId] ? 'Disconnecting…' : alive(s.connectionId) === false ? 'Not responding' : alive(s.connectionId) === true ? 'Connected' : 'Checking…' }}
+                </td>
+                <td class="act">
+                  <DropdownMenuRoot>
+                    <DropdownMenuTrigger class="ib sm" title="Actions" :disabled="!!busy[s.connectionId]"><Icon :path="mdiDotsVertical" /></DropdownMenuTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuContent class="menu" align="end" :side-offset="4">
+                        <DropdownMenuItem class="menu-item" @select="reconnect(s.connectionId)"><Icon :path="mdiRestart" /> Reconnect</DropdownMenuItem>
+                        <DropdownMenuSeparator class="menu-sep" />
+                        <DropdownMenuItem class="menu-item danger" @select="kill(s.connectionId)"><Icon :path="mdiLanDisconnect" /> Disconnect</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuRoot>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </template>
@@ -141,20 +152,16 @@ async function killAll(): Promise<void> {
 .hero.bad .trail { stroke-dasharray: 3 4; opacity: 0.5; }
 @keyframes beat { from { stroke-dashoffset: 0.22; } to { stroke-dashoffset: -1; } }
 
-/* The list is flat, like the tree: hairlines, a dot, hover background. */
+/* The list is a table in the same style as the other dialogs (.dgrid). */
 .panel { margin: 16px 20px 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); overflow: hidden; }
-.cols, .row { grid-template-columns: 1fr 140px 48px 112px; column-gap: 28px; }
-.cols { display: grid; padding: 7px 16px; background: var(--bg-side); border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); font-weight: 600; }
 .list { max-height: 44vh; overflow: auto; }
-.row { display: grid; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.row:last-child { border-bottom: 0; }
-.mid { min-width: 0; }
-.nm { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-.flag { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--warn); }
-.tg { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.db, .nt { font: 12px var(--mono); color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.acts { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
-.kill:hover { color: var(--danger); }
+td.nm { font-family: var(--font); font-weight: 600; }
+td.st { font-family: var(--font); white-space: nowrap; }
+.dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--text-3); vertical-align: 1px; }
+.dot.ok { background: var(--ok); }
+.dot.bad { background: var(--warn); }
+.dot.wait { background: var(--text-3); }
+td.trunc { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
 .link { border: 0; background: none; color: var(--text-3); font: inherit; cursor: pointer; padding: 5px 2px; }
 .link:hover:not(:disabled) { color: var(--danger); }
 

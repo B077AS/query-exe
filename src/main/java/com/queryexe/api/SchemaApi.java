@@ -10,27 +10,27 @@ import java.util.Map;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.queryexe.Params;
-import com.queryexe.Rpc;
-import com.queryexe.model.connections.ConnectionObject;
-import com.queryexe.model.data.ColumnData;
-import com.queryexe.model.data.ForeignKeyData;
-import com.queryexe.service.Catalog;
-import com.queryexe.service.DatabaseConnection;
-import com.queryexe.service.SQLFormatterUtils;
-import com.queryexe.service.ScriptRunner;
-import com.queryexe.service.Workspace;
-import com.queryexe.utils.SqlSplitter;
+import com.queryexe.app.Params;
+import com.queryexe.app.Rpc;
+import com.queryexe.connection.ConnectionProfile;
+import com.queryexe.schema.ColumnData;
+import com.queryexe.schema.ForeignKeyData;
+import com.queryexe.schema.SchemaService;
+import com.queryexe.connection.DatabaseConnection;
+import com.queryexe.query.SQLFormatterUtils;
+import com.queryexe.query.ScriptRunner;
+import com.queryexe.query.Workspace;
+import com.queryexe.query.SqlSplitter;
 
 import lombok.extern.slf4j.Slf4j;
 
 /** The schema tree, generated scripts, and the table editor (create / alter / drop). */
 @Slf4j
-final class SchemaApi {
+class SchemaApi {
 
     private static final int SELECT_LIMIT = 1_000;
 
-    private final Catalog catalog = Catalog.get();
+    private SchemaService catalog = SchemaService.get();
 
     void register(Rpc rpc) {
         rpc.on("schema.load", p -> catalog.load(Params.string(p, "connectionId")));
@@ -41,7 +41,7 @@ final class SchemaApi {
             return out;
         });
         rpc.on("schema.use", p -> {
-            catalog.call(Params.string(p, "connectionId"), c -> {
+            catalog.read(Params.string(p, "connectionId"), c -> {
                 c.useDatabase(Params.string(p, "container"));
                 return null;
             });
@@ -50,24 +50,24 @@ final class SchemaApi {
         rpc.on("schema.script", this::script);
         rpc.on("schema.tableInfo", this::tableInfo);
         rpc.on("schema.diagram", this::diagram);
-        rpc.on("schema.columnInfo", p -> catalog.call(Params.string(p, "connectionId"), c ->
+        rpc.on("schema.columnInfo", p -> catalog.read(Params.string(p, "connectionId"), c ->
                 c.getDetailedColumnInfo(Params.string(p, "container"), Params.string(p, "table"), Params.string(p, "column"))));
         rpc.on("schema.createContainer", p -> {
-            catalog.call(Params.string(p, "connectionId"), c -> {
+            catalog.read(Params.string(p, "connectionId"), c -> {
                 c.createDatabase(Params.string(p, "name"));
                 return null;
             });
             return Map.of("ok", true);
         });
         rpc.on("schema.dropContainer", p -> {
-            catalog.call(Params.string(p, "connectionId"), c -> {
+            catalog.read(Params.string(p, "connectionId"), c -> {
                 c.deleteDatabase(Params.string(p, "name"));
                 return null;
             });
             return Map.of("ok", true);
         });
         rpc.on("schema.dropTable", p -> {
-            catalog.call(Params.string(p, "connectionId"), c -> {
+            catalog.read(Params.string(p, "connectionId"), c -> {
                 c.deleteTable(Params.string(p, "container"), Params.string(p, "table"));
                 return null;
             });
@@ -77,11 +77,11 @@ final class SchemaApi {
         rpc.on("table.preview", this::preview);
         rpc.on("table.execute", this::execute);
         rpc.on("sql.format", p -> {
-            ConnectionObject c = DatabaseConnection.getInstance().getConnectionObject(Params.string(p, "connectionId"));
+            ConnectionProfile c = DatabaseConnection.getInstance().getProfile(Params.string(p, "connectionId"));
             return Map.of("sql", SQLFormatterUtils.format(Params.string(p, "sql"), c));
         });
         rpc.on("sql.split", p -> {
-            ConnectionObject c = DatabaseConnection.getInstance().getConnectionObject(Params.string(p, "connectionId"));
+            ConnectionProfile c = DatabaseConnection.getInstance().getProfile(Params.string(p, "connectionId"));
             if (c == null) {
                 throw new IllegalStateException("This connection is not open.");
             }
@@ -93,9 +93,9 @@ final class SchemaApi {
         String kind = Params.string(p, "kind");
         String container = Params.string(p, "container");
         String table = Params.string(p, "table");
-        return catalog.call(Params.string(p, "connectionId"), c -> {
+        return catalog.read(Params.string(p, "connectionId"), c -> {
             String sql = switch (kind) {
-                case "select" -> c.generateSelectScript(table, container, SELECT_LIMIT);
+                case "select" -> c.getDialect().generateSelectScript(table, container, SELECT_LIMIT);
                 case "create" -> c.generateCreateScript(table, container);
                 case "insert" -> c.generateInsertScript(table, container);
                 default -> throw new IllegalArgumentException("Unknown script kind: " + kind);
@@ -107,7 +107,7 @@ final class SchemaApi {
     private Object tableInfo(JsonObject p) throws SQLException {
         String container = Params.string(p, "container");
         String table = Params.string(p, "table");
-        return catalog.call(Params.string(p, "connectionId"), c -> {
+        return catalog.read(Params.string(p, "connectionId"), c -> {
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("columns", c.getColumnsForTable(container, table));
             out.put("foreignKeys", new ArrayList<>(c.extractForeignKeys(container, table).values()));
@@ -134,7 +134,7 @@ final class SchemaApi {
      */
     private Object diagram(JsonObject p) throws SQLException {
         String container = Params.string(p, "container");
-        return catalog.call(Params.string(p, "connectionId"), c -> {
+        return catalog.read(Params.string(p, "connectionId"), c -> {
             Map<String, ArrayList<ColumnData>> all = c.getAllTablesAndColumns(container);
             List<Map<String, Object>> tables = new ArrayList<>();
             List<Map<String, Object>> relations = new ArrayList<>();
@@ -188,9 +188,9 @@ final class SchemaApi {
     private Object describeTable(JsonObject p) throws SQLException {
         String container = Params.string(p, "container");
         String table = Params.optionalString(p, "table");
-        return catalog.call(Params.string(p, "connectionId"), c -> {
+        return catalog.read(Params.string(p, "connectionId"), c -> {
             Map<String, Object> out = new LinkedHashMap<>();
-            out.put("dataTypes", List.of(c.getDataTypes()));
+            out.put("dataTypes", List.of(c.getDialect().getDataTypes()));
             out.put("tables", c.getTablesForDatabase(container));
             if (!table.isEmpty()) {
                 out.put("columns", c.getColumnsForTable(container, table));
@@ -281,16 +281,16 @@ final class SchemaApi {
                 renames.put(e.getKey(), e.getValue().getAsString());
             }
         }
-        return catalog.call(Params.string(p, "connectionId"), c -> {
+        return catalog.read(Params.string(p, "connectionId"), c -> {
             String sql;
             if (original.isEmpty()) {
-                sql = c.generateCreateTableSQL(container, table, columns, fks);
+                sql = c.getDialect().generateCreateTableSQL(container, table, columns, fks);
             } else {
                 List<ColumnData> oldColumns = c.getColumnsForTable(container, original);
                 Map<String, ForeignKeyData> oldFks = c.extractForeignKeys(container, original);
-                sql = c.generateAlterTableSQL(container, original, table, oldColumns, columns, oldFks, fks, renames);
+                sql = c.getDialect().generateAlterTableSQL(container, original, table, oldColumns, columns, oldFks, fks, renames);
             }
-            String shown = sql == null || sql.isBlank() ? "" : SQLFormatterUtils.format(sql, c);
+            String shown = sql == null || sql.isBlank() ? "" : SQLFormatterUtils.format(sql, c.getProfile());
             Map<String, Object> out = new HashMap<>();
             out.put("sql", shown);
             return out;
@@ -300,11 +300,11 @@ final class SchemaApi {
     /** Runs a generated script on a connection of its own, one statement at a time, stopping at the first error. */
     private Object execute(JsonObject p) throws SQLException {
         String connectionId = Params.string(p, "connectionId");
-        ConnectionObject object = DatabaseConnection.getInstance().getConnectionObject(connectionId);
+        ConnectionProfile object = DatabaseConnection.getInstance().getProfile(connectionId);
         if (object == null) {
             throw new IllegalStateException("This connection is not open.");
         }
-        List<String> statements = SqlSplitter.texts(SqlSplitter.split(Params.string(p, "sql"), object.getSqlSyntax()));
+        List<String> statements = SqlSplitter.texts(SqlSplitter.split(Params.string(p, "sql"), object.dialect().getSqlSyntax()));
         Connection session = DatabaseConnection.getInstance().openSession(object);
         String[] failure = {null};
         try {

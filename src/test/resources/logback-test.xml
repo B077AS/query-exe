@@ -2,7 +2,7 @@
 <!-- Tests log to the console only (same colored format as the app), so they never write a logs/ folder into the repo. -->
 <configuration>
 
-    <conversionRule conversionWord="customLevel" class="com.queryexe.utils.CustomDebugConfig" />
+    <conversionRule conversionWord="customLevel" class="com.queryexe.app.CustomDebugConfig" />
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <conversionRule conversionWord="customLevel" class="com.queryexe.utils.CustomDebugConfig" />
+    <conversionRule conversionWord="customLevel" class="com.queryexe.app.CustomDebugConfig" />
 
     <!-- Resolve AppData path via system property set in Launcher -->
     <property name="LOG_DIR" value="${queryexe.logDir:-logs}" />

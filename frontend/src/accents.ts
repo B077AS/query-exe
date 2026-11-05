@@ -11,7 +11,7 @@ export interface Accent {
 }
 
 export const ACCENTS: Accent[] = [
-  { key: 'blue', name: 'Blue', light: '#2a62d9', dark: '#6b9bff', onLight: '#ffffff', onDark: '#0d1526' },
+  { key: 'blue', name: 'Blue', light: '#2a62d9', dark: '#3f7df2', onLight: '#ffffff', onDark: '#ffffff' },
   { key: 'teal', name: 'Teal', light: '#0b8575', dark: '#3cc2ad', onLight: '#ffffff', onDark: '#04201b' },
   { key: 'green', name: 'Green', light: '#2f7d3f', dark: '#6cc17e', onLight: '#ffffff', onDark: '#0a1f0e' },
   { key: 'orange', name: 'Orange', light: '#c2501a', dark: '#f08a55', onLight: '#ffffff', onDark: '#2a1004' },

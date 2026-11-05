@@ -2,14 +2,14 @@ package com.queryexe.api;
 
 import java.util.Map;
 
-import com.queryexe.Params;
-import com.queryexe.Rpc;
-import com.queryexe.service.MonitorService;
+import com.queryexe.app.Params;
+import com.queryexe.app.Rpc;
+import com.queryexe.monitor.MonitorService;
 
 /** The server monitor: live numbers, sessions and locks of an open connection. */
-final class MonitorApi {
+class MonitorApi {
 
-    private final MonitorService monitor = MonitorService.get();
+    private MonitorService monitor = MonitorService.get();
 
     void register(Rpc rpc) {
         rpc.on("monitor.open", p -> monitor.open(Params.string(p, "connectionId")));

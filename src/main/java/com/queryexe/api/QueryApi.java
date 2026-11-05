@@ -13,24 +13,24 @@ import java.util.UUID;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.queryexe.Params;
-import com.queryexe.Rpc;
-import com.queryexe.grid.GridModel;
-import com.queryexe.model.connections.ConnectionObject;
-import com.queryexe.service.DatabaseConnection;
-import com.queryexe.service.Exporter;
-import com.queryexe.service.RecentFilesManager;
-import com.queryexe.service.Workspace;
-import com.queryexe.utils.SqlSplitter;
+import com.queryexe.app.Params;
+import com.queryexe.app.Rpc;
+import com.queryexe.query.grid.GridModel;
+import com.queryexe.connection.ConnectionProfile;
+import com.queryexe.connection.DatabaseConnection;
+import com.queryexe.query.Exporter;
+import com.queryexe.store.RecentFilesManager;
+import com.queryexe.query.Workspace;
+import com.queryexe.query.SqlSplitter;
 
 import lombok.extern.slf4j.Slf4j;
 
 /** Running scripts, editing result grids, exporting, and the .sql files on disk. */
 @Slf4j
-final class QueryApi {
+class QueryApi {
 
-    private final Workspace workspace;
-    private final FileChooser chooser;
+    private Workspace workspace;
+    private FileChooser chooser;
 
     QueryApi(Workspace workspace, FileChooser chooser) {
         this.workspace = workspace;
@@ -109,7 +109,7 @@ final class QueryApi {
      */
     private Object run(JsonObject p) {
         String connectionId = Params.string(p, "connectionId");
-        ConnectionObject connection = DatabaseConnection.getInstance().getConnectionObject(connectionId);
+        ConnectionProfile connection = DatabaseConnection.getInstance().getProfile(connectionId);
         if (connection == null) {
             throw new IllegalStateException("This connection is not open. Connect first.");
         }
@@ -119,11 +119,11 @@ final class QueryApi {
 
         if (mode.equals("statement")) {
             int caret = Params.integer(p, "caret");
-            Optional<SqlSplitter.Statement> at = SqlSplitter.statementAt(text, caret, connection.getSqlSyntax());
+            Optional<SqlSplitter.Statement> at = SqlSplitter.statementAt(text, caret, connection.dialect().getSqlSyntax());
             at.ifPresent(s -> statements.add(new Workspace.StatementRange(s.getText(), s.getFrom(), s.getTo())));
         } else {
             int offset = mode.equals("selection") ? Params.integer(p, "offset") : 0;
-            for (SqlSplitter.Statement s : SqlSplitter.split(text, connection.getSqlSyntax())) {
+            for (SqlSplitter.Statement s : SqlSplitter.split(text, connection.dialect().getSqlSyntax())) {
                 statements.add(new Workspace.StatementRange(s.getText(), s.getFrom() + offset, s.getTo() + offset));
             }
         }

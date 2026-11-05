@@ -12,32 +12,32 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.queryexe.Launcher;
-import com.queryexe.Params;
-import com.queryexe.Rpc;
-import com.queryexe.model.connections.ConnectionObject;
-import com.queryexe.model.connections.ConnectionObjectDeserializer;
-import com.queryexe.model.connections.ConnectionTypes;
-import com.queryexe.model.drivers.DriverAPIs;
-import com.queryexe.model.drivers.DriverInfo;
-import com.queryexe.service.AppSettings;
-import com.queryexe.service.ConnectionService;
-import com.queryexe.service.DatabaseConnection;
-import com.queryexe.service.Workspace;
+import com.queryexe.app.Params;
+import com.queryexe.app.Rpc;
+import com.queryexe.connection.ConnectionProfile;
+import com.queryexe.connection.ConnectionProfileDeserializer;
+import com.queryexe.connection.ConnectionTypes;
+import com.queryexe.connection.driver.DriverAPIs;
+import com.queryexe.connection.driver.DriverInfo;
+import com.queryexe.store.AppSettings;
+import com.queryexe.connection.ProfileStore;
+import com.queryexe.connection.DatabaseConnection;
+import com.queryexe.query.Workspace;
 
 import lombok.extern.slf4j.Slf4j;
 
 /** Saved connections, connecting, and JDBC drivers. */
 @Slf4j
-final class ConnectionApi {
+class ConnectionApi {
 
     private static final Gson GSON = new GsonBuilder()
-            .registerTypeAdapter(ConnectionObject.class, new ConnectionObjectDeserializer()).create();
+            .registerTypeAdapter(ConnectionProfile.class, new ConnectionProfileDeserializer()).create();
     private static final String FOLDERS = "connections.folders";
     private static final String COLLAPSED = "connections.collapsedFolders";
 
-    private final ConnectionService connections = ConnectionService.getInstance();
-    private final Workspace workspace;
-    private final Map<String, Boolean> connecting = new ConcurrentHashMap<>();
+    private ProfileStore connections = ProfileStore.getInstance();
+    private Workspace workspace;
+    private Map<String, Boolean> connecting = new ConcurrentHashMap<>();
 
     ConnectionApi(Workspace workspace) {
         this.workspace = workspace;
@@ -59,7 +59,7 @@ final class ConnectionApi {
         rpc.on("connections.list", p -> list());
         rpc.on("connections.get", p -> {
             // the edit dialog is the only place that sees the stored password; the list never carries it
-            ConnectionObject c = load(Params.string(p, "id"));
+            ConnectionProfile c = load(Params.string(p, "id"));
             Map<String, Object> out = describe(c);
             out.put("password", c.getPassword() == null ? "" : c.getPassword());
             return out;
@@ -156,21 +156,21 @@ final class ConnectionApi {
 
     private Object list() {
         List<Object> out = new ArrayList<>();
-        for (ConnectionObject connection : connections.loadConnections()) {
+        for (ConnectionProfile connection : connections.loadConnections()) {
             out.add(describe(connection));
         }
         return out;
     }
 
-    private ConnectionObject load(String id) {
-        ConnectionObject connection = connections.loadConnection(id);
+    private ConnectionProfile load(String id) {
+        ConnectionProfile connection = connections.loadConnection(id);
         if (connection == null) {
             throw new IllegalArgumentException("This connection no longer exists.");
         }
         return connection;
     }
 
-    private Map<String, Object> describe(ConnectionObject c) {
+    private Map<String, Object> describe(ConnectionProfile c) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", c.getId());
         out.put("name", c.getConnectionName());
@@ -250,7 +250,7 @@ final class ConnectionApi {
             }
         } else {
             json.remove("password");
-            connections.forgetPassword(id);
+            connections.getVault().forget(id);
             if (ConnectionTypes.SQLite.name().equals(json.get("dbType").getAsString())) {
                 json.addProperty("password", "");
             }
@@ -271,7 +271,7 @@ final class ConnectionApi {
         }
         json.addProperty("password", password);
         json.addProperty("id", "test-" + UUID.randomUUID());
-        ConnectionObject candidate = GSON.fromJson(json, ConnectionObject.class);
+        ConnectionProfile candidate = GSON.fromJson(json, ConnectionProfile.class);
         DatabaseConnection.getInstance().test(candidate);
         return Map.of("ok", true);
     }
@@ -280,7 +280,7 @@ final class ConnectionApi {
 
     private Object connect(JsonObject p) throws Exception {
         String id = Params.string(p, "id");
-        ConnectionObject connection = load(id);
+        ConnectionProfile connection = load(id);
         String given = Params.optionalString(p, "password");
         if (connection.getPassword() == null && ConnectionTypes.SQLite.name().equals(connection.getDbType())) {
             connection.setPassword(""); // a SQLite file has no password to ask for
@@ -296,9 +296,9 @@ final class ConnectionApi {
             throw new IllegalStateException("Already connecting.");
         }
         try {
-            connections.connect(connection);
+            DatabaseConnection.getInstance().initialize(connection);
             if (p.has("remember") && Params.bool(p, "remember") && !given.isEmpty()) {
-                connections.rememberPassword(id, connection.getUsername() == null ? "" : connection.getUsername(), given);
+                connections.getVault().store(id, connection.getUsername() == null ? "" : connection.getUsername(), given);
             }
         } finally {
             connecting.remove(id);

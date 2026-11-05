@@ -325,9 +325,7 @@ const working = computed(() => currentSession());
 
     <div class="tree" role="tree">
       <div v-if="focusSession && focusSession.loadingTree && !focusSession.tree" class="empty">Reading structure…</div>
-      <div v-if="app.ready && app.connections.length === 0" class="empty">
-        No connections yet.<br /><button class="btn" style="margin-top: 10px" @click="dialogs.connection = {}"><Icon :path="mdiPlus" /> New connection</button>
-      </div>
+      <div v-if="app.ready && app.connections.length === 0" class="empty">No connections yet.</div>
       <ContextMenuRoot v-for="n in nodes" :key="n.id">
         <ContextMenuTrigger as-child>
           <div class="node" :class="{ sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"

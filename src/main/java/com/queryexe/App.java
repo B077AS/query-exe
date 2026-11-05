@@ -19,8 +19,12 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.queryexe.api.Api;
-import com.queryexe.service.AppSettings;
-import com.queryexe.service.DatabaseConnection;
+import com.queryexe.app.Params;
+import com.queryexe.app.Rpc;
+import com.queryexe.app.SystemClipboard;
+import com.queryexe.app.ThemeRequest;
+import com.queryexe.store.AppSettings;
+import com.queryexe.connection.DatabaseConnection;
 
 import io.github.b077as.jolt.AppOptions;
 import io.github.b077as.jolt.AppResources;
@@ -41,7 +45,7 @@ import lombok.extern.slf4j.Slf4j;
  * that folder instead of the real profile.
  */
 @Slf4j
-public final class App {
+public class App {
 
     private static final String APP_ID = "com.queryexe.app";
     private static final String DEV_SERVER = "http://127.0.0.1:5173";
@@ -114,7 +118,14 @@ public final class App {
     // ------------------------------------------------------------------------------------ appearance
 
     /** What the window needs at startup, before any page has loaded. */
-    private record Appearance(String preference, String accent, String scheme, int background) {
+    @lombok.Data
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    private static class Appearance {
+        private String preference;
+        private String accent;
+        private String scheme;
+        private int background;
     }
 
     private static Appearance appearance() {
@@ -139,19 +150,19 @@ public final class App {
 
     /** Starts a window in the colours the user last had, so a dark app never flashes white. */
     private static WindowOptions inSavedColours(WindowOptions options, Appearance saved) {
-        if (saved.scheme() == null) {
+        if (saved.getScheme() == null) {
             return options;
         }
         return options
-                .withTitleBarScheme("dark".equals(saved.scheme()) ? ColorScheme.DARK : ColorScheme.LIGHT)
-                .withBackgroundColor(saved.background());
+                .withTitleBarScheme("dark".equals(saved.getScheme()) ? ColorScheme.DARK : ColorScheme.LIGHT)
+                .withBackgroundColor(saved.getBackground());
     }
 
     /** What the page reads before its first paint ({@code window.__QUERYEXE__}). Every value was validated when it was saved. */
     private static String bootScript(Appearance saved, boolean dev) {
         Map<String, Object> boot = new LinkedHashMap<>();
-        boot.put("preference", saved.preference());
-        boot.put("accent", saved.accent());
+        boot.put("preference", saved.getPreference());
+        boot.put("accent", saved.getAccent());
         boot.put("version", version());
         boot.put("dev", dev);
         boot.put("ui", uiSettings());
@@ -193,14 +204,14 @@ public final class App {
         // never takes the accent colour.
         rpc.on("window.setTheme", params -> {
             ThemeRequest theme = ThemeRequest.parse(params);
-            window.setTitleBarScheme(theme.scheme());
-            window.setTitleBarColors(theme.background(), theme.text());
-            window.setBackgroundColor(theme.background());
+            window.setTitleBarScheme(theme.getScheme());
+            window.setTitleBarColors(theme.getBackground(), theme.getText());
+            window.setBackgroundColor(theme.getBackground());
             JsonObject stored = new JsonObject();
-            stored.addProperty("preference", theme.preference());
-            stored.addProperty("accent", theme.accent());
-            stored.addProperty("scheme", theme.scheme().name().toLowerCase(java.util.Locale.ROOT));
-            stored.addProperty("background", theme.background());
+            stored.addProperty("preference", theme.getPreference());
+            stored.addProperty("accent", theme.getAccent());
+            stored.addProperty("scheme", theme.getScheme().name().toLowerCase(java.util.Locale.ROOT));
+            stored.addProperty("background", theme.getBackground());
             AppSettings.get().setRaw(APPEARANCE, stored);
             return Map.of("ok", true);
         });
