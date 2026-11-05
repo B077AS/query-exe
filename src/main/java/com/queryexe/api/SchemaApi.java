@@ -111,6 +111,12 @@ final class SchemaApi {
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("columns", c.getColumnsForTable(container, table));
             out.put("foreignKeys", new ArrayList<>(c.extractForeignKeys(container, table).values()));
+            try {
+                out.put("indexes", c.getIndexes(container, table));
+            } catch (SQLException | RuntimeException e) {
+                log.warn("No indexes for {}: {}", table, e.getMessage());
+                out.put("indexes", List.of());
+            }
             Double size = null;
             try {
                 size = c.getTableSize(container, table);
@@ -189,6 +195,12 @@ final class SchemaApi {
             if (!table.isEmpty()) {
                 out.put("columns", c.getColumnsForTable(container, table));
                 out.put("foreignKeys", new ArrayList<>(c.extractForeignKeys(container, table).values()));
+            try {
+                out.put("indexes", c.getIndexes(container, table));
+            } catch (SQLException | RuntimeException e) {
+                log.warn("No indexes for {}: {}", table, e.getMessage());
+                out.put("indexes", List.of());
+            }
             } else {
                 out.put("columns", List.of());
                 out.put("foreignKeys", List.of());

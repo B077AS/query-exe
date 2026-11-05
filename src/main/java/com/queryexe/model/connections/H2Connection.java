@@ -461,6 +461,11 @@ public class H2Connection extends ConnectionObject {
     }
 
     @Override
+    protected String[] metadataScope(String container) {
+        return new String[] { null, container };
+    }
+
+    @Override
     public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
         Map<String, ForeignKeyData> foreignKeys = new LinkedHashMap<>();
         for (ForeignKeyInfo fk : catalog().foreignKeys(schemaOrCurrent(dbName), tableName)) {

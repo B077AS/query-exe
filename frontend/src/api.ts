@@ -127,6 +127,7 @@ export interface TableDescription {
 export interface TableInfo {
   columns: TableDescription['columns'];
   foreignKeys: ForeignKeyDef[];
+  indexes: { name: string; unique: boolean; primary: boolean; type: string | null; columns: string[] }[];
   sizeMb: number | null;
 }
 

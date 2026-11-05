@@ -108,6 +108,51 @@ public abstract class ConnectionObject {
         return null;
     }
 
+
+    /**
+     * Where the tree's "container" lives in JDBC metadata: {catalog, schema}. Engines whose container is a database
+     * (MySQL, MariaDB, SQL Server) use the catalog; the ones where it is a schema (PostgreSQL, H2) override this.
+     */
+    protected String[] metadataScope(String container) {
+        return new String[] { container, null };
+    }
+
+    /**
+     * The indexes of one table, from JDBC metadata, columns in key order. Engines with a better source override this.
+     */
+    public java.util.List<com.queryexe.model.data.IndexData> getIndexes(String container, String table) throws java.sql.SQLException {
+        String[] scope = metadataScope(container);
+        java.sql.DatabaseMetaData meta = com.queryexe.service.DatabaseConnection.getInstance().getConnection().getMetaData();
+        java.util.Set<String> pkColumns = new java.util.HashSet<>();
+        try (java.sql.ResultSet rs = meta.getPrimaryKeys(scope[0], scope[1], table)) {
+            while (rs.next()) pkColumns.add(rs.getString("COLUMN_NAME"));
+        }
+        java.util.Map<String, java.util.TreeMap<Integer, String>> columns = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Boolean> unique = new java.util.HashMap<>();
+        java.util.Map<String, String> types = new java.util.HashMap<>();
+        try (java.sql.ResultSet rs = meta.getIndexInfo(scope[0], scope[1], table, false, false)) {
+            while (rs.next()) {
+                String name = rs.getString("INDEX_NAME");
+                String column = rs.getString("COLUMN_NAME");
+                if (name == null || column == null) continue; // table statistics row, or an expression column
+                columns.computeIfAbsent(name, k -> new java.util.TreeMap<>()).put(rs.getInt("ORDINAL_POSITION"), column);
+                unique.put(name, !rs.getBoolean("NON_UNIQUE"));
+                types.put(name, switch (rs.getShort("TYPE")) {
+                    case java.sql.DatabaseMetaData.tableIndexHashed -> "HASH";
+                    case java.sql.DatabaseMetaData.tableIndexClustered -> "CLUSTERED";
+                    default -> null;
+                });
+            }
+        }
+        java.util.List<com.queryexe.model.data.IndexData> out = new java.util.ArrayList<>();
+        columns.forEach((name, cols) -> {
+            java.util.List<String> list = new java.util.ArrayList<>(cols.values());
+            boolean primary = unique.get(name) && !pkColumns.isEmpty() && pkColumns.size() == list.size() && pkColumns.containsAll(list);
+            out.add(com.queryexe.model.data.IndexData.builder().name(name).unique(unique.get(name)).primary(primary)
+                    .type(types.get(name)).columns(list).build());
+        });
+        return out;
+    }
     /**
      * Other objects of a database/schema that the tree lists next to its tables, by group title ("Sequences",
      * "Indexes", ...), in display order. Empty groups are left out; engines without support return nothing.

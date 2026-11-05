@@ -253,6 +253,16 @@ public class SQLiteConnection extends ConnectionObject {
     }
 
     @Override
+    public List<com.queryexe.model.data.IndexData> getIndexes(String container, String table) throws SQLException {
+        List<com.queryexe.model.data.IndexData> out = new ArrayList<>();
+        for (IndexInfo index : catalog().indexes(container, table)) {
+            out.add(com.queryexe.model.data.IndexData.builder().name(index.getName()).unique(index.isUnique())
+                    .primary("pk".equals(index.getOrigin())).columns(index.getColumns()).build());
+        }
+        return out;
+    }
+
+    @Override
     public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
         Map<String, ForeignKeyData> foreignKeys = new LinkedHashMap<>();
         for (ForeignKeyInfo fk : catalog().foreignKeys(dbName, tableName)) {

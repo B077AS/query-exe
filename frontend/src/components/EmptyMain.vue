@@ -23,12 +23,12 @@ async function openScript(): Promise<void> {
 
 <template>
   <div class="empty-main">
-    <Logo :size="88" bare />
+    <Logo class="logo" :size="64" bare />
     <h3>{{ app.connections.length ? 'Pick a connection to start' : 'Add your first connection' }}</h3>
     <p v-if="app.connections.length">Double-click one on the left to connect and browse it, or:</p>
     <p v-else>QueryExe connects to PostgreSQL, MySQL, MariaDB, SQL Server, H2 and SQLite.</p>
     <div class="act">
-      <button class="btn primary" @click="dialogs.connection = {}"><Icon :path="mdiPlus" /> New connection</button>
+      <button class="btn outline" @click="dialogs.connection = {}"><Icon :path="mdiPlus" /> New connection</button>
       <button class="btn" @click="openScript"><Icon :path="mdiFolderOpenOutline" /> Open script</button>
     </div>
     <div v-if="app.recent.length" class="rec">
@@ -44,6 +44,9 @@ async function openScript(): Promise<void> {
 <style scoped>
 .empty-main { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-2); }
 h3 { color: var(--text); font-size: 16px; }
+.logo :deep(.accent) { stroke: var(--text-3); }
+.btn.outline { border-color: var(--accent); color: var(--accent); background: transparent; }
+.btn.outline:hover:not(:disabled) { background: var(--accent-tint); }
 .act { display: flex; gap: 8px; margin-top: 4px; }
 .rec { width: 420px; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-raised); overflow: hidden; }
 .h { padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); font-weight: 600; background: var(--bg-side); }
