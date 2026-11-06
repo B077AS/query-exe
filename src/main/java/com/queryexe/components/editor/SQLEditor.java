@@ -176,17 +176,19 @@ public class SQLEditor extends CodeArea {
 
         // Keyboard event handler
         this.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            // Autocomplete stays Ctrl+Space on every OS (Cmd+Space is Spotlight on macOS);
+            // all other editor shortcuts use the platform shortcut key (Cmd on macOS, Ctrl elsewhere).
             if (event.isControlDown() && event.getCode() == KeyCode.SPACE) {
                 handleCtrlSpace(event);
-            } else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.F) {
+            } else if (event.isShortcutDown() && event.isShiftDown() && event.getCode() == KeyCode.F) {
                 handleCtrlShiftF(event);
-            } else if (event.isControlDown() && event.getCode() == KeyCode.F) {
+            } else if (event.isShortcutDown() && event.getCode() == KeyCode.F) {
                 handleCtrlF(event);
-            } else if (event.isControlDown() && event.getCode() == KeyCode.D) {
+            } else if (event.isShortcutDown() && event.getCode() == KeyCode.D) {
                 handleCtrlD(event);
-            } else if (event.isControlDown() && event.isShiftDown() && event.getCode() == KeyCode.ENTER) {
+            } else if (event.isShortcutDown() && event.isShiftDown() && event.getCode() == KeyCode.ENTER) {
                 handleCtrlShiftEnter(event);
-            } else if (event.isControlDown() && event.getCode() == KeyCode.ENTER) {
+            } else if (event.isShortcutDown() && event.getCode() == KeyCode.ENTER) {
                 handleCtrlEnter(event);
             } else if (autocompletePopup.isShowing()) {
                 handleAutocompleteKeys(event);

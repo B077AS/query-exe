@@ -1,6 +1,7 @@
 package com.queryexe.components.menu;
 
-import static javafx.scene.input.KeyCombination.CONTROL_DOWN;
+import static javafx.scene.input.KeyCombination.SHIFT_DOWN;
+import static javafx.scene.input.KeyCombination.SHORTCUT_DOWN;
 
 import javafx.event.Event;
 import javafx.scene.Node;
@@ -24,6 +25,7 @@ import com.queryexe.components.modals.SettingsModal;
 import com.queryexe.service.QueryService;
 import com.queryexe.service.RecentFilesManager;
 import com.queryexe.queryexe.App;
+import com.queryexe.utils.OsUtil;
 
 import java.io.File;
 import java.util.List;
@@ -33,6 +35,10 @@ public class CustomMenuBar extends MenuBar {
     private Menu openRecentMenu;
 
     public CustomMenuBar() {
+        // On macOS the menus live in the global screen menu bar (top of the
+        // screen) instead of inside the window. Elsewhere this is a no-op.
+        setUseSystemMenuBar(OsUtil.IS_MAC);
+
         getMenus().addAll(
                 fileMenu(),
                 editMenu(),
@@ -57,12 +63,12 @@ public class CustomMenuBar extends MenuBar {
 
         populateRecentFiles();
 
-        MenuItem openMenu = createItem("Open", Feather.FOLDER, new KeyCodeCombination(KeyCode.O, CONTROL_DOWN));
+        MenuItem openMenu = createItem("Open", Feather.FOLDER, new KeyCodeCombination(KeyCode.O, SHORTCUT_DOWN));
         openMenu.setOnAction(event -> {
             QueryService.getInstance().openQuery();
         });
 
-        MenuItem saveMenu = createItem("Save", Feather.SAVE, new KeyCodeCombination(KeyCode.S, CONTROL_DOWN));
+        MenuItem saveMenu = createItem("Save", Feather.SAVE, new KeyCodeCombination(KeyCode.S, SHORTCUT_DOWN));
         saveMenu.setOnAction(event -> {
             QueryService.getInstance().saveQuery();
         });
@@ -128,24 +134,28 @@ public class CustomMenuBar extends MenuBar {
 
     private Menu editMenu() {
         Menu menu = new Menu("Edit");
-        MenuItem undoMenu = createItem("Undo", Feather.CORNER_DOWN_LEFT, new KeyCodeCombination(KeyCode.Z, CONTROL_DOWN));
-        MenuItem redoMenu = createItem("Redo", Feather.CORNER_DOWN_RIGHT, new KeyCodeCombination(KeyCode.Y, CONTROL_DOWN));
-        MenuItem cutMenu = createItem("Cut", Feather.SCISSORS, new KeyCodeCombination(KeyCode.X, CONTROL_DOWN));
-        MenuItem copyMenu = createItem("Copy", MaterialDesignC.CONTENT_COPY, new KeyCodeCombination(KeyCode.C, CONTROL_DOWN));
-        MenuItem pasteMenu = createItem("Paste", MaterialDesignC.CONTENT_PASTE, new KeyCodeCombination(KeyCode.V, CONTROL_DOWN));
+        MenuItem undoMenu = createItem("Undo", Feather.CORNER_DOWN_LEFT, new KeyCodeCombination(KeyCode.Z, SHORTCUT_DOWN));
+        KeyCodeCombination redoKey = OsUtil.IS_MAC
+                ? new KeyCodeCombination(KeyCode.Z, SHORTCUT_DOWN, SHIFT_DOWN)
+                : new KeyCodeCombination(KeyCode.Y, SHORTCUT_DOWN);
+        MenuItem redoMenu = createItem("Redo", Feather.CORNER_DOWN_RIGHT, redoKey);
+        MenuItem cutMenu = createItem("Cut", Feather.SCISSORS, new KeyCodeCombination(KeyCode.X, SHORTCUT_DOWN));
+        MenuItem copyMenu = createItem("Copy", MaterialDesignC.CONTENT_COPY, new KeyCodeCombination(KeyCode.C, SHORTCUT_DOWN));
+        MenuItem pasteMenu = createItem("Paste", MaterialDesignC.CONTENT_PASTE, new KeyCodeCombination(KeyCode.V, SHORTCUT_DOWN));
 
-        undoMenu.setOnAction(e -> fireShortcut(KeyCode.Z));
-        redoMenu.setOnAction(e -> fireShortcut(KeyCode.Y));
-        cutMenu.setOnAction(e -> fireShortcut(KeyCode.X));
-        copyMenu.setOnAction(e -> fireShortcut(KeyCode.C));
-        pasteMenu.setOnAction(e -> fireShortcut(KeyCode.V));
+        undoMenu.setOnAction(e -> fireShortcut(KeyCode.Z, false));
+        redoMenu.setOnAction(e -> fireShortcut(redoKey.getCode(), redoKey.getShift() == KeyCombination.ModifierValue.DOWN));
+        cutMenu.setOnAction(e -> fireShortcut(KeyCode.X, false));
+        copyMenu.setOnAction(e -> fireShortcut(KeyCode.C, false));
+        pasteMenu.setOnAction(e -> fireShortcut(KeyCode.V, false));
 
         menu.setMnemonicParsing(true);
         menu.getItems().addAll(undoMenu, redoMenu, new SeparatorMenuItem(), cutMenu, copyMenu, pasteMenu);
         return menu;
     }
 
-    private void fireShortcut(KeyCode code) {
+    /** Replays the platform shortcut (Cmd on macOS, Ctrl elsewhere) + code on the focused node. */
+    private void fireShortcut(KeyCode code, boolean shift) {
         Node focused = App.getScene().getFocusOwner();
         if (focused != null) {
             KeyEvent pressEvent = new KeyEvent(
@@ -154,7 +164,7 @@ public class CustomMenuBar extends MenuBar {
                     KeyEvent.KEY_PRESSED,
                     "", "",
                     code,
-                    false, true, false, false
+                    shift, !OsUtil.IS_MAC, false, OsUtil.IS_MAC
             );
 
             Event.fireEvent(focused, pressEvent);

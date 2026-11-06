@@ -18,6 +18,7 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.materialdesign2.*;
 import atlantafx.base.theme.Styles;
 import com.queryexe.utils.IconColorUtil;
+import com.queryexe.utils.OsUtil;
 import com.queryexe.queryexe.App;
 
 import java.util.LinkedHashMap;
@@ -31,18 +32,18 @@ public class ShortcutsModal extends HBox {
     private final ShortcutCategory[] categories = new ShortcutCategory[]{
             new ShortcutCategory("Editor", MaterialDesignC.CODE_TAGS, new String[][]{
                     {"Ctrl + Space", "Trigger autocomplete"},
-                    {"Ctrl + Enter", "Run selection, or current statement if nothing is selected"},
-                    {"Ctrl + Shift + Enter", "Run entire query/script"},
-                    {"Ctrl + D", "Duplicate current line"},
-                    {"Ctrl + Shift + F", "Format selection, or entire script if nothing is selected"},
-                    {"Ctrl + F", "Find and replace"},
-                    {"Ctrl + O", "Open file"},
-                    {"Ctrl + S", "Save file"}
+                    {OsUtil.SHORTCUT_KEY + " + Enter", "Run selection, or current statement if nothing is selected"},
+                    {OsUtil.SHORTCUT_KEY + " + Shift + Enter", "Run entire query/script"},
+                    {OsUtil.SHORTCUT_KEY + " + D", "Duplicate current line"},
+                    {OsUtil.SHORTCUT_KEY + " + Shift + F", "Format selection, or entire script if nothing is selected"},
+                    {OsUtil.SHORTCUT_KEY + " + F", "Find and replace"},
+                    {OsUtil.SHORTCUT_KEY + " + O", "Open file"},
+                    {OsUtil.SHORTCUT_KEY + " + S", "Save file"}
             }),
             new ShortcutCategory("Find & Replace", MaterialDesignM.MAGNIFY, new String[][]{
                     {"Enter", "Find next match"},
                     {"Shift + Enter", "Find previous match"},
-                    {"Ctrl + Enter", "Replace all occurrences"},
+                    {OsUtil.SHORTCUT_KEY + " + Enter", "Replace all occurrences"},
                     {"Enter (replace field)", "Replace current match"},
                     {"Escape", "Close find popup"}
             }),

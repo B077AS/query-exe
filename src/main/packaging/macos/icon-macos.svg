@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- macOS app icon source (Apple icon grid: 824px body centered on a 1024px
+       transparent canvas). Same design as src/main/resources/icon.svg: the
+       lucide "database-zap" glyph on a 45deg purple gradient.
+       Rendered to QueryExe.icns by scripts/make-icns.sh. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="rgb(104,90,179)"/>
+      <stop offset="1" stop-color="rgb(227,115,253)"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#bg)"/>
+  <!-- glyph: 24-unit lucide viewBox scaled to 646px (400/510 of the body), centered -->
+  <g transform="translate(189 189) scale(26.9167)" fill="none" stroke="#ffffff"
+     stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+    <path d="M3 5V19A9 3 0 0 0 15 21.84"/>
+    <path d="M21 5V8"/>
+    <path d="M21 12L18 17H22L19 22"/>
+    <path d="M3 12A9 3 0 0 0 14.59 14.87"/>
+  </g>
+</svg>

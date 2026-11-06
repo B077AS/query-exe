@@ -209,7 +209,7 @@ public class CustomTab<T extends Node> extends Tab {
         this.setGraphic(graphicBox);
 
         content.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
-            if (event.isControlDown() && event.getCode() == KeyCode.F4) {
+            if (event.isShortcutDown() && event.getCode() == KeyCode.F4) {
                 App.getTabPane().getTabs().remove(this);
             }
         });

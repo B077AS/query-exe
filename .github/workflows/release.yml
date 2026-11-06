@@ -11,6 +11,10 @@
 #                   attach the resulting QueryExe-Setup-<v>.exe /
 #                   QueryExe-<v>-x86_64.AppImage (+ .sha256 sidecars) to the
 #                   SAME release.
+#   3. macos      — (parallel to 1, release flow only) builds the client from
+#                   the release tag with `-Pmacos` (jpackage, bundled JDK 27
+#                   runtime) and attaches QueryExe-<v>-arm64.dmg (+ .sha256).
+#                   Unsigned / not notarized.
 #
 # Manual flow (Actions tab -> Run workflow, tag = existing release e.g. 0.0.3):
 #   Skips the jar build; rebuilds only the installers from the CURRENT
@@ -52,7 +56,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "27"
           cache: maven
 
       - name: Resolve version from release tag
@@ -297,4 +301,52 @@ jobs:
           gh release upload "${{ steps.v.outputs.tag }}" \
             "target/appimage/QueryExe-$V-x86_64.AppImage" \
             "target/appimage/QueryExe-$V-x86_64.AppImage.sha256" \
+            --clobber -R "$GITHUB_REPOSITORY"
+
+  macos:
+    name: macOS DMG (arm64)
+    if: github.event_name == 'release'
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "27"
+          cache: maven
+
+      - name: Resolve version from release tag
+        id: v
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          V="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          # jpackage on macOS only accepts 1-3 numeric components (CFBundleVersion),
+          # so a pre-release suffix like "-beta.1" is dropped for the bundle version.
+          echo "bundle=${V%%-*}" >> "$GITHUB_OUTPUT"
+
+      - name: Build DMG (version from tag)
+        run: |
+          mvn -B versions:set -DnewVersion="${{ steps.v.outputs.version }}" -DgenerateBackupPoms=false
+          mvn -B clean package -Pmacos -DskipTests \
+            "-Djpackage.appVersion=${{ steps.v.outputs.bundle }}"
+
+      - name: Rename and compute sha256 sidecar
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          cd target/dist
+          mv QueryExe-*.dmg "QueryExe-$V-arm64.dmg"
+          shasum -a 256 "QueryExe-$V-arm64.dmg" | awk '{print $1}' > "QueryExe-$V-arm64.dmg.sha256"
+
+      - name: Upload DMG to the client release
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          gh release upload "${{ steps.v.outputs.tag }}" \
+            "target/dist/QueryExe-$V-arm64.dmg" \
+            "target/dist/QueryExe-$V-arm64.dmg.sha256" \
             --clobber -R "$GITHUB_REPOSITORY"
