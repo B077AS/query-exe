@@ -413,7 +413,7 @@ public class ResultTable extends TableView<TableRowData> {
                                 this.getSelectionModel().clearSelection();
                                 this.getSelectionModel().select(clickedRowIndex);
                             });
-                        } else if (event.getClickCount() == 1 && !event.isControlDown()) {
+                        } else if (event.getClickCount() == 1 && !event.isShortcutDown()) {
                             if (wasSelected && selectedCount == 1) {
                                 event.consume();
                                 Platform.runLater(() -> {

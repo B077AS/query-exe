@@ -223,7 +223,7 @@ public class ResultBox extends VBox {
         });
 
         tabPane.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
-            if (event.isControlDown() && event.getCode() == KeyCode.A && ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getEditingCell() == null) {
+            if (event.isShortcutDown() && event.getCode() == KeyCode.A && ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getEditingCell() == null) {
 
                 if (((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getSelectionModel().getSelectedItems().size() == ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getItems().size()) {
                     ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getSelectionModel().clearSelection();
@@ -232,7 +232,7 @@ public class ResultBox extends VBox {
                 }
 
                 event.consume();
-            } else if (event.isControlDown() && event.getCode() == KeyCode.C && ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getEditingCell() == null) {
+            } else if (event.isShortcutDown() && event.getCode() == KeyCode.C && ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).getEditingCell() == null) {
                 ((ResultTable) tabPane.getSelectionModel().getSelectedItem().getContent()).copySelectedRows();
                 event.consume();
             }

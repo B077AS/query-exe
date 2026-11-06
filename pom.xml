@@ -12,8 +12,9 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
-        <javafx.version>22</javafx.version>
+        <maven.compiler.release>27</maven.compiler.release>
+        <lombok.version>1.18.48</lombok.version>
+        <javafx.version>27.0.1</javafx.version>
     </properties>
 
     <dependencies>
@@ -141,7 +142,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.42</version>
+            <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.microsoft/credential-secure-storage -->
@@ -194,6 +195,80 @@
                 </dependency>
             </dependencies>
         </profile>
+        <!--
+            Native macOS bundle via jpackage (must run on macOS, with the JDK
+            Maven runs on — its jpackage + jlink'ed runtime get bundled):
+              mvn clean package -Pmacos                        -> target/dist/QueryExe-<version>.dmg
+              mvn clean package -Pmacos -Djpackage.type=app-image   -> target/dist/QueryExe.app
+            Builds for the architecture of the building JDK (arm64 or x64).
+            Unsigned: Gatekeeper requires right-click -> Open on first launch.
+            app-image is ad-hoc codesigned in place, which fails on network
+            volumes (SMB/NFS): then add -Djpackage.dest=/some/local/dir.
+        -->
+        <profile>
+            <id>macos</id>
+            <properties>
+                <jpackage.type>dmg</jpackage.type>
+                <jpackage.appVersion>${project.version}</jpackage.appVersion>
+                <jpackage.input>${project.build.directory}/jpackage-input</jpackage.input>
+                <jpackage.dest>${project.build.directory}/dist</jpackage.dest>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage-macos</id>
+                                <!-- after maven-shade-plugin (same phase, declared earlier) -->
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <delete dir="${jpackage.input}" />
+                                        <delete dir="${jpackage.dest}" />
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${jpackage.input}" />
+                                        <exec executable="${java.home}/bin/jpackage" failonerror="true">
+                                            <arg value="--type" />
+                                            <arg value="${jpackage.type}" />
+                                            <arg value="--name" />
+                                            <arg value="${project.name}" />
+                                            <arg value="--app-version" />
+                                            <arg value="${jpackage.appVersion}" />
+                                            <arg value="--description" />
+                                            <arg value="${project.description}" />
+                                            <arg value="--vendor" />
+                                            <arg value="${project.name}" />
+                                            <arg value="--input" />
+                                            <arg value="${jpackage.input}" />
+                                            <arg value="--main-jar" />
+                                            <arg value="${project.build.finalName}.jar" />
+                                            <arg value="--main-class" />
+                                            <arg value="com.queryexe.queryexe.Launcher" />
+                                            <arg value="--icon" />
+                                            <arg value="${project.basedir}/src/main/packaging/macos/QueryExe.icns" />
+                                            <arg value="--mac-package-identifier" />
+                                            <arg value="com.queryexe.QueryExe" />
+                                            <arg value="--mac-package-name" />
+                                            <arg value="${project.name}" />
+                                            <arg value="--java-options" />
+                                            <arg value="--enable-native-access=ALL-UNNAMED" />
+                                            <arg value="--dest" />
+                                            <arg value="${jpackage.dest}" />
+                                        </exec>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
     </profiles>
 
     <build>
@@ -211,12 +286,12 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <release>21</release>
+                    <release>27</release>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
-                            <version>1.18.42</version>
+                            <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import com.queryexe.utils.OsUtil;
 import com.queryexe.utils.WindowsThemeUtil;
 import com.queryexe.utils.TabScrollChevrons;
 
@@ -80,8 +81,13 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
 
-        Image appIcon = new Image(Objects.requireNonNull(getClass().getResourceAsStream("/icon.png")));
-        stage.getIcons().add(appIcon);
+        // On macOS a stage icon replaces the Dock icon while the app runs; the square
+        // icon.png then looks off next to the bundle's .icns (which has the standard
+        // macOS icon margins). macOS has no per-window icons anyway, so skip it there.
+        if (!OsUtil.IS_MAC) {
+            Image appIcon = new Image(Objects.requireNonNull(getClass().getResourceAsStream("/icon.png")));
+            stage.getIcons().add(appIcon);
+        }
 
         stackPane = new StackPane();
         BorderPane borderPane = new BorderPane();

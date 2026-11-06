@@ -170,7 +170,7 @@ public class FindPopup {
         replaceField.setOnKeyPressed(event -> {
             switch (event.getCode()) {
                 case ENTER:
-                    if (event.isControlDown()) {
+                    if (event.isShortcutDown()) {
                         replaceAll();
                     } else {
                         replaceCurrent();
