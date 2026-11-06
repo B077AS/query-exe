@@ -12,8 +12,8 @@ const boot = window.__QUERYEXE__;
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 
 export const theme = reactive({
-  preference: (boot?.preference ?? 'system') as Preference,
-  accent: boot?.accent ?? 'blue',
+  preference: (boot?.preference ?? 'dark') as Preference,
+  accent: boot?.accent ?? 'rose',
   systemDark: darkQuery.matches,
 });
 

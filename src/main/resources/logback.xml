@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <conversionRule conversionWord="customLevel" class="com.queryexe.app.CustomDebugConfig" />
+    <conversionRule conversionWord="customLevel" class="io.github.b077as.queryexe.app.CustomDebugConfig" />
 
     <!-- Resolve AppData path via system property set in Launcher -->
     <property name="LOG_DIR" value="${queryexe.logDir:-logs}" />
@@ -29,7 +29,7 @@
     </appender>
 
     <!-- Your app packages -->
-    <logger name="com.queryexe" level="DEBUG" />
+    <logger name="io.github.b077as.queryexe" level="DEBUG" />
 
     <!-- Silence noisy third-party libs -->
     <logger name="com.microsoft.credentialstorage" level="WARN" />

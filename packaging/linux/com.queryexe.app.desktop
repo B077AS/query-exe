@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=QueryExe
+Comment=A desktop database client
+Exec=query-exe
+Icon=com.queryexe.app
+Terminal=false
+Categories=Development;Database;
+StartupWMClass=com.queryexe.app

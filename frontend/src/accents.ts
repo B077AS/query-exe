@@ -17,6 +17,7 @@ export const ACCENTS: Accent[] = [
   { key: 'orange', name: 'Orange', light: '#c2501a', dark: '#f08a55', onLight: '#ffffff', onDark: '#2a1004' },
   { key: 'red', name: 'Red', light: '#d8281e', dark: '#ff5347', onLight: '#ffffff', onDark: '#2a0710' },
   { key: 'pink', name: 'Pink', light: '#b8387b', dark: '#ec7fb4', onLight: '#ffffff', onDark: '#2b0a1c' },
+  { key: 'rose', name: 'Rose', light: '#e0105c', dark: '#ff4a86', onLight: '#ffffff', onDark: '#2b0412' },
   { key: 'violet', name: 'Violet', light: '#6a4bc4', dark: '#a58cf0', onLight: '#ffffff', onDark: '#150c33' },
   { key: 'graphite', name: 'Graphite', light: '#44484e', dark: '#c3c7ce', onLight: '#ffffff', onDark: '#14161a' },
 ];

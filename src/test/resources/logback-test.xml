@@ -2,7 +2,7 @@
 <!-- Tests log to the console only (same colored format as the app), so they never write a logs/ folder into the repo. -->
 <configuration>
 
-    <conversionRule conversionWord="customLevel" class="com.queryexe.app.CustomDebugConfig" />
+    <conversionRule conversionWord="customLevel" class="io.github.b077as.queryexe.app.CustomDebugConfig" />
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -10,7 +10,7 @@
         </encoder>
     </appender>
 
-    <logger name="com.queryexe" level="INFO" />
+    <logger name="io.github.b077as.queryexe" level="INFO" />
 
     <root level="WARN">
         <appender-ref ref="CONSOLE" />
