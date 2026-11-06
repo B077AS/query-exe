@@ -1,0 +1,70 @@
+### syntax
+SqlSyntax(backslashEscapes=false, eStrings=false, backtickIdentifiers=true, bracketIdentifiers=true, hashComments=false, dashDashNeedsSpace=false, executableComments=false, dollarQuoting=false, nestedBlockComments=false, delimiterCommand=false, goSeparator=false, beginEndObjects=[TRIGGER], batchScopedObjects=[])
+
+### dataTypes
+NULL, INTEGER, REAL, TEXT, BLOB, INT, TINYINT, SMALLINT, MEDIUMINT, BIGINT, UNSIGNED BIG INT, INT2, INT8, BOOLEAN, NUMERIC, DECIMAL, DOUBLE, DOUBLE PRECISION, FLOAT, CHARACTER, VARCHAR, VARYING CHARACTER, NCHAR, NATIVE CHARACTER, NVARCHAR, CLOB, DATE, DATETIME, TIMESTAMP
+
+### quoteIdentifier plain
+"orders"
+
+### quoteIdentifier hostile
+"a""b`c]d'e"
+
+### qualifyTable catalog+schema
+"sch"."orders"
+
+### qualifyTable schema only
+"sch"."orders"
+
+### qualifyTable catalog only
+"orders"
+
+### qualifyTable table only
+"orders"
+
+### defaultsOnlyInsert
+INSERT INTO "sch"."orders" DEFAULT VALUES
+
+### select
+SELECT * FROM "shop"."orders" LIMIT 100;
+
+### create table
+CREATE TABLE "shop"."orders" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "email" VARCHAR(120) NOT NULL UNIQUE,
+    "price" DECIMAL(10,2),
+    "order" VARCHAR(20)
+);
+
+### create table with fk
+CREATE TABLE "shop"."orders" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "email" VARCHAR(120) NOT NULL UNIQUE,
+    "price" DECIMAL(10,2),
+    "order" VARCHAR(20),
+    "owner_id" INT,
+    CONSTRAINT "fk_orders_owner" FOREIGN KEY ("owner_id") REFERENCES "owners" ("id") ON DELETE CASCADE ON UPDATE NO ACTION
+);
+
+### alter: add column
+ALTER TABLE "shop"."orders" ADD COLUMN "owner_id" INT;
+
+### alter: drop column
+ALTER TABLE "shop"."orders" DROP COLUMN "order";
+
+### alter: rename table
+ALTER TABLE "shop"."orders" RENAME TO "orders2";
+
+### alter: rename column
+ALTER TABLE "shop"."orders" RENAME COLUMN "email" TO "mail";
+
+### alter: change type
+!! SQLFeatureNotSupportedException
+
+### alter: add fk
+!! SQLFeatureNotSupportedException
+
+### row insert
+INSERT INTO "sch"."orders" ("id", "email", "price", "order")
+VALUES (1, 'a@b.c', 9.50, 'it''s');
+

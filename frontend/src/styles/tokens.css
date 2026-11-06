@@ -1,0 +1,70 @@
+/* Design tokens. Flat surfaces, hairline borders, one accent, small radii. Every colour in the app comes from here.
+   --accent and --on-accent are overridden at runtime by theme.ts (the accent differs between light and dark). */
+:root {
+  --font: system-ui, 'Segoe UI', 'Noto Sans', sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', Consolas, 'DejaVu Sans Mono', monospace;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --sidebar-width: 256px;
+
+  --bg: #fcfcfb; /* editor, grid, home */
+  --bg-side: #f3f3f1; /* sidebar, toolbars, native title bar */
+  --bg-raised: #ffffff; /* inputs, popovers, dialogs */
+  --bg-hover: #ebebe8;
+  --border: #e2e2de;
+  --border-strong: #cfcfca;
+  --text: #1c1c1a;
+  --text-2: #55554f;
+  --text-3: #86867f;
+  --danger: #c4332b;
+  --danger-solid: #c4332b; /* filled destructive buttons, same in both themes: the text-colour --danger is too pale on dark */
+  --on-danger: #ffffff;
+  --ok: #2f7d3f;
+  --warn: #b7791f;
+
+  --accent: #2a62d9;
+  --on-accent: #ffffff;
+  --th-bg: var(--bg-side); /* header of the tables in dialogs */
+  --accent-tint: color-mix(in srgb, var(--accent) 11%, var(--bg));
+  --accent-tint-strong: color-mix(in srgb, var(--accent) 18%, var(--bg));
+
+  /* SQL syntax */
+  --syn-keyword: var(--accent);
+  --syn-string: #2f7d3f;
+  --syn-number: #b4541a;
+  --syn-comment: var(--text-3);
+  --syn-function: #7a4bc4;
+  --syn-type: #0b7a8a;
+
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme='dark'] {
+  /* IntelliJ New UI dark: the editor and grid are the darkest layer, chrome and dialogs a step lighter, selection a blue tint (Darcula classic is option D in docs/mockups/dark-options-3.html) */
+  color-scheme: dark;
+  --bg: #1e1f22;
+  --bg-side: #2b2d30;
+  --bg-raised: #2b2d30;
+  --bg-hover: #34373c;
+  --border: #3d3f45;
+  --border-strong: #50545b;
+  --text: #dfe1e5;
+  --text-2: #bcbec4;
+  --text-3: #9a9ea6;
+  --danger: #f68e86;
+  --ok: #6cc17e;
+  --warn: #e0a84a;
+  --th-bg: color-mix(in srgb, var(--bg-side) 50%, var(--bg)); /* header of the tables in dialogs: a step darker than the dialog */
+  --accent-tint: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  --accent-tint-strong: color-mix(in srgb, var(--accent) 36%, var(--bg));
+  --syn-keyword: #cf8e6d;
+  --syn-string: #6aab73;
+  --syn-number: #2aacb8;
+  --syn-function: #56a8f5;
+  --syn-type: #c77dbb;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}

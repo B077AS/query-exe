@@ -1,0 +1,72 @@
+### syntax
+SqlSyntax(backslashEscapes=false, eStrings=false, backtickIdentifiers=false, bracketIdentifiers=true, hashComments=false, dashDashNeedsSpace=false, executableComments=false, dollarQuoting=false, nestedBlockComments=true, delimiterCommand=false, goSeparator=true, beginEndObjects=[], batchScopedObjects=[FUNCTION, PROC, PROCEDURE, TRIGGER])
+
+### dataTypes
+INT, TINYINT, SMALLINT, BIGINT, DECIMAL(18, 0), FLOAT, MONEY, SMALLMONEY, CHAR(10), VARCHAR(50), NCHAR(10), NVARCHAR(50), TEXT, NTEXT, DATE, TIME(7), DATETIME, DATETIME2(7), SMALLDATETIME, DATETIMEOFFSET(7), BINARY(50), VARBINARY(50), IMAGE, BIT, GEOGRAPHY, GEOMETRY, HIERARCHYID, NUMERIC(18, 0), NVARCHAR(MAX), REAL, SQL_VARIANT, TIMESTAMP, UNIQUEIDENTIFIER, VARBINARY(MAX), VARCHAR(MAX), XML
+
+### quoteIdentifier plain
+[orders]
+
+### quoteIdentifier hostile
+[a"b`c]]d'e]
+
+### qualifyTable catalog+schema
+[sch].[orders]
+
+### qualifyTable schema only
+[sch].[orders]
+
+### qualifyTable catalog only
+[orders]
+
+### qualifyTable table only
+[orders]
+
+### defaultsOnlyInsert
+INSERT INTO [sch].[orders] DEFAULT VALUES
+
+### select
+SELECT TOP 100 * FROM [dbo].[orders];
+
+### create table
+CREATE TABLE [shop].[dbo].[orders] (
+    [id] INT IDENTITY(1,1) NOT NULL,
+    [email] VARCHAR(120) NOT NULL UNIQUE,
+    [price] DECIMAL(10,2),
+    [order] VARCHAR(20),
+    CONSTRAINT [PK_orders] PRIMARY KEY ([id])
+);
+
+### create table with fk
+CREATE TABLE [shop].[dbo].[orders] (
+    [id] INT IDENTITY(1,1) NOT NULL,
+    [email] VARCHAR(120) NOT NULL UNIQUE,
+    [price] DECIMAL(10,2),
+    [order] VARCHAR(20),
+    [owner_id] INT,
+    CONSTRAINT [PK_orders] PRIMARY KEY ([id]),
+    CONSTRAINT [fk_orders_owner] FOREIGN KEY ([owner_id]) REFERENCES [dbo].[owners] ([id]) ON DELETE CASCADE ON UPDATE NO ACTION
+);
+
+### alter: add column
+null
+
+### alter: drop column
+null
+
+### alter: rename table
+null
+
+### alter: rename column
+null
+
+### alter: change type
+null
+
+### alter: add fk
+null
+
+### row insert
+INSERT INTO [dbo].[orders] ([id], [email], [price], [order])
+VALUES (1, N'a@b.c', 9.50, N'it''s');
+
