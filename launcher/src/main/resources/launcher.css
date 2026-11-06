@@ -1,0 +1,91 @@
+/* Same -color-* token names as query-exe's own style.css :root, so the
+   launcher reads as part of the client rather than a separate-looking app. */
+.root {
+    -color-fg-default: #f8f8f2;
+    -color-fg-muted: #bfbfc3;
+    -color-fg-subtle: #7e7f86;
+    -color-bg-overlay: #22242f;
+    -color-bg-inset: #181920;
+    -color-border-subtle: #3c3366;
+    -color-neutral-subtle: rgba(148, 149, 155, 0.1);
+    -color-accent-emphasis: #9580ff;
+    -color-danger-fg: #FF9580;
+}
+
+/* Base ProgressBar indeterminate-animation timing (track/bar fills are fully
+   re-specified below under .launcher-progress). */
+.progress-bar {
+    -fx-indeterminate-bar-length: 60;
+    -fx-indeterminate-bar-escape: true;
+    -fx-indeterminate-bar-flip: true;
+    -fx-indeterminate-bar-animation-time: 2;
+}
+
+.launcher-root {
+    -fx-background-color: transparent;
+}
+
+/* The Discord-style rounded square card. */
+.launcher-card {
+    -fx-background-color: -color-bg-overlay;
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-border-color: -color-border-subtle;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 36, 0.05, 0, 12);
+}
+
+.launcher-title {
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-default;
+}
+
+/* Animated status phrase ("Checking for updates…" etc.) */
+.launcher-status {
+    -fx-font-size: 13px;
+    -fx-text-fill: -color-fg-muted;
+}
+
+.launcher-status.is-error {
+    -fx-text-fill: -color-danger-fg;
+}
+
+/* Thin accent progress bar. */
+.launcher-progress {
+    -fx-pref-height: 6px;
+    -fx-min-height: 6px;
+    -fx-max-height: 6px;
+}
+
+.launcher-progress > .track {
+    -fx-background-color: -color-bg-inset;
+    -fx-background-radius: 6;
+}
+
+.launcher-progress > .bar {
+    -fx-background-color: -color-accent-emphasis;
+    -fx-background-radius: 6;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+/* Small frameless-window controls. */
+.launcher-window-button {
+    -fx-background-color: transparent;
+    -fx-cursor: hand;
+    -fx-padding: 4 6 4 6;
+    -fx-background-radius: 6;
+}
+
+.launcher-window-button .ikonli-font-icon {
+    -fx-icon-color: -color-fg-subtle;
+}
+
+.launcher-window-button:hover {
+    -fx-background-color: -color-neutral-subtle;
+}
+
+.launcher-window-button:hover .ikonli-font-icon {
+    -fx-icon-color: -color-fg-default;
+}

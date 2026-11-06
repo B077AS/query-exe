@@ -26,7 +26,7 @@ The project has two pieces — you only need to think about the second one if yo
 | Piece | Role |
 |---|---|
 | **query-exe** (this repo) | The desktop client itself — connections, the SQL editor, schema browsing, result grids |
-| [query-exe-launcher](https://github.com/B077AS/query-exe-launcher) | Auto-updating launcher source — built into the Windows installer & Linux AppImage by this repo's release pipeline, keeps the client (and itself) up to date |
+| [launcher/](launcher) | Auto-updating launcher source, built into the Windows installer & Linux AppImage by this repo's release pipeline, keeps the client (and itself) up to date |
 
 > 📥 **Just want to use QueryExe?** Grab the Windows installer or Linux AppImage from **this repo's** [Releases page](https://github.com/B077AS/query-exe/releases) — it installs the client and keeps it current automatically, every time you start it. You never need to build anything yourself. (Not query-exe-launcher's releases — that repo's own releases only carry self-update payloads for an already-installed launcher, not something you'd download directly.)
 
@@ -73,14 +73,14 @@ Download the **launcher** — a Windows installer or Linux AppImage — from [th
 
 ## Keeping the launcher up to date
 
-There's no hub or server behind QueryExe — the launcher and client each query **GitHub Releases directly** for updates, using the release tag as the version. The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the [query-exe-launcher](https://github.com/B077AS/query-exe-launcher) that started it is out of date, and if so, downloads and swaps its files in the background. It has to be the client that does this — by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
+There's no hub or server behind QueryExe — the launcher and client each query **GitHub Releases directly** for updates, using the release tag as the version. The client's `update/LauncherUpdateService` does something a little unusual: once per start, it checks whether the [launcher](launcher) that started it is out of date, and if so, downloads and swaps its files in the background. It has to be the client that does this — by the time the client is running, the launcher process has already exited, so there's nothing left to check on its own behalf.
 
 - It reads `System.getProperty("launcher.version")` — forwarded by the launcher when it spawns the client — and compares it against the launcher repo's latest GitHub release tag. A missing value (an old launcher, from before this existed) is always treated as outdated.
 - Every downloaded file is verified against a `.sha256` sidecar published alongside it in the same release, before it replaces anything.
 - On Windows it overwrites `app/query-exe-launcher.jar` next to the running install; on Linux it overwrites the `.AppImage` at `$APPIMAGE` (an AppImage is one opaque unit — there's no "just the launcher part" to update). Both are safe to replace while in use, since the launcher process that loaded them has already exited.
 - It's entirely best-effort and silent: any failure is logged and swallowed, since a failed launcher self-update must never interfere with the client actually running. No UI, no restart prompt.
 
-See [query-exe-launcher's README](https://github.com/B077AS/query-exe-launcher#how-the-launcher-updates-itself) for the full mechanics.
+See [query-exe-launcher's README](launcher#how-the-launcher-updates-itself) for the full mechanics.
 
 ## Building from source (developers)
 
@@ -129,7 +129,7 @@ There's no hub URL to bake in and no `prod` profile — the client is entirely s
 | Repo | What it is |
 |---|---|
 | query-exe | This repo — desktop client (JavaFX, Windows & Linux) |
-| [query-exe-launcher](https://github.com/B077AS/query-exe-launcher) | Auto-updating launcher — Windows installer & Linux AppImage |
+| [launcher](launcher) | Auto-updating launcher — Windows installer & Linux AppImage |
 
 ## Screenshots
 

@@ -1,0 +1,501 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.queryexe</groupId>
+    <artifactId>query-exe-launcher</artifactId>
+    <version>0.0.1</version>
+    <packaging>jar</packaging>
+
+    <name>query-exe-launcher</name>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <javafx.version>22</javafx.version>
+        <lombok.version>1.18.42</lombok.version>
+        <!-- override with -Dlauncher.demo=true to run the scripted demo -->
+        <launcher.demo>false</launcher.demo>
+        <github.owner>B077AS</github.owner>
+        <github.repo.client>query-exe</github.repo.client>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.kordamp.ikonli/ikonli-javafx -->
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-javafx</artifactId>
+            <version>12.4.0</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.kordamp.ikonli/ikonli-feather-pack -->
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-feather-pack</artifactId>
+            <version>12.4.0</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/io.github.mkpaz/atlantafx-base -->
+        <dependency>
+            <groupId>io.github.mkpaz</groupId>
+            <artifactId>atlantafx-base</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/net.java.dev.jna/jna -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>5.18.1</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/net.java.dev.jna/jna-platform -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>5.18.1</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.google.code.gson/gson -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.13.2</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.projectlombok/lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/ch.qos.logback/logback-classic -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.34</version>
+        </dependency>
+    </dependencies>
+
+    <!-- mvn javafx:run                          (dev run — checks GitHub, downloads/updates the client jar, launches it)
+         mvn javafx:run -Dlauncher.demo=true     (scripted demo, no network / jar needed)
+         mvn clean package -Ppackage             (fat jar with win + linux JavaFX natives)
+         mvn clean package -Pinstaller           (Windows exe installer: launcher + bundled client seed
+                                                  + private jlink runtime; needs Inno Setup 6 and the
+                                                  query-exe client fat jar built next door)
+         mvn clean package -Pappimage            (Linux AppImage: launcher + bundled client seed
+                                                  + private jlink runtime; needs appimagetool and the
+                                                  query-exe client fat jar built next door)
+         mvn clean package -Pwin-natives         (plain fat jar, Windows natives only — self-update payload)
+         mvn clean package -Plinux-natives       (plain fat jar, Linux natives only — self-update payload) -->
+    <profiles>
+        <profile>
+            <id>package</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>win</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>linux</classifier>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <!-- Single-platform fat jars with no packaging steps attached — unlike
+             installer/appimage below (which bundle the full jpackage/Inno-Setup/
+             appimagetool pipeline in the same package phase), these just produce
+             target/query-exe-launcher.jar for the launcher's own release workflow
+             to upload as a release asset (the self-update download). -->
+        <profile>
+            <id>win-natives</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>win</classifier>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>linux-natives</id>
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>linux</classifier>
+                </dependency>
+            </dependencies>
+        </profile>
+
+        <profile>
+            <id>installer</id>
+            <properties>
+                <!-- Version of the query-exe client seeded into the installer. Drives the
+                     installer's filename/displayed version and the default jar path below;
+                     the seed jar itself is self-describing (app.version in its app.properties).
+                     Override: -Dclient.version=X -->
+                <client.version>0.0.1</client.version>
+                <!-- Fat client jar to bundle (built with `mvn clean package -Ppackage`
+                     in the repo root). Override: -Dclient.jar=path\to\query-exe.jar -->
+                <client.jar>${project.basedir}/../target/query-exe-${client.version}.jar</client.jar>
+                <!-- Inno Setup compiler. Override with -Discc.path=... if installed
+                     elsewhere (winget install JRSoftware.InnoSetup). -->
+                <iscc.path>${env.LOCALAPPDATA}/Programs/Inno Setup 6/ISCC.exe</iscc.path>
+                <!-- rcedit, used to rebrand the client's copy of javaw.exe so it shows
+                     as "QueryExe" instead of "Java Platform SE binary" in Task Manager.
+                     Auto-downloaded to this path on first use if missing; override the
+                     location (e.g. to reuse an existing install) with -Drcedit.path=... -->
+                <rcedit.path>${env.LOCALAPPDATA}/rcedit.exe</rcedit.path>
+            </properties>
+            <dependencies>
+                <!-- Windows installer -> only win natives needed in the launcher fat jar -->
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>win</classifier>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <!-- Stage jpackage's input dir: launcher fat jar + client seed.
+                         Runs in the package phase after shade (profile plugins
+                         execute after the main build's plugins within a phase). -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>stage-installer-input</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <fail message="Client jar not found: ${client.jar} — build the query-exe client first (mvn clean package -Ppackage) or pass -Dclient.jar=...">
+                                            <condition>
+                                                <not><available file="${client.jar}"/></not>
+                                            </condition>
+                                        </fail>
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${project.build.directory}/installer-input"/>
+                                        <copy file="${client.jar}"
+                                              tofile="${project.build.directory}/installer-input/query-exe-client-seed.jar"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Step 1: jpackage app-image — QueryExe.exe + a private jlink runtime
+                         (shared by launcher + client, since the launcher starts the client
+                         with java.home's javaw) + the staged input files. -->
+                    <!-- Step 2: Inno Setup compiles packaging/windows/query-exe.iss into a
+                         branded wizard installer (welcome art, install dir, desktop icon
+                         task, launch-on-finish) around that app-image. -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage-app-image</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${java.home}/bin/jpackage</executable>
+                                    <arguments>
+                                        <argument>--type</argument><argument>app-image</argument>
+                                        <argument>--name</argument><argument>QueryExe</argument>
+                                        <argument>--app-version</argument><argument>${project.version}</argument>
+                                        <argument>--vendor</argument><argument>QueryExe</argument>
+                                        <argument>--description</argument><argument>QueryExe universal database client</argument>
+                                        <argument>--icon</argument><argument>${project.basedir}/packaging/windows/query-exe.ico</argument>
+                                        <argument>--input</argument><argument>${project.build.directory}/installer-input</argument>
+                                        <argument>--main-jar</argument><argument>${project.build.finalName}.jar</argument>
+                                        <argument>--main-class</argument><argument>com.queryexe.launcher.Launcher</argument>
+                                        <!-- jpackage's default jlink options strip native commands, which
+                                             would drop the runtime's javaw; the launcher starts the client
+                                             with java.home's javaw, so it must survive. -->
+                                        <argument>--jlink-options</argument><argument>--strip-debug --no-man-pages --no-header-files</argument>
+                                        <argument>--dest</argument><argument>${project.build.directory}/jpackage</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <!-- Rebrands a copy of the runtime's javaw.exe (runtime/bin/QueryExe.exe) so the
+                                     client process shows as "QueryExe" in Task Manager instead of stock javaw.exe's
+                                     "Java Platform SE binary"; UpdateManager launches this copy when present. -->
+                                <id>rebrand-client-exe</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>powershell</executable>
+                                    <arguments>
+                                        <argument>-NoProfile</argument>
+                                        <argument>-ExecutionPolicy</argument><argument>Bypass</argument>
+                                        <argument>-File</argument><argument>${project.basedir}/packaging/windows/rebrand-client-exe.ps1</argument>
+                                        <argument>-AppImageDir</argument><argument>${project.build.directory}/jpackage/QueryExe</argument>
+                                        <argument>-RceditPath</argument><argument>${rcedit.path}</argument>
+                                        <argument>-IconPath</argument><argument>${project.basedir}/packaging/windows/query-exe.ico</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>inno-setup-installer</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${iscc.path}</executable>
+                                    <arguments>
+                                        <!-- The installer is named/versioned after the client it seeds,
+                                             since it is published on the client's release page. -->
+                                        <argument>/DAppVersion=${client.version}</argument>
+                                        <argument>/DAppImageDir=${project.build.directory}/jpackage/QueryExe</argument>
+                                        <argument>/DOutputDir=${project.build.directory}/installer</argument>
+                                        <argument>${project.basedir}/packaging/windows/query-exe.iss</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>appimage</id>
+            <properties>
+                <!-- Version of the query-exe client seeded into the AppImage. Drives the
+                     AppImage's filename and the default jar path below; the seed jar itself
+                     is self-describing (app.version in its app.properties).
+                     Override: -Dclient.version=X -->
+                <client.version>0.0.1</client.version>
+                <!-- Fat client jar to bundle (built with `mvn clean package -Ppackage`
+                     in the repo root). Override: -Dclient.jar=path/to/query-exe.jar -->
+                <client.jar>${project.basedir}/../target/query-exe-${client.version}.jar</client.jar>
+                <!-- appimagetool binary. Override with -Dappimagetool.path=... — grab it with
+                     curl -Lo ~/.local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+                     && chmod +x ~/.local/bin/appimagetool -->
+                <appimagetool.path>${user.home}/.local/bin/appimagetool</appimagetool.path>
+            </properties>
+            <dependencies>
+                <!-- Linux AppImage -> only linux natives needed in the launcher fat jar -->
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>linux</classifier>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <!-- Stage jpackage's input dir: launcher fat jar + client seed.
+                         Same staging as the Windows installer profile. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>stage-appimage-input</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <fail message="Client jar not found: ${client.jar} — build the query-exe client first (mvn clean package -Ppackage) or pass -Dclient.jar=...">
+                                            <condition>
+                                                <not><available file="${client.jar}"/></not>
+                                            </condition>
+                                        </fail>
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${project.build.directory}/appimage-input"/>
+                                        <copy file="${client.jar}"
+                                              tofile="${project.build.directory}/appimage-input/query-exe-client-seed.jar"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Step 1: jpackage app-image — bin/QueryExe + a private jlink runtime
+                         (shared by launcher + client, since the launcher starts the client
+                         with java.home's java) + the staged input files. -->
+                    <!-- Step 2: packaging/linux/make-appimage.sh turns that app-image into
+                         an AppDir (AppRun, .desktop, icon) and runs appimagetool. -->
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage-app-image</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>${java.home}/bin/jpackage</executable>
+                                    <arguments>
+                                        <argument>--type</argument><argument>app-image</argument>
+                                        <argument>--name</argument><argument>QueryExe</argument>
+                                        <argument>--app-version</argument><argument>${project.version}</argument>
+                                        <argument>--vendor</argument><argument>QueryExe</argument>
+                                        <argument>--description</argument><argument>QueryExe universal database client</argument>
+                                        <argument>--icon</argument><argument>${project.basedir}/src/main/resources/icon.png</argument>
+                                        <argument>--input</argument><argument>${project.build.directory}/appimage-input</argument>
+                                        <argument>--main-jar</argument><argument>${project.build.finalName}.jar</argument>
+                                        <argument>--main-class</argument><argument>com.queryexe.launcher.Launcher</argument>
+                                        <!-- jpackage's default jlink options strip native commands, which
+                                             would drop the runtime's bin/java; the launcher starts the client
+                                             with java.home's java, so it must survive. -->
+                                        <argument>--jlink-options</argument><argument>--strip-debug --no-man-pages --no-header-files</argument>
+                                        <argument>--dest</argument><argument>${project.build.directory}/jpackage</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>make-appimage</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>bash</executable>
+                                    <arguments>
+                                        <argument>${project.basedir}/packaging/linux/make-appimage.sh</argument>
+                                        <argument>${project.build.directory}/jpackage/QueryExe</argument>
+                                        <argument>${project.build.directory}/appimage</argument>
+                                        <!-- Named after the client it seeds — published on the client's releases. -->
+                                        <argument>${client.version}</argument>
+                                        <argument>${appimagetool.path}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <build>
+        <!-- Pinned (not the artifactId-version default) so every version produces
+             an identically-named jar inside the jpackage app-image (app/query-exe-launcher.jar) —
+             the launcher's own self-update swaps that file in place by name, which only
+             works if the name never changes between versions. -->
+        <finalName>query-exe-launcher</finalName>
+        <!-- Only app.properties is filtered, so ${github.owner}/${github.repo.client} land
+             in it at build time; everything else is copied verbatim (blanket filtering
+             would corrupt binary resources). Mirrors the query-exe client. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <excludes>
+                    <exclude>app.properties</exclude>
+                </excludes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>app.properties</include>
+                </includes>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>com.queryexe.launcher.Launcher</mainClass>
+                    <options>
+                        <option>-Dlauncher.demo=${launcher.demo}</option>
+                    </options>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.queryexe.launcher.Launcher</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                    </manifestEntries>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+<!-- mvn clean package -Pinstaller -->
+<!-- mvn clean package -Pappimage -->
+<!-- mvn clean package -Pinstaller -Dclient.version=0.0.1 -->
