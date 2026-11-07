@@ -33,6 +33,8 @@ public class ConnectionProfile {
     /** Home page folder this connection is filed under, or null when ungrouped. */
     private String folder;
     private boolean pinned;
+    /** The SSH server the database is reached through, or null for a direct connection. */
+    private SshConfig ssh;
 
     /** A profile built from host, port and database: the JDBC URL is made from {@code baseUrl}. */
     public static ConnectionProfile server(String id, String connectionName, String dbType, String baseUrl, String host, String port,

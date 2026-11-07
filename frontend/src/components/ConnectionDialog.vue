@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { mdiCheck, mdiEyeOffOutline, mdiEyeOutline, mdiCogOutline, mdiPowerPlugOutline, mdiChevronDown, mdiDownload, mdiFolderOpenOutline, mdiLightningBolt, mdiRestore } from '@mdi/js';
+import { mdiCheck, mdiEyeOffOutline, mdiEyeOutline, mdiCogOutline, mdiPowerPlugOutline, mdiChevronDown, mdiDownload, mdiFolderOpenOutline, mdiLightningBolt, mdiRestore, mdiConsoleNetworkOutline } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { api, type ConnectionForm, type DriverInfo } from '../api';
+import { api, type ConnectionForm, type DriverInfo, type SshForm } from '../api';
 import { app, dialogs, reloadConnections } from '../store';
 import { errorText, fail, toast } from '../ui';
 import AppDialog from './AppDialog.vue';
@@ -14,16 +14,20 @@ const editing = computed(() => !!props.id);
 
 const form = reactive<ConnectionForm>({
   name: '', type: props.type ?? 'PostgreSQL', host: 'localhost', port: '5432', database: '', username: '',
-  password: '', savePassword: true, url: '', driver: null,
+  password: '', savePassword: true, url: '', driver: null, ssh: null,
 });
+const ssh = reactive<SshForm & { enabled: boolean }>({ enabled: false, host: '', port: '22', user: '', auth: 'password', keyPath: '', password: '' });
+const hadSshPassword = ref(false);
+const showSshPassword = ref(false);
 const useUrl = ref(false);
 const hadPassword = ref(false);
 const showPassword = ref(false);
-const tab = ref<'general' | 'driver'>('general');
-const pages = [
+const tab = ref<'general' | 'ssh' | 'driver'>('general');
+const pages = computed(() => [
   { key: 'general' as const, label: 'General', icon: mdiCogOutline },
+  ...(fileBased.value && !h2Server.value ? [] : [{ key: 'ssh' as const, label: 'SSH', icon: mdiConsoleNetworkOutline }]),
   { key: 'driver' as const, label: 'Driver', icon: mdiPowerPlugOutline },
-];
+]);
 const testing = ref(false);
 const saving = ref(false);
 const drivers = ref<DriverInfo[] | null>(null);
@@ -55,6 +59,10 @@ onMounted(async () => {
       username: info.username ?? '', password: info.password ?? '', url: info.url ?? '', driver: info.driver, savePassword: info.hasPassword || info.type === 'SQLite',
     });
     hadPassword.value = info.hasPassword;
+    if (info.ssh) {
+      Object.assign(ssh, { enabled: true, host: info.ssh.host, port: info.ssh.port || '22', user: info.ssh.user, auth: info.ssh.auth, keyPath: info.ssh.keyPath ?? '', password: info.ssh.password ?? '' });
+      hadSshPassword.value = info.ssh.hasPassword;
+    }
     useUrl.value = !!info.url && !fileBased.value;
     const tcp = info.type === 'H2' && info.url ? H2_TCP.exec(info.url) : null;
     if (tcp) {
@@ -113,14 +121,26 @@ const testable = computed(() => {
   }
   return form.host.trim() !== '';
 });
-const savable = computed(() => testable.value && form.name.trim() !== '');
+const sshActive = computed(() => ssh.enabled && !(fileBased.value && !h2Server.value));
+const sshReady = computed(() => !sshActive.value || (ssh.host.trim() !== '' && ssh.user.trim() !== '' && (ssh.auth === 'password' || ssh.keyPath.trim() !== '')));
+const savable = computed(() => testable.value && sshReady.value && form.name.trim() !== '');
+
+async function browseKey(): Promise<void> {
+  try {
+    const r = await api.pickKey();
+    if (r.path) ssh.keyPath = r.path;
+  } catch (e) {
+    fail('Could not open the file dialog', e);
+  }
+}
 
 function payload(): ConnectionForm {
+  const sshPart = sshActive.value ? { ...ssh } : null;
   if (h2Server.value) {
     const url = `jdbc:h2:tcp://${form.host.trim()}:${form.port.trim() || '9092'}/${form.database.trim()}`;
-    return { ...form, url };
+    return { ...form, url, ssh: sshPart };
   }
-  return { ...form, url: fileBased.value || useUrl.value ? form.url.trim() : '' };
+  return { ...form, url: fileBased.value || useUrl.value ? form.url.trim() : '', ssh: sshPart };
 }
 
 async function test(): Promise<void> {
@@ -255,6 +275,39 @@ async function chooseDriver(d: DriverInfo): Promise<void> {
         <span class="chk" :class="{ on: useUrl }"><Icon v-if="useUrl" :path="mdiCheck" :size="11" /></span>
         Use a custom JDBC URL
       </label>
+    </div>
+
+    <div class="pane" :class="{ off: tab !== 'ssh' }">
+      <label class="check-row" @click.prevent="ssh.enabled = !ssh.enabled">
+        <span class="chk" :class="{ on: ssh.enabled }"><Icon v-if="ssh.enabled" :path="mdiCheck" :size="11" /></span>
+        Connect through an SSH tunnel
+      </label>
+      <template v-if="ssh.enabled">
+        <div class="row">
+          <div class="field"><label>SSH host</label><input v-model="ssh.host" class="input mono" placeholder="bastion.example.com" /></div>
+          <div class="field" style="flex: 0 0 110px"><label>Port</label><input v-model="ssh.port" class="input mono" placeholder="22" /></div>
+        </div>
+        <div class="field"><label>SSH user</label><input v-model="ssh.user" class="input" autocomplete="off" /></div>
+        <Seg v-model="ssh.auth" style="align-self: flex-start" :options="[{ value: 'password', label: 'Password' }, { value: 'key', label: 'Private key' }]" />
+        <div v-if="ssh.auth === 'key'" class="field">
+          <label>Private key file</label>
+          <div style="display: flex; gap: 8px">
+            <input v-model="ssh.keyPath" class="input mono" placeholder="~/.ssh/id_ed25519" />
+            <button class="btn" @click="browseKey"><Icon :path="mdiFolderOpenOutline" /> Browse</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>{{ ssh.auth === 'key' ? 'Key passphrase' : 'SSH password' }}<span v-if="ssh.auth === 'key'" class="hint"> (if the key has one)</span></label>
+          <div class="pw">
+            <input v-model="ssh.password" class="input" :type="showSshPassword ? 'text' : 'password'" autocomplete="new-password"
+              :placeholder="editing && hadSshPassword ? 'Saved — leave empty to keep' : ''" />
+            <button type="button" class="ib sm pw-eye" tabindex="-1" :title="showSshPassword ? 'Hide' : 'Show'" @click="showSshPassword = !showSshPassword">
+              <Icon :path="showSshPassword ? mdiEyeOffOutline : mdiEyeOutline" :size="16" />
+            </button>
+          </div>
+          <span class="hint">Kept in the system credential store. The host and port on the General page are the database as the SSH server sees it.</span>
+        </div>
+      </template>
     </div>
 
     <div class="pane" :class="{ off: tab !== 'driver' }">

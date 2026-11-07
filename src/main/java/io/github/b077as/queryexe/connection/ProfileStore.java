@@ -111,6 +111,20 @@ public class ProfileStore {
         }
     }
 
+    private static String sshKey(String connectionId) {
+        return connectionId + ".ssh";
+    }
+
+    /** Puts the SSH secret from the credential store into a connection's JSON, when it has an ssh section. */
+    private void addSshSecret(String connectionId, JsonObject json) {
+        if (json.has("ssh")) {
+            String secret = vault.retrieve(sshKey(connectionId));
+            if (secret != null) {
+                json.addProperty("sshPassword", secret);
+            }
+        }
+    }
+
     private JsonObject readConnections() {
         if (!Files.exists(connectionsPath)) {
             return new JsonObject();
@@ -169,6 +183,7 @@ public class ProfileStore {
                 if (password != null) {
                     element.addProperty("password", password);
                 }
+                addSshSecret(connectionId, element);
 
                 ConnectionProfile connection = gsonWithDeserializer.fromJson(element, ConnectionProfile.class);
                 connections.add(connection);
@@ -187,6 +202,7 @@ public class ProfileStore {
         }
 
         element.addProperty("id", connectionId);
+        addSshSecret(connectionId, element);
 
         try {
             Gson gsonWithDeserializer = new GsonBuilder()
@@ -207,6 +223,10 @@ public class ProfileStore {
         }
 
         String username = connectionData.has("username") ? connectionData.get("username").getAsString() : "";
+        String sshSecret = connectionData.has("sshPassword") && !connectionData.get("sshPassword").isJsonNull()
+                ? connectionData.get("sshPassword").getAsString() : null;
+        connectionData.remove("sshPassword");
+        boolean usesSsh = connectionData.has("ssh");
 
         modifyConnections(connections -> {
             // The edit dialog knows nothing about home page organisation; keep it across edits.
@@ -224,6 +244,11 @@ public class ProfileStore {
         if (password != null && !password.isEmpty()) {
             vault.store(connectionId, username, password);
         }
+        if (!usesSsh) {
+            vault.forget(sshKey(connectionId));
+        } else if (sshSecret != null && !sshSecret.isEmpty()) {
+            vault.store(sshKey(connectionId), "", sshSecret);
+        }
     }
 
     public JsonObject getConnection(String connectionId) {
@@ -237,6 +262,7 @@ public class ProfileStore {
             if (password != null) {
                 connection.addProperty("password", password);
             }
+            addSshSecret(connectionId, connection);
 
             return connection;
         }
@@ -300,6 +326,9 @@ public class ProfileStore {
                 originalConnection.remove("password");
             }
 
+            String sshSecret = originalConnection.has("sshPassword") ? originalConnection.get("sshPassword").getAsString() : null;
+            originalConnection.remove("sshPassword");
+
             modifyConnections(connections -> {
                 JsonObject newConnection = originalConnection.deepCopy();
                 newConnection.addProperty("connectionName", newName);
@@ -311,6 +340,9 @@ public class ProfileStore {
                         originalConnection.get("username").getAsString() : "";
                 vault.store(newId, username, password);
             }
+            if (sshSecret != null && !sshSecret.isEmpty()) {
+                vault.store(sshKey(newId), "", sshSecret);
+            }
         }
 
         return newId;
@@ -319,6 +351,7 @@ public class ProfileStore {
     public boolean deleteConnection(String connectionId) {
         try {
             vault.forget(connectionId);
+            vault.forget(sshKey(connectionId));
 
             JsonObject connections = readConnections();
 

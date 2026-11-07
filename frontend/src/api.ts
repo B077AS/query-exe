@@ -33,8 +33,20 @@ export interface ConnectionInfo {
   folder: string | null;
   pinned: boolean;
   hasPassword: boolean;
+  ssh: (SshForm & { hasPassword: boolean }) | null;
   connected: boolean;
   driver: DriverInfo | null;
+}
+
+export interface SshForm {
+  enabled?: boolean;
+  host: string;
+  port: string;
+  user: string;
+  auth: 'password' | 'key';
+  keyPath: string;
+  /** The SSH password, or the passphrase of the key. */
+  password: string;
 }
 
 export interface ConnectionForm {
@@ -49,6 +61,7 @@ export interface ConnectionForm {
   savePassword: boolean;
   url: string;
   driver: DriverInfo | null;
+  ssh: SshForm | null;
 }
 
 // ---- schema ------------------------------------------------------------------------------------------------------
@@ -354,6 +367,7 @@ export const api = {
   openPath: (path: string, connectionId?: string) => call<OpenedFile>('file.openPath', { path, connectionId: connectionId ?? '' }),
   saveFile: (p: { path?: string; text: string; name?: string; saveAs?: boolean; connectionId?: string }) =>
     call<{ path?: string; name?: string; cancelled?: boolean }>('file.save', p),
+  pickKey: () => call<{ path?: string; cancelled?: boolean }>('file.pickKey'),
   pickDatabase: (type: string) => call<{ path?: string; cancelled?: boolean }>('file.pickDatabase', { type }),
   recentFiles: () => call<RecentFile[]>('file.recent'),
   removeRecent: (path: string) => call<{ ok: boolean }>('file.recentRemove', { path }),

@@ -13,7 +13,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <jolt.version>0.3.2</jolt.version>
+        <jolt.version>0.4.0</jolt.version>
         <queryexe.dev>false</queryexe.dev>
         <queryexe.data></queryexe.data>
     </properties>
@@ -33,6 +33,11 @@
             <groupId>io.github.b077as</groupId>
             <artifactId>jolt-linux</artifactId>
             <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mwiede</groupId>
+            <artifactId>jsch</artifactId>
+            <version>2.27.2</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.mysql/mysql-connector-j -->
         <dependency>

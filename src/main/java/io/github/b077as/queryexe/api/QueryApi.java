@@ -78,6 +78,10 @@ class QueryApi {
             Optional<Path> chosen = chooser.open("Select " + type + " database", type + " files", extensions);
             return chosen.isEmpty() ? Map.of("cancelled", true) : Map.of("path", chosen.get().toString());
         });
+        rpc.on("file.pickKey", p -> {
+            Optional<Path> chosen = chooser.open("Select SSH private key", "Private keys", "pem", "key", "ppk");
+            return chosen.isEmpty() ? Map.of("cancelled", true) : Map.of("path", chosen.get().toString());
+        });
         rpc.on("file.recent", p -> recent());
         rpc.on("file.recentRemove", p -> {
             RecentFilesManager.getInstance().removeRecentFile(Params.string(p, "path"));

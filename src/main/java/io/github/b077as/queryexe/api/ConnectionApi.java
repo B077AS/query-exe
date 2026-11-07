@@ -17,6 +17,7 @@ import io.github.b077as.queryexe.app.Rpc;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.ConnectionProfileDeserializer;
 import io.github.b077as.queryexe.connection.ConnectionTypes;
+import io.github.b077as.queryexe.connection.SshConfig;
 import io.github.b077as.queryexe.connection.driver.DriverAPIs;
 import io.github.b077as.queryexe.connection.driver.DriverInfo;
 import io.github.b077as.queryexe.store.AppSettings;
@@ -62,6 +63,9 @@ class ConnectionApi {
             ConnectionProfile c = load(Params.string(p, "id"));
             Map<String, Object> out = describe(c);
             out.put("password", c.getPassword() == null ? "" : c.getPassword());
+            if (c.getSsh() != null) {
+                ((Map<String, Object>) out.get("ssh")).put("password", c.getSsh().getSecret() == null ? "" : c.getSsh().getSecret());
+            }
             return out;
         });
         rpc.on("connections.save", this::save);
@@ -184,6 +188,19 @@ class ConnectionApi {
         out.put("folder", c.getFolder());
         out.put("pinned", c.isPinned());
         out.put("hasPassword", c.getPassword() != null && !c.getPassword().isEmpty());
+        SshConfig ssh = c.getSsh();
+        if (ssh != null) {
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("host", ssh.getHost());
+            s.put("port", String.valueOf(ssh.getPort()));
+            s.put("user", ssh.getUser());
+            s.put("auth", ssh.getAuth());
+            s.put("keyPath", ssh.getKeyPath());
+            s.put("hasPassword", ssh.getSecret() != null && !ssh.getSecret().isEmpty());
+            out.put("ssh", s);
+        } else {
+            out.put("ssh", null);
+        }
         out.put("connected", DatabaseConnection.getInstance().hasConnection(c.getId()));
         DriverInfo info = c.getDriverInfo();
         boolean custom = info != null && !info.equals(ConnectionTypes.valueOf(c.getDbType()).getDefaultDriverInfo());
@@ -212,6 +229,40 @@ class ConnectionApi {
         out.addProperty("databaseName", useUrl ? null : Params.optionalString(p, "database").trim());
         out.addProperty("username", Params.optionalString(p, "username"));
         out.addProperty("customUrl", useUrl ? customUrl : null);
+
+        out.remove("ssh");
+        out.remove("sshPassword");
+        if (p.has("ssh") && p.get("ssh").isJsonObject() && Params.bool(p.getAsJsonObject("ssh"), "enabled")) {
+            JsonObject s = p.getAsJsonObject("ssh");
+            if (type.isFileBased() && !useUrl) {
+                throw new IllegalArgumentException("A file database cannot be reached through SSH.");
+            }
+            String sshHost = Params.optionalString(s, "host").trim();
+            String sshUser = Params.optionalString(s, "user").trim();
+            if (sshHost.isEmpty() || sshUser.isEmpty()) {
+                throw new IllegalArgumentException("Enter the SSH host and user.");
+            }
+            String sshPort = orDefault(Params.optionalString(s, "port"), "22");
+            if (!sshPort.matches("[0-9]{1,5}")) {
+                throw new IllegalArgumentException("The SSH port must be a number.");
+            }
+            boolean key = SshConfig.KEY.equals(Params.optionalString(s, "auth"));
+            String keyPath = Params.optionalString(s, "keyPath").trim();
+            if (key && keyPath.isEmpty()) {
+                throw new IllegalArgumentException("Choose the SSH private key file.");
+            }
+            JsonObject ssh = new JsonObject();
+            ssh.addProperty("host", sshHost);
+            ssh.addProperty("port", sshPort);
+            ssh.addProperty("user", sshUser);
+            ssh.addProperty("auth", key ? SshConfig.KEY : SshConfig.PASSWORD);
+            ssh.addProperty("keyPath", key ? keyPath : null);
+            out.add("ssh", ssh);
+            String secret = Params.optionalString(s, "password");
+            if (!secret.isEmpty()) {
+                out.addProperty("sshPassword", secret);
+            }
+        }
 
         if (p.has("driver") && p.get("driver").isJsonObject()) {
             JsonObject d = p.getAsJsonObject("driver");
@@ -270,6 +321,12 @@ class ConnectionApi {
             }
         }
         json.addProperty("password", password);
+        if (json.has("ssh") && !json.has("sshPassword") && !id.isBlank()) {
+            JsonObject stored = connections.getConnection(id);
+            if (stored != null && stored.has("sshPassword")) {
+                json.add("sshPassword", stored.get("sshPassword"));
+            }
+        }
         json.addProperty("id", "test-" + UUID.randomUUID());
         ConnectionProfile candidate = GSON.fromJson(json, ConnectionProfile.class);
         DatabaseConnection.getInstance().test(candidate);

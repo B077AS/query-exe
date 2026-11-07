@@ -50,6 +50,15 @@ public class ConnectionProfileDeserializer implements JsonDeserializer<Connectio
             profile.setFolder(getStringOrNull(obj, "folder"));
             JsonElement pinned = obj.get("pinned");
             profile.setPinned(pinned != null && pinned.isJsonPrimitive() && pinned.getAsBoolean());
+            JsonElement sshElement = obj.get("ssh");
+            if (sshElement != null && sshElement.isJsonObject()) {
+                JsonObject ssh = sshElement.getAsJsonObject();
+                String sshPort = getStringOrNull(ssh, "port");
+                profile.setSsh(SshConfig.builder().host(getStringOrNull(ssh, "host"))
+                        .port(sshPort == null || sshPort.isBlank() ? 22 : Integer.parseInt(sshPort.trim()))
+                        .user(getStringOrNull(ssh, "user")).auth(getStringOrNull(ssh, "auth"))
+                        .keyPath(getStringOrNull(ssh, "keyPath")).secret(getStringOrNull(obj, "sshPassword")).build());
+            }
             return profile;
         } catch (Exception e) {
             log.error("deserialize failed", e);
