@@ -2,6 +2,7 @@
 import { nextTick, onMounted } from 'vue';
 import { api } from './api';
 import ActiveConnectionsDialog from './components/ActiveConnectionsDialog.vue';
+import DropFilesDialog from './components/DropFilesDialog.vue';
 import ColumnInfoDialog from './components/ColumnInfoDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import ConnectionDialog from './components/ConnectionDialog.vue';
@@ -38,6 +39,7 @@ onMounted(async () => {
   <PasswordDialog v-if="dialogs.password" />
   <SettingsDialog v-if="dialogs.settings" />
   <ActiveConnectionsDialog v-if="dialogs.activeConnections" />
+  <DropFilesDialog v-if="dialogs.dropFiles" />
   <TableEditor v-if="dialogs.tableEditor" :connection-id="dialogs.tableEditor.connectionId" :container="dialogs.tableEditor.container" :table="dialogs.tableEditor.table" />
   <TableInfoDialog v-if="dialogs.tableInfo" />
   <ColumnInfoDialog v-if="dialogs.columnInfo" />

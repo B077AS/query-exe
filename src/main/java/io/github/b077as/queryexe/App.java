@@ -7,7 +7,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -32,6 +34,7 @@ import io.github.b077as.jolt.Application;
 import io.github.b077as.jolt.ColorScheme;
 import io.github.b077as.jolt.FileDialogOptions;
 import io.github.b077as.jolt.FileFilter;
+import io.github.b077as.jolt.TaskbarProgress;
 import io.github.b077as.jolt.WebWindow;
 import io.github.b077as.jolt.WindowOptions;
 import lombok.extern.slf4j.Slf4j;
@@ -200,6 +203,24 @@ public class App {
         // The page has its content on screen: now the window can appear without a blank flash.
         rpc.on("window.ready", params -> {
             window.show();
+            return Map.of("ok", true);
+        });
+        // Files dropped on the window (Jolt 0.4.1): the paths come from the operating system, never from the page. The page
+        // decides what to do with them (.sql files open as query tabs). Registered before the page loads.
+        window.onFileDrop(drop -> {
+            if (!"scripts".equals(drop.zone())) {
+                return; // only the editor area (data-jolt-drop="scripts") takes files, not the toolbar or the tree
+            }
+            List<Map<String, String>> files = new ArrayList<>();
+            for (Path file : drop.files()) {
+                Path name = file.getFileName();
+                files.add(Map.of("path", file.toString(), "name", name == null ? file.toString() : name.toString()));
+            }
+            rpc.emit("files.dropped", Map.of("files", files));
+        });
+        // A moving bar on the taskbar icon while a query runs (Windows; a launcher that draws it on Linux; harmless elsewhere).
+        rpc.on("window.setBusy", params -> {
+            window.setTaskbarProgress(Params.bool(params, "busy") ? TaskbarProgress.indeterminate() : TaskbarProgress.none());
             return Map.of("ok", true);
         });
         // The page cannot restyle the operating system's title bar, but it can ask Java to. The window icon is fixed: it

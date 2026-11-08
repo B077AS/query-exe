@@ -13,7 +13,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <jolt.version>0.4.0</jolt.version>
+        <jolt.version>0.4.1</jolt.version>
         <queryexe.dev>false</queryexe.dev>
         <queryexe.data></queryexe.data>
     </properties>

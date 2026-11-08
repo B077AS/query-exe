@@ -296,6 +296,7 @@ export interface TableDraft {
 }
 
 export const api = {
+  setBusy: (busy: boolean) => call<{ ok: boolean }>('window.setBusy', { busy }),
   appInfo: () => call<{ version: string; os: string; java: string }>('app.info'),
   windowReady: () => call<{ ok: boolean }>('window.ready'),
   setTheme: (theme: Record<string, unknown>) => call<{ ok: boolean }>('window.setTheme', theme),
@@ -382,5 +383,6 @@ export const api = {
 export const events = {
   onResult: (cb: (e: QueryResultEvent) => void) => onEvent<QueryResultEvent>('query.result', cb),
   onFinished: (cb: (e: QueryFinishedEvent) => void) => onEvent<QueryFinishedEvent>('query.finished', cb),
+  onFilesDropped: (cb: (e: { files: { path: string; name: string }[] }) => void) => onEvent('files.dropped', cb),
   onStarted: (cb: (e: { tabId: string; runId: string; count: number }) => void) => onEvent('query.started', cb),
 };
