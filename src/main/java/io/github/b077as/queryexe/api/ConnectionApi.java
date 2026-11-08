@@ -40,6 +40,8 @@ class ConnectionApi {
             .registerTypeAdapter(ConnectionProfile.class, new ConnectionProfileDeserializer()).create();
     private static final String FOLDERS = "connections.folders";
     private static final String COLLAPSED = "connections.collapsedFolders";
+    private static final String ORDER = "connections.order";
+    private static final String FOLDER_ORDER = "connections.folderOrder";
 
     private ProfileStore connections = ProfileStore.getInstance();
     private Workspace workspace;
@@ -146,7 +148,15 @@ class ConnectionApi {
         rpc.on("connections.folders", p -> Map.of(
                 "folders", AppSettings.get().getStringList(FOLDERS),
                 "collapsed", AppSettings.get().getStringList(COLLAPSED),
-                "colors", AppSettings.get().getFolderColors()));
+                "colors", AppSettings.get().getFolderColors(),
+                "order", AppSettings.get().getStringList(ORDER),
+                "folderOrder", AppSettings.get().getStringList(FOLDER_ORDER)));
+        // the arrangement made by dragging; both lists empty = the default alphabetical order
+        rpc.on("connections.setOrder", p -> {
+            AppSettings.get().setStringList(ORDER, Params.optionalStrings(p, "order"));
+            AppSettings.get().setStringList(FOLDER_ORDER, Params.optionalStrings(p, "folderOrder"));
+            return Map.of("ok", true);
+        });
         rpc.on("connections.setFolders", p -> {
             AppSettings.get().setStringList(FOLDERS, Params.optionalStrings(p, "folders"));
             AppSettings.get().setStringList(COLLAPSED, Params.optionalStrings(p, "collapsed"));
