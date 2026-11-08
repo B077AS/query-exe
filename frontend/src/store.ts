@@ -383,6 +383,12 @@ export async function openTable(session: Session, container: string, table: stri
   }
 }
 
+/** Opens an empty query tab for a database/schema, switching to it first. */
+export async function openQuery(session: Session, container: string): Promise<void> {
+  if (container && container !== session.current) await selectContainer(session, container);
+  newTab(session.connectionId);
+}
+
 export async function openScript(session: Session, container: string, table: string, kind: 'select' | 'create' | 'insert'): Promise<void> {
   try {
     const { sql } = await api.script(session.connectionId, container, table, kind);

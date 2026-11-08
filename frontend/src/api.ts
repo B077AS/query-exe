@@ -307,6 +307,10 @@ export const api = {
   connections: () => call<ConnectionInfo[]>('connections.list'),
   connectionStatus: () => call<{ id: string; alive: boolean; sessions: number }[]>('connections.status'),
   connection: (id: string) => call<ConnectionInfo & { password: string }>('connections.get', { id }),
+  exportConnections: (passwords: boolean, passphrase: string) =>
+    call<{ path?: string; count?: number; cancelled?: boolean }>('connections.export', { passwords, passphrase }),
+  importConnections: (passphrase: string) =>
+    call<{ count?: number; skipped?: number; cancelled?: boolean }>('connections.import', { passphrase }),
   saveConnection: (form: ConnectionForm) => call<{ id: string }>('connections.save', { ...form }),
   testConnection: (form: ConnectionForm) => call<{ ok: boolean }>('connections.test', { ...form }),
   deleteConnection: (id: string) => call<{ ok: boolean }>('connections.delete', { id }),

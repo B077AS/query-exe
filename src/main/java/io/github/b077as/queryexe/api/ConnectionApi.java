@@ -1,7 +1,11 @@
 package io.github.b077as.queryexe.api;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +18,7 @@ import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.Launcher;
 import io.github.b077as.queryexe.app.Params;
 import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.queryexe.connection.ConnectionBackup;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.ConnectionProfileDeserializer;
 import io.github.b077as.queryexe.connection.ConnectionTypes;
@@ -40,8 +45,56 @@ class ConnectionApi {
     private Workspace workspace;
     private Map<String, Boolean> connecting = new ConcurrentHashMap<>();
 
-    ConnectionApi(Workspace workspace) {
+    private FileChooser chooser;
+
+    ConnectionApi(Workspace workspace, FileChooser chooser) {
         this.workspace = workspace;
+        this.chooser = chooser;
+    }
+
+    // ------------------------------------------------------------------------------------ export / import
+
+    private Object exportConnections(JsonObject p) throws Exception {
+        boolean withPasswords = Params.bool(p, "passwords");
+        String passphrase = Params.optionalString(p, "passphrase");
+        Optional<Path> target = chooser.save("Export connections", "queryexe-connections.json", "Connections", "json");
+        if (target.isEmpty()) {
+            return Map.of("cancelled", true);
+        }
+        JsonObject all = connections.exportConnections(withPasswords);
+        JsonObject payload = ConnectionBackup.payload(all);
+        payload.add("folders", GSON.toJsonTree(AppSettings.get().getStringList(FOLDERS)));
+        Files.writeString(target.get(), ConnectionBackup.write(payload, passphrase), StandardCharsets.UTF_8);
+        return Map.of("path", target.get().toString(), "count", all.size());
+    }
+
+    private Object importConnections(JsonObject p) throws Exception {
+        Optional<Path> source = chooser.open("Import connections", "Connections", "json");
+        if (source.isEmpty()) {
+            return Map.of("cancelled", true);
+        }
+        JsonObject payload = ConnectionBackup.read(Files.readString(source.get(), StandardCharsets.UTF_8), Params.optionalString(p, "passphrase"));
+        if (!payload.has("connections") || !payload.get("connections").isJsonObject()) {
+            throw new IllegalArgumentException("This is not a QueryExe connections file.");
+        }
+        List<String> added = connections.importConnections(payload.getAsJsonObject("connections"));
+        // folders the imported connections sit in must exist in the tree's folder list
+        List<String> folders = new ArrayList<>(AppSettings.get().getStringList(FOLDERS));
+        if (payload.has("folders") && payload.get("folders").isJsonArray()) {
+            payload.getAsJsonArray("folders").forEach(f -> {
+                if (f.isJsonPrimitive() && !f.getAsString().isBlank() && !folders.contains(f.getAsString())) {
+                    folders.add(f.getAsString());
+                }
+            });
+        }
+        for (String id : added) {
+            String folder = load(id).getFolder();
+            if (folder != null && !folder.isBlank() && !folders.contains(folder)) {
+                folders.add(folder);
+            }
+        }
+        AppSettings.get().setStringList(FOLDERS, folders);
+        return Map.of("count", added.size(), "skipped", payload.getAsJsonObject("connections").size() - added.size());
     }
 
     /** Keeps only well-formed colour keys ("teal", "pink", ...); the page decides which ones it knows how to draw. */
@@ -68,6 +121,8 @@ class ConnectionApi {
             }
             return out;
         });
+        rpc.on("connections.export", this::exportConnections);
+        rpc.on("connections.import", this::importConnections);
         rpc.on("connections.save", this::save);
         rpc.on("connections.test", this::test);
         rpc.on("connections.delete", p -> {

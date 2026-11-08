@@ -2,7 +2,7 @@
 import {
   mdiChevronDown, mdiChevronRight, mdiCodeBraces, mdiCollapseAllOutline, mdiContentCopy, mdiDatabase, mdiDatabaseOutline, mdiDatabasePlusOutline,
   mdiDeleteOutline, mdiFlashOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiFormatListNumbered, mdiInformationOutline, mdiKeyVariant, mdiLanConnect,
-  mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable,
+  mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable, mdiTableSearch, mdiFilePlusOutline,
   mdiTableColumn, mdiViewAgendaOutline, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline, mdiGraphOutline, mdiChartLine,
 } from '@mdi/js';
 import {
@@ -17,7 +17,7 @@ import {
 import { ACCENTS } from '../accents';
 import { scheme } from '../theme';
 import {
-  app, connect, currentSession, dialogs, disconnect, loadTree, newTab, openFileOnConnection, openScript, openTable, refreshContainer, selectContainer, type Session,
+  app, connect, currentSession, dialogs, disconnect, loadTree, newTab, openFileOnConnection, openQuery, openScript, openTable, refreshContainer, selectContainer, type Session,
 } from '../store';
 import { confirm, engineBadge, fail, prefs, toast } from '../ui';
 import Icon from './Icon.vue';
@@ -384,7 +384,7 @@ const working = computed(() => currentSession());
             <ContextMenuItem class="menu-item danger" @select="removeFolder(n.label)"><Icon :path="mdiDeleteOutline" /> Delete folder</ContextMenuItem>
           </ContextMenuContent>
           <ContextMenuContent v-else-if="n.kind === 'table'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiPlay" /> Open (SELECT *)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'insert')"><Icon :path="mdiCodeBraces" /> Script: INSERT</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'create')"><Icon :path="mdiCodeBraces" /> Script: CREATE</ContextMenuItem>
@@ -400,6 +400,7 @@ const working = computed(() => currentSession());
             <ContextMenuItem class="menu-item" @select="copyText(n.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
           </ContextMenuContent>
           <ContextMenuContent v-else-if="n.kind === 'container' || n.kind === 'tables'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openQuery(sessionOf(n)!, n.container!)"><Icon :path="mdiFilePlusOutline" /> New query</ContextMenuItem>
             <ContextMenuItem v-if="n.kind === 'container'" class="menu-item" @select="selectContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiPlay" /> Use</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: n.connectionId!, container: n.container! }"><Icon :path="mdiTablePlus" /> New table</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="refreshContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
@@ -414,7 +415,7 @@ const working = computed(() => currentSession());
           </ContextMenuContent>
           <!-- a partition is only worth a menu where it is a table of its own; the label nodes (groups, objects) have none -->
           <ContextMenuContent v-else-if="n.kind === 'partition' && sessionOf(n)?.info.type === 'PostgreSQL'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiPlay" /> Open (SELECT *)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenuPortal>
       </ContextMenuRoot>

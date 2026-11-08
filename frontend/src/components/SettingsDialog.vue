@@ -6,9 +6,9 @@ import {
 import { computed, onMounted, ref } from 'vue';
 import { ACCENTS } from '../accents';
 import { api } from '../api';
-import { app, dialogs } from '../store';
+import { app, dialogs, reloadConnections } from '../store';
 import { scheme, theme } from '../theme';
-import { prefs, savePref } from '../ui';
+import { confirm, fail, prefs, savePref, toast } from '../ui';
 import AppDialog from './AppDialog.vue';
 import Icon from './Icon.vue';
 import Logo from './Logo.vue';
@@ -43,6 +43,41 @@ function setTreeMode(mode: 'all' | 'focus'): void {
   savePref('treeMode', mode);
   // switching to the one-at-a-time tree starts on the list; switching back shows everything
   app.focused = null;
+}
+
+// ---- export / import ----------------------------------------------------------------------------------------------
+const withPasswords = ref(false);
+const passphrase = ref('');
+const busy = ref(false);
+
+async function exportAll(): Promise<void> {
+  if (withPasswords.value && passphrase.value === '' &&
+      !(await confirm('Export without a passphrase?', 'The passwords will be written to the file in plain text. Anyone who gets the file can read them.', 'Export anyway', true))) {
+    return;
+  }
+  busy.value = true;
+  try {
+    const r = await api.exportConnections(withPasswords.value, passphrase.value);
+    if (!r.cancelled) toast('ok', 'Connections exported', `${r.count} connection${r.count === 1 ? '' : 's'}${withPasswords.value ? (passphrase.value ? ', passwords encrypted' : ', passwords in plain text') : ''}`);
+  } catch (e) {
+    fail('Export failed', e);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function importAll(): Promise<void> {
+  busy.value = true;
+  try {
+    const r = await api.importConnections(passphrase.value);
+    if (r.cancelled) return;
+    await reloadConnections();
+    toast('ok', 'Connections imported', `${r.count} added${r.skipped ? `, ${r.skipped} skipped` : ''}`);
+  } catch (e) {
+    fail('Import failed', e);
+  } finally {
+    busy.value = false;
+  }
 }
 
 // ---- shortcuts ----------------------------------------------------------------------------------------------------
@@ -175,6 +210,18 @@ const stack = ['Java 25', 'Jolt', 'Vue 3', 'CodeMirror 6', 'Reka UI', 'Material 
               <span class="hint">Opening a connection makes it the whole tree, with a button to go back to the list.</span>
             </button>
           </div>
+          <div class="label" style="margin-top: 22px">Export and import</div>
+          <div class="switch-row" @click="withPasswords = !withPasswords">
+            <div><div class="t">Include passwords</div><div class="hint">Saved database and SSH passwords go into the file, encrypted with the passphrase below; leave it empty to store them in plain text.</div></div>
+            <span class="switch" :class="{ on: withPasswords }"><i /></span>
+          </div>
+          <div class="xfer">
+            <input v-model="passphrase" class="input" type="password" autocomplete="off" :placeholder="'Passphrase (optional)'" />
+            <button class="btn" :disabled="busy" @click="exportAll">Export…</button>
+            <button class="btn" :disabled="busy" @click="importAll">Import…</button>
+          </div>
+          <div class="hint">Importing adds connections; one that already exists is kept as a copy, never overwritten. SSH key paths are not moved with the file.</div>
+
           <div class="note"><Icon :path="mdiLanConnect" :size="16" /> The list of open connections, with Refresh, Reconnect and Disconnect for each, is behind the network icon above the tree.</div>
         </template>
 
@@ -267,6 +314,8 @@ h3 { font-size: 18px; font-weight: 600; margin-bottom: 18px; }
 .switch.on i { left: 19px; }
 
 /* connections */
+.xfer { display: flex; gap: 8px; margin: 12px 0 8px; }
+.xfer .input { flex: 1; }
 .tall .hint { line-height: 1.4; }
 .diagram { height: 150px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-side); padding: 10px; display: flex; flex-direction: column; gap: 5px; overflow: hidden; }
 .diagram .r { display: flex; align-items: center; gap: 6px; height: 16px; font-size: 11px; font-family: var(--mono); color: var(--text); }

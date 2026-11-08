@@ -269,6 +269,59 @@ public class ProfileStore {
         return null;
     }
 
+    /** Every saved connection as stored, with its passwords from the credential store added when {@code withSecrets}. */
+    public JsonObject exportConnections(boolean withSecrets) {
+        JsonObject out = new JsonObject();
+        for (Map.Entry<String, JsonElement> entry : readConnections().entrySet()) {
+            if (!entry.getValue().isJsonObject()) {
+                continue;
+            }
+            JsonObject connection = entry.getValue().getAsJsonObject().deepCopy();
+            connection.remove("password");
+            connection.remove("sshPassword");
+            if (withSecrets) {
+                String password = vault.retrieve(entry.getKey());
+                if (password != null) {
+                    connection.addProperty("password", password);
+                }
+                addSshSecret(entry.getKey(), connection);
+            }
+            out.add(entry.getKey(), connection);
+        }
+        return out;
+    }
+
+    /**
+     * Adds connections from an export. One whose id is already saved is kept as a second connection under a new id,
+     * never overwritten. Entries that are not valid connections are skipped. Returns the ids that were added.
+     */
+    public List<String> importConnections(JsonObject incoming) {
+        Gson reader = new GsonBuilder().registerTypeAdapter(ConnectionProfile.class, new ConnectionProfileDeserializer()).create();
+        JsonObject existing = readConnections();
+        List<String> added = new ArrayList<>();
+        for (Map.Entry<String, JsonElement> entry : incoming.entrySet()) {
+            try {
+                JsonObject connection = entry.getValue().getAsJsonObject().deepCopy();
+                connection.addProperty("id", entry.getKey());
+                if (reader.fromJson(connection, ConnectionProfile.class) == null) {
+                    continue;
+                }
+                connection.remove("id");
+                String id = entry.getKey();
+                if (existing.has(id) || id.isBlank()) {
+                    id = UUID.randomUUID().toString();
+                    String name = connection.has("connectionName") ? connection.get("connectionName").getAsString() : "Connection";
+                    connection.addProperty("connectionName", name + " (imported)");
+                }
+                saveConnection(id, connection);
+                added.add(id);
+            } catch (Exception e) {
+                log.warn("Skipped a connection that could not be imported: {}", entry.getKey(), e);
+            }
+        }
+        return added;
+    }
+
     /** Files a connection under a folder (null = ungrouped). */
     public void setConnectionFolder(String connectionId, String folder) {
         modifyConnections(connections -> {
