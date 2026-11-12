@@ -80,7 +80,12 @@ public class Rpc {
         }
         try {
             response.add("result", GSON.toJsonTree(handler.handle(params)));
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            // A LinkageError (a class missing from the packaged runtime, a native library that did not load) is an Error, not an Exception.
+            // Left uncaught it would leave this request without an answer, and the page would wait for it forever.
+            if (e instanceof LinkageError) {
+                org.slf4j.LoggerFactory.getLogger(Rpc.class).error("{} failed: {}", method, e.toString(), e);
+            }
             response.addProperty("error", e.getMessage() != null ? e.getMessage() : e.toString());
         }
         return GSON.toJson(response);

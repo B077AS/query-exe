@@ -11,7 +11,7 @@
 
   "rawParts": ["app", "launcher"],
 
-  "modules": "java.base,java.sql,java.sql.rowset,java.transaction.xa,java.logging,java.naming,java.xml,java.management,java.net.http,java.security.sasl,java.security.jgss,java.xml.crypto,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.naming.dns",
+  "modules": "java.base,java.compiler,java.instrument,java.logging,java.management,java.naming,java.net.http,java.prefs,java.scripting,java.security.jgss,java.security.sasl,java.sql,java.sql.rowset,java.transaction.xa,java.xml,java.xml.crypto,jdk.charsets,jdk.crypto.ec,jdk.httpserver,jdk.naming.dns,jdk.net,jdk.unsupported",
 
   "jvmArgs": [
     "--enable-native-access=ALL-UNNAMED"
