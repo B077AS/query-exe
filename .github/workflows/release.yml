@@ -1,50 +1,165 @@
-name: Build release files
-
-# Runs when you publish a release on GitHub (Releases > Draft a new release > choose a tag such as v0.1.0 > Publish release).
-# It builds the Windows installer (a branded Inno Setup wizard), the Linux .deb, .tar.gz and AppImage, and one fat jar, then attaches them to
-# that release. The tag decides the version, so tag it v0.1.0 for 0.1.0.
+# Release pipeline for QueryExe: the desktop client (repo root) and its launcher (launcher/), shipped as a self-updating install
+# built with jpack (https://github.com/B077AS/jpack). The two files people download are QueryExe-Setup.exe (Windows) and
+# QueryExe.AppImage (Linux). Everything else on the release is what installed copies update from.
 #
-# "Run workflow" on the Actions tab does the same build without a release: the files only appear as downloads of that run, which
-# is the way to try this workflow out before the first real release.
+# Release flow (create a GitHub release with a tag such as 0.1.0; a leading "v" is tolerated and stripped):
+#   One job per platform, because jpack builds for the machine it runs on (the Java runtime is made with that machine's jlink and
+#   the stub it ships is native). Each job
+#     1. sets the Maven version from the tag (the tag is the single source of truth: app.properties' version is filtered from it
+#        and jpack versions the release with it),
+#     2. takes the client jar and the launcher jar built once by the `client` job,
+#     3. runs `jpack:package` over them (-Pjpack -Djpack.jar=...): a jlink runtime shared by launcher and client, the install
+#        folder and the release files,
+#     4. wraps the install folder into the download: QueryExe-Setup.exe (Inno Setup) on Windows, QueryExe.AppImage (built by jpack
+#        itself, with its block index) on Linux,
+#     5. attaches everything to the release.
+#
+#   Installed copies update from releases/latest/download/ (updateUrl in src/jpack/jpack.json): the stub fetches
+#   jpack-<platform>.json and then only the parts (jars, runtime, launcher, stub) whose hash changed. So EVERY release must carry
+#   ALL files of target/jpack/release/, changed or not (a user who skipped a version needs whatever changed since theirs). The
+#   manifest is uploaded LAST: the parts it names must exist before anyone can see it.
+#
+# Manual flow (Actions tab -> Run workflow, tag = an existing release, e.g. 0.1.0):
+#   Rebuilds both platforms from that tag's source and replaces their assets on the release. Use it when a job failed or an asset
+#   is missing.
+
+name: Release
+
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
-      version:
-        description: Version to put on the files (for example 0.1.0)
+      tag:
+        description: "Existing release tag (e.g. 0.1.0): rebuilds the Windows and Linux assets from that tag and replaces them on the release"
         required: true
-        default: 0.0.0-test
 
 permissions:
-  contents: write # attach files to the release
-
-env:
-  VERSION: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.version }}
+  contents: write
 
 jobs:
-  windows:
-    name: Windows (installer)
-    runs-on: windows-2022
-    defaults:
-      run:
-        shell: bash
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Resolve the version from the release tag
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-java@v4
+  # The client jar is platform independent (the Windows and the Linux Jolt backends and the built page are side by side in it),
+  # so it is built ONCE here and both platform jobs package this same file: two builds would give two jars that are not
+  # byte-identical, and with them two different "app" parts on the release. The launcher is the same: one jar for both systems.
+  client:
+    name: Client and launcher jars (built once)
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
           cache: maven
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # The installer is an Inno Setup wizard around the app folder jpackage builds (packaging/windows/queryexe.iss).
+      - name: Build the page
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set the version from the tag
+        run: mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      - name: Build the client jar
+        run: mvn -B -ntp clean package -DskipTests
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: client-jar
+          path: target/query-exe-${{ needs.version.outputs.version }}.jar
+          if-no-files-found: error
+
+      # The launcher's version is deliberately NOT bumped (the versions:set above does not touch launcher/), so the launcher part
+      # keeps its hash and installed copies do not download it again until the launcher changes.
+      - name: Build the launcher jar
+        run: mvn -B -ntp -f launcher/pom.xml clean package
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: launcher-jar
+          path: launcher/target/queryexe-launcher.jar
+          if-no-files-found: error
+
+  windows:
+    name: Windows (QueryExe-Setup.exe + update files)
+    needs: [version, client]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # A manual run rebuilds a release and replaces what is on it; a normal run only skips identical files.
+      REPLACE_EXISTING: ${{ github.event_name == 'workflow_dispatch' }}
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: client-jar
+          path: prebuilt
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: launcher-jar
+          path: launcher/target
+
+      - name: Set the version from the tag
+        run: mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      - name: Build the jpack release (packages the jars built above)
+        run: mvn -B -ntp package -Pjpack -DskipTests -Djpack.jar=prebuilt/query-exe-$VERSION.jar
+
+      - name: Check the release files
+        run: |
+          ls -l target/jpack/release
+          test -s target/jpack/release/jpack-windows-x64.json
+          test -d target/jpack/image/windows-x64
+          # The two jars are published as they are (rawParts in jpack.json), not as zips.
+          test -s "target/jpack/release/query-exe-$VERSION.jar"
+          test -s target/jpack/release/queryexe-launcher.jar
+          grep -q '"packed": false' target/jpack/release/jpack-windows-x64.json
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -52,90 +167,88 @@ jobs:
             choco install innosetup --no-progress -y
           }
 
-      - name: Build the page
-        working-directory: frontend
+      - name: Build the installer
+        shell: pwsh
         run: |
-          npm ci
-          npm run build
+          $repo = (Get-Location).Path
+          $fileVersion = ($env:VERSION -split '[-+]')[0]
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=$env:VERSION" `
+            "/DFileVersion=$fileVersion" `
+            "/DImageDir=$repo\target\jpack\image\windows-x64" `
+            "/DOutputDir=$repo\target\installer" `
+            "$repo\packaging\windows\queryexe.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
 
-      - name: Build the fat jar
+      - name: Upload to the release
         run: |
-          mvn -B versions:set -DnewVersion="${VERSION#v}" -DgenerateBackupPoms=false
-          mvn -B clean package -DskipTests
-
-      - name: Package for Windows
-        run: node packaging/package.mjs windows-installer --version "$VERSION"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows
-          path: target/dist/*
-
-      - name: Attach to the release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" target/dist/* --clobber
+          # Parts first, the manifest last (see the header).
+          bash .github/scripts/upload-parts.sh target/jpack/release
+          # The installer has no version in its name, so releases/latest/download/QueryExe-Setup.exe never changes.
+          gh release upload "$TAG" target/installer/QueryExe-Setup.exe --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" target/jpack/release/jpack-windows-x64.json --clobber -R "$GITHUB_REPOSITORY"
 
   linux:
-    name: Linux (.deb, .tar.gz, AppImage and fat jar)
-    # The oldest Ubuntu GitHub still offers: a .deb names its dependencies as the building system calls them (Ubuntu 24.04 says
-    # libasound2t64, which older systems do not have), and the bundled runtime needs a glibc no newer than the users'.
+    name: Linux (QueryExe.AppImage + update files)
+    needs: [version, client]
+    # The oldest Ubuntu GitHub still offers: the bundled Java runtime and the stub need a glibc no newer than the users'.
     runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPLACE_EXISTING: ${{ github.event_name == 'workflow_dispatch' }}
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: ${{ needs.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
           cache: maven
 
-      - uses: actions/setup-node@v4
+      # appimagetool is itself an AppImage; jpack runs it with --appimage-extract-and-run, so no FUSE is needed. Pinned to a
+      # release and checked against its SHA-256 (as in jpack's own workflow).
+      - name: Get appimagetool
+        run: |
+          set -eu
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          echo "APPIMAGETOOL=$PWD/appimagetool" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v5
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          name: client-jar
+          path: prebuilt
 
-      - name: Tools for building a .deb
-        run: sudo apt-get update && sudo apt-get install -y fakeroot
-
-      # appimagetool is itself an AppImage and the runner has no FUSE, so a small script starts it with --appimage-extract-and-run.
-      - name: appimagetool
-        run: |
-          curl -fsSL -o /tmp/appimagetool.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x /tmp/appimagetool.AppImage
-          printf '#!/bin/sh\nexec /tmp/appimagetool.AppImage --appimage-extract-and-run "$@"\n' | sudo tee /usr/local/bin/appimagetool >/dev/null
-          sudo chmod +x /usr/local/bin/appimagetool
-
-      - name: Build the page
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Build the fat jar
-        run: |
-          mvn -B versions:set -DnewVersion="${VERSION#v}" -DgenerateBackupPoms=false
-          mvn -B clean package -DskipTests
-
-      - name: Package for Linux
-        env:
-          # Shown as the maintainer of the .deb: the person who published the release, by their GitHub no-reply address.
-          QUERYEXE_DEB_MAINTAINER: ${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>
-        run: |
-          node packaging/package.mjs linux-deb --version "$VERSION"
-          node packaging/package.mjs linux-tarball --version "$VERSION"
-          node packaging/package.mjs linux-appimage --version "$VERSION"
-          node packaging/package.mjs jars --version "$VERSION"
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
-          name: linux
-          path: target/dist/*
+          name: launcher-jar
+          path: launcher/target
 
-      - name: Attach to the release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" target/dist/* --clobber
+      - name: Set the version from the tag
+        run: mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      - name: Build the jpack release (packages the jars built above)
+        run: mvn -B -ntp package -Pjpack -DskipTests -Djpack.jar=prebuilt/query-exe-$VERSION.jar
+
+      - name: Check the release files
+        run: |
+          ls -l target/jpack/release
+          test -s target/jpack/release/jpack-linux-x64.json
+          test -s "target/jpack/release/query-exe-$VERSION.jar"
+          test -s target/jpack/release/queryexe-launcher.jar
+          grep -q '"packed": false' target/jpack/release/jpack-linux-x64.json
+          test -s target/jpack/release/QueryExe.AppImage
+          test -s target/jpack/release/QueryExe.AppImage.blocks
+
+      - name: Upload to the release
+        run: |
+          # Parts first, the manifest last. The AppImage has no version in its name (appImageName in jpack.json), so it is both what
+          # the manifest names for in-place AppImage updates and the stable releases/latest/download/QueryExe.AppImage link; its
+          # block index goes with it.
+          bash .github/scripts/upload-parts.sh target/jpack/release
+          gh release upload "$TAG" target/jpack/release/jpack-linux-x64.json --clobber -R "$GITHUB_REPOSITORY"

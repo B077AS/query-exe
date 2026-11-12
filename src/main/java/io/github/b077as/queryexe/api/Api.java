@@ -16,7 +16,7 @@ public class Api {
 
     public void register() {
         Workspace workspace = new Workspace(rpc::emit);
-        new ConnectionApi(workspace).register(rpc);
+        new ConnectionApi(workspace, chooser).register(rpc);
         new SchemaApi().register(rpc);
         new MonitorApi().register(rpc);
         new QueryApi(workspace, chooser).register(rpc);

@@ -7,7 +7,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,7 +23,6 @@ import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.api.Api;
 import io.github.b077as.queryexe.app.Params;
 import io.github.b077as.queryexe.app.Rpc;
-import io.github.b077as.queryexe.app.SystemClipboard;
 import io.github.b077as.queryexe.app.ThemeRequest;
 import io.github.b077as.queryexe.store.AppSettings;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
@@ -32,6 +33,7 @@ import io.github.b077as.jolt.Application;
 import io.github.b077as.jolt.ColorScheme;
 import io.github.b077as.jolt.FileDialogOptions;
 import io.github.b077as.jolt.FileFilter;
+import io.github.b077as.jolt.TaskbarProgress;
 import io.github.b077as.jolt.WebWindow;
 import io.github.b077as.jolt.WindowOptions;
 import lombok.extern.slf4j.Slf4j;
@@ -75,6 +77,9 @@ public class App {
     public static void main(String[] args) {
         boolean dev = Boolean.getBoolean("queryexe.dev");
         boolean smoke = Boolean.getBoolean("queryexe.smoke");
+
+        // After a self-update the installer's version in Apps & features is stale; fix it off the start-up path.
+        Thread.ofVirtual().start(io.github.b077as.queryexe.app.AppsFeatures::syncVersion);
 
         AppOptions appOptions = AppOptions.of(APP_ID).withQuietNativeLogs(true)
                 .withDataDirectory(Launcher.getAppDataDirectory().resolve("webview"));
@@ -202,6 +207,24 @@ public class App {
             window.show();
             return Map.of("ok", true);
         });
+        // Files dropped on the window (Jolt 0.4.1): the paths come from the operating system, never from the page. The page
+        // decides what to do with them (.sql files open as query tabs). Registered before the page loads.
+        window.onFileDrop(drop -> {
+            if (!"scripts".equals(drop.zone())) {
+                return; // only the editor area (data-jolt-drop="scripts") takes files, not the toolbar or the tree
+            }
+            List<Map<String, String>> files = new ArrayList<>();
+            for (Path file : drop.files()) {
+                Path name = file.getFileName();
+                files.add(Map.of("path", file.toString(), "name", name == null ? file.toString() : name.toString()));
+            }
+            rpc.emit("files.dropped", Map.of("files", files));
+        });
+        // A moving bar on the taskbar icon while a query runs (Windows; a launcher that draws it on Linux; harmless elsewhere).
+        rpc.on("window.setBusy", params -> {
+            window.setTaskbarProgress(Params.bool(params, "busy") ? TaskbarProgress.indeterminate() : TaskbarProgress.none());
+            return Map.of("ok", true);
+        });
         // The page cannot restyle the operating system's title bar, but it can ask Java to. The window icon is fixed: it
         // never takes the accent colour.
         rpc.on("window.setTheme", params -> {
@@ -236,7 +259,18 @@ public class App {
             return Map.of("ok", true);
         });
         // The Paste item of the page's context menus (the web view lets the page copy but not read the clipboard; Ctrl+V is not affected).
-        rpc.on("clipboard.readText", params -> Map.of("text", SystemClipboard.readText()));
+        // Jolt's own clipboard (plain text only; an image or files on it read as an empty string).
+        rpc.on("clipboard.readText", params -> {
+            try {
+                return Map.of("text", app.clipboard().readText().get(5, java.util.concurrent.TimeUnit.SECONDS).orElse(""));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Cancelled", e);
+            } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+                log.debug("Could not read the clipboard: {}", e.toString());
+                throw new IllegalStateException("The clipboard cannot be read now. Use Ctrl+V to paste.", e);
+            }
+        });
         // A link clicked in the page. Jolt only opens http, https and mailto.
         rpc.on("app.openExternal", params -> {
             try {

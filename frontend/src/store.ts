@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { reactive, watch } from 'vue';
 import {
   api,
   events,
@@ -56,6 +56,9 @@ export const app = reactive({
   collapsedFolders: [] as string[],
   /** Accent key chosen for a folder (see accents.ts), by folder name. */
   folderColors: {} as Record<string, string>,
+  /** The arrangement made by dragging: connection ids and folder names in order. Empty = alphabetical. */
+  order: [] as string[],
+  folderOrder: [] as string[],
   recent: [] as RecentFile[],
   sessions: {} as Record<string, Session>,
   tabs: [] as QueryTab[],
@@ -81,6 +84,8 @@ export const dialogs = reactive({
   monitor: null as null | { connectionId: string },
   newContainer: null as null | { connectionId: string; kind: string },
   activeConnections: false,
+  /** Script files dropped on the window while no connection was selected: asks which one they open on. */
+  dropFiles: null as null | { files: { path: string; name: string }[] },
 });
 
 let tabCounter = 1;
@@ -110,6 +115,8 @@ export async function loadConnections(): Promise<void> {
     app.folders = folders.folders;
     app.collapsedFolders = folders.collapsed;
     app.folderColors = folders.colors ?? {};
+    app.order = folders.order ?? [];
+    app.folderOrder = folders.folderOrder ?? [];
     app.recent = recent;
     for (const info of connections) {
       if (app.sessions[info.id]) app.sessions[info.id].info = { ...info, connected: true };
@@ -383,6 +390,12 @@ export async function openTable(session: Session, container: string, table: stri
   }
 }
 
+/** Opens an empty query tab for a database/schema, switching to it first. */
+export async function openQuery(session: Session, container: string): Promise<void> {
+  if (container && container !== session.current) await selectContainer(session, container);
+  newTab(session.connectionId);
+}
+
 export async function openScript(session: Session, container: string, table: string, kind: 'select' | 'create' | 'insert'): Promise<void> {
   try {
     const { sql } = await api.script(session.connectionId, container, table, kind);
@@ -426,9 +439,9 @@ export async function openFileOnConnection(connectionId: string): Promise<void> 
   }
 }
 
-export function addFileTab(connectionId: string, path: string, name: string, text: string): void {
+export function addFileTab(connectionId: string, path: string, name: string, text: string, replaceBlank = true): void {
   // an untouched blank tab is replaced by the file rather than left next to it
-  const blank = app.tabs.length === 1 && app.tabs[0].text.trim() === '' && !app.tabs[0].path ? app.tabs[0] : null;
+  const blank = replaceBlank && app.tabs.length === 1 && app.tabs[0].text.trim() === '' && !app.tabs[0].path ? app.tabs[0] : null;
   newTab(connectionId, text, name, path);
   if (blank) closeTab(blank.id);
 }
@@ -440,4 +453,36 @@ export function initStore(): void {
   started = true;
   events.onResult(onResult);
   events.onFinished(onFinished);
+  events.onFilesDropped(onFilesDropped);
+  // a moving bar on the taskbar icon while any query runs
+  watch(() => app.tabs.some((t) => t.running), (busy) => void api.setBusy(busy).catch(() => {}));
+}
+
+/** Files dropped on the window: each .sql file opens as a tab on the current connection. */
+async function onFilesDropped(event: { files: { path: string; name: string }[] }): Promise<void> {
+  const scripts = event.files.filter((f) => /\.sql$/i.test(f.name));
+  if (scripts.length === 0) {
+    toast('info', 'Only .sql files can be opened', 'Drop a SQL script on the window.');
+    return;
+  }
+  const connectionId = currentSession()?.connectionId ?? null;
+  if (!connectionId) {
+    // nothing selected: let the user choose which connection the scripts open on
+    if (app.connections.length === 0) toast('info', 'No connections yet', 'Create a connection first, then drop the file again.');
+    else dialogs.dropFiles = { files: scripts };
+    return;
+  }
+  await openDroppedFiles(scripts, connectionId);
+}
+
+/** Opens each script as a tab on a connection (which must already be open). */
+export async function openDroppedFiles(scripts: { path: string; name: string }[], connectionId: string): Promise<void> {
+  for (const file of scripts) {
+    try {
+      const opened = await api.openPath(file.path, connectionId);
+      if (opened.path) addFileTab(connectionId, opened.path, opened.name ?? file.name, opened.text ?? '', false);
+    } catch (e) {
+      fail('Could not open ' + file.name, e);
+    }
+  }
 }

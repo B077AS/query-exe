@@ -33,8 +33,20 @@ export interface ConnectionInfo {
   folder: string | null;
   pinned: boolean;
   hasPassword: boolean;
+  ssh: (SshForm & { hasPassword: boolean }) | null;
   connected: boolean;
   driver: DriverInfo | null;
+}
+
+export interface SshForm {
+  enabled?: boolean;
+  host: string;
+  port: string;
+  user: string;
+  auth: 'password' | 'key';
+  keyPath: string;
+  /** The SSH password, or the passphrase of the key. */
+  password: string;
 }
 
 export interface ConnectionForm {
@@ -49,6 +61,7 @@ export interface ConnectionForm {
   savePassword: boolean;
   url: string;
   driver: DriverInfo | null;
+  ssh: SshForm | null;
 }
 
 // ---- schema ------------------------------------------------------------------------------------------------------
@@ -283,6 +296,7 @@ export interface TableDraft {
 }
 
 export const api = {
+  setBusy: (busy: boolean) => call<{ ok: boolean }>('window.setBusy', { busy }),
   appInfo: () => call<{ version: string; os: string; java: string }>('app.info'),
   windowReady: () => call<{ ok: boolean }>('window.ready'),
   setTheme: (theme: Record<string, unknown>) => call<{ ok: boolean }>('window.setTheme', theme),
@@ -294,13 +308,18 @@ export const api = {
   connections: () => call<ConnectionInfo[]>('connections.list'),
   connectionStatus: () => call<{ id: string; alive: boolean; sessions: number }[]>('connections.status'),
   connection: (id: string) => call<ConnectionInfo & { password: string }>('connections.get', { id }),
+  exportConnections: (passwords: boolean, passphrase: string) =>
+    call<{ path?: string; count?: number; cancelled?: boolean }>('connections.export', { passwords, passphrase }),
+  importConnections: (passphrase: string) =>
+    call<{ count?: number; skipped?: number; cancelled?: boolean }>('connections.import', { passphrase }),
   saveConnection: (form: ConnectionForm) => call<{ id: string }>('connections.save', { ...form }),
   testConnection: (form: ConnectionForm) => call<{ ok: boolean }>('connections.test', { ...form }),
   deleteConnection: (id: string) => call<{ ok: boolean }>('connections.delete', { id }),
   cloneConnection: (id: string, name: string) => call<{ id: string }>('connections.clone', { id, name }),
   setConnectionFolder: (id: string, folder: string) => call<{ ok: boolean }>('connections.setFolder', { id, folder }),
   setConnectionPinned: (id: string, pinned: boolean) => call<{ ok: boolean }>('connections.setPinned', { id, pinned }),
-  folders: () => call<{ folders: string[]; collapsed: string[]; colors: Record<string, string> }>('connections.folders'),
+  folders: () => call<{ folders: string[]; collapsed: string[]; colors: Record<string, string>; order: string[]; folderOrder: string[] }>('connections.folders'),
+  setOrder: (order: string[], folderOrder: string[]) => call<{ ok: boolean }>('connections.setOrder', { order, folderOrder }),
   setFolders: (folders: string[], collapsed: string[], colors: Record<string, string>) => call<{ ok: boolean }>('connections.setFolders', { folders, collapsed, colors }),
   renameFolder: (from: string, to: string) => call<{ ok: boolean }>('connections.renameFolder', { from, to }),
   connect: (id: string, password?: string, remember?: boolean) =>
@@ -354,6 +373,7 @@ export const api = {
   openPath: (path: string, connectionId?: string) => call<OpenedFile>('file.openPath', { path, connectionId: connectionId ?? '' }),
   saveFile: (p: { path?: string; text: string; name?: string; saveAs?: boolean; connectionId?: string }) =>
     call<{ path?: string; name?: string; cancelled?: boolean }>('file.save', p),
+  pickKey: () => call<{ path?: string; cancelled?: boolean }>('file.pickKey'),
   pickDatabase: (type: string) => call<{ path?: string; cancelled?: boolean }>('file.pickDatabase', { type }),
   recentFiles: () => call<RecentFile[]>('file.recent'),
   removeRecent: (path: string) => call<{ ok: boolean }>('file.recentRemove', { path }),
@@ -363,5 +383,6 @@ export const api = {
 export const events = {
   onResult: (cb: (e: QueryResultEvent) => void) => onEvent<QueryResultEvent>('query.result', cb),
   onFinished: (cb: (e: QueryFinishedEvent) => void) => onEvent<QueryFinishedEvent>('query.finished', cb),
+  onFilesDropped: (cb: (e: { files: { path: string; name: string }[] }) => void) => onEvent('files.dropped', cb),
   onStarted: (cb: (e: { tabId: string; runId: string; count: number }) => void) => onEvent('query.started', cb),
 };

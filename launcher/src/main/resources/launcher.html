@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QueryExe</title>
+<style>
+/* The launcher page. Colours are the client's own tokens (frontend/src/styles/tokens.css); the accent comes from Java. */
+:root {
+  --font: system-ui, 'Segoe UI', 'Noto Sans', sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', Consolas, 'DejaVu Sans Mono', monospace;
+  --bg-side: #f3f3f1;
+  --border-strong: #cfcfca;
+  --text: #1c1c1a;
+  --text-2: #55554f;
+  --text-3: #86867f;
+  --danger: #c4332b;
+  --accent: #e0105c;
+  --on-accent: #ffffff;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-side: #2b2d30;
+  --border-strong: #50545b;
+  --text: #dfe1e5;
+  --text-2: #bcbec4;
+  --text-3: #9a9ea6;
+  --danger: #f68e86;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg-side);
+  color: var(--text);
+  font: 13px/1.45 var(--font);
+  border: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+header { height: 34px; flex: none; display: flex; justify-content: flex-end; align-items: center; padding: 0 6px; }
+.close { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--text-3); cursor: pointer; padding: 0; }
+.close:hover { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
+.close svg { width: 14px; height: 14px; }
+main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 0 24px 22px; min-height: 0; }
+
+/* The name, and the version underneath (old -> new while an update is on the way). */
+.brand { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: -12px; }
+.brand .name { font-size: 28px; font-weight: 650; letter-spacing: -0.025em; line-height: 1; }
+.brand .ver { font-family: var(--mono); font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.brand .ver b { color: var(--text-2); font-weight: 500; }
+
+svg.vessel { width: 128px; height: 160px; flex: none; }
+.w { fill: var(--accent); transition: fill .3s; }
+.w.b { opacity: .34; }
+.w.f { opacity: .72; }
+.fail .w { fill: var(--danger); }
+/* The glass is drawn over the water in the text colour, so it stays readable when the database is full. */
+.rim { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+.caption { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 58px; text-align: center; width: 100%; }
+.caption b { font-size: 14px; font-weight: 600; }
+.caption .sub { font-size: 12px; color: var(--text-2); min-height: 1.45em; }
+.caption .sub.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.caption .sub.err { color: var(--danger); }
+.buttons { display: flex; gap: 8px; margin-top: 8px; }
+.buttons[hidden] { display: none; }
+button.btn { font: inherit; font-size: 12.5px; padding: 4px 16px; border-radius: 4px; border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.btn:focus-visible, .close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<header data-jolt-drag>
+  <button class="close" type="button" aria-label="Close" onclick="window.jolt && jolt.frame ? jolt.frame.close() : window.close()">
+    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>
+  </button>
+</header>
+<main id="main">
+  <div class="brand" data-jolt-drag>
+    <span class="name">QueryExe</span>
+    <div id="ver" class="ver">&nbsp;</div>
+  </div>
+  <svg class="vessel" viewBox="0 0 160 200" aria-hidden="true">
+    <defs><clipPath id="body"><path d="M18 40 A62 18 0 0 1 142 40 V158 A62 18 0 0 1 18 158 Z"/></clipPath></defs>
+    <g clip-path="url(#body)"><path id="wb" class="w b"/><path id="wf" class="w f"/></g>
+    <path class="rim" d="M18 40 A62 18 0 0 1 142 40 V158 A62 18 0 0 1 18 158 Z"/>
+    <path class="rim" d="M18 40 A62 18 0 0 0 142 40" style="opacity:.75"/>
+    <path class="rim" d="M18 99 A62 18 0 0 0 142 99" style="opacity:.4;stroke-width:2"/>
+  </svg>
+  <div class="caption" role="status" aria-live="polite">
+    <b id="title">Checking for updates</b>
+    <span id="sub" class="sub">&nbsp;</span>
+    <div id="buttons" class="buttons" hidden>
+      <button id="retry" class="btn primary" type="button">Retry</button>
+      <button id="quit" class="btn" type="button">Quit</button>
+    </div>
+  </div>
+</main>
+<script>
+(function () {
+  var boot = window.__LAUNCHER__ || {};
+  var root = document.documentElement;
+  root.dataset.theme = boot.scheme === 'light' ? 'light' : 'dark';
+  if (/^#[0-9a-f]{6}$/i.test(boot.accent || '')) {
+    root.style.setProperty('--accent', boot.accent);
+  }
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var el = { main: document.getElementById('main'), title: document.getElementById('title'), sub: document.getElementById('sub'),
+             ver: document.getElementById('ver'), buttons: document.getElementById('buttons'),
+             wb: document.getElementById('wb'), wf: document.getElementById('wf') };
+
+  var IDLE = 0.08;
+  var state = { target: IDLE, shown: IDLE, received: 0, total: 0, current: '', latest: '', note: '' };
+
+  // ---- the water: two wave layers redrawn every frame. Level 0 is the floor of the cylinder (y 176) and level 1 is above
+  // its highest point (the top of the lid arc is at y 22), so a full cylinder is full to the brim.
+  var W = 160, H = 200, TOP = 16, BOTTOM = 176, LEN = 70, AMP = 4;
+  function r(n) { return Math.round(n * 10) / 10; }
+  function wave(level, phase, scale) {
+    var amp = AMP * Math.min(1, level * 12, (1 - level) * 12) * scale;
+    var pos = BOTTOM + (TOP - BOTTOM) * level, s = 'M0 ' + H, i;
+    for (i = 0; i <= 40; i++) {
+      var x = W * i / 40;
+      s += 'L' + r(x) + ' ' + r(pos + amp * Math.sin(6.2832 * x / LEN + phase));
+    }
+    return s + 'L' + W + ' ' + H + 'Z';
+  }
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    var gap = state.target - state.shown;
+    // Ease towards the target, and land on it exactly: an exponential ease alone never quite arrives.
+    state.shown = reduce || Math.abs(gap) < 0.004 ? state.target : state.shown + gap * Math.min(1, dt * 5.5);
+    var t = reduce ? 0 : now / 1000;
+    el.wb.setAttribute('d', wave(state.shown, t * 1.6 + 1.7, 0.75));
+    el.wf.setAttribute('d', wave(state.shown, -t * 2.3, 1));
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- the words
+  function mb(n) { return (n / 1048576).toFixed(1); }
+  function say(title, sub, mono) {
+    el.title.textContent = title;
+    el.sub.textContent = sub || ' ';
+    el.sub.className = 'sub' + (mono ? ' mono' : '');
+  }
+  function showVersion(text) {
+    el.ver.textContent = text || ' ';
+  }
+  function versionLine() {
+    if (state.latest && state.current && state.latest !== state.current) {
+      el.ver.innerHTML = '';
+      el.ver.append(state.current + ' → ');
+      var b = document.createElement('b');
+      b.textContent = state.latest;
+      el.ver.append(b);
+    } else {
+      showVersion(state.current || state.latest);
+    }
+  }
+  function setFailed(on) {
+    el.main.classList.toggle('fail', on);
+    el.buttons.hidden = !on;
+  }
+
+  var handlers = {
+    installed: function (m) {
+      state.current = m.version;
+      versionLine();
+    },
+    phase: function (m) {
+      setFailed(false);
+      if (m.phase === 'checking') {
+        state.target = IDLE;
+        say('Checking for updates', '');
+      } else if (m.phase === 'downloading') {
+        say('Downloading update', '', true);
+      } else if (m.phase === 'installing') {
+        state.target = 1;
+        say('Installing update', '');
+      } else if (m.phase === 'starting') {
+        state.target = 1;
+        if (state.latest) { state.current = state.latest; state.latest = ''; versionLine(); }
+        say('Starting QueryExe', state.note);
+      }
+    },
+    update: function (m) {
+      state.current = m.current; state.latest = m.latest; state.total = m.bytes;
+      versionLine();
+    },
+    progress: function (m) {
+      state.received = m.received; state.total = m.total || state.total;
+      var f = state.total > 0 ? Math.min(1, state.received / state.total) : 0;
+      state.target = Math.max(IDLE, f);
+      say('Downloading update', Math.round(f * 100) + '% · ' + mb(state.received) + ' / ' + mb(state.total) + ' MB', true);
+    },
+    note: function (m) {
+      state.note = m.message;
+    },
+    error: function (m) {
+      setFailed(true);
+      say('Update stopped', m.message);
+      el.sub.className = 'sub err';
+    }
+  };
+
+  if (window.jolt) {
+    jolt.onMessage(function (text) {
+      var m;
+      try { m = JSON.parse(text); } catch (e) { return; }
+      if (m && handlers[m.type]) handlers[m.type](m);
+    });
+  }
+  function send(text) { if (window.jolt) jolt.postMessage(text); }
+
+  document.getElementById('retry').addEventListener('click', function () {
+    state.note = ''; state.received = 0; state.target = IDLE;
+    setFailed(false);
+    say('Checking for updates', '');
+    send('retry');
+  });
+  document.getElementById('quit').addEventListener('click', function () { send('quit'); });
+
+  // Tell Java the page is in place, so it can show the window and start. Not from requestAnimationFrame: a hidden web view
+  // never runs it, so the window would only appear when Java's fallback timer fired, seconds later.
+  send('ready');
+})();
+</script>
+</body>
+</html>

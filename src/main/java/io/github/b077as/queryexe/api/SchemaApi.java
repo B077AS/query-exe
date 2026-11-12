@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 class SchemaApi {
 
-    private static final int SELECT_LIMIT = 1_000;
+    private static final int SELECT_LIMIT = 100;
 
     private SchemaService catalog = SchemaService.get();
 

@@ -13,7 +13,9 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <jolt.version>0.3.2</jolt.version>
+        <jolt.version>0.4.1</jolt.version>
+        <!-- Do not add a property called jpack.version: it is the jpack plugin's own `version` parameter and would replace the release version. -->
+        <jpack.plugin.version>0.1.2</jpack.plugin.version>
         <queryexe.dev>false</queryexe.dev>
         <queryexe.data></queryexe.data>
     </properties>
@@ -33,6 +35,11 @@
             <groupId>io.github.b077as</groupId>
             <artifactId>jolt-linux</artifactId>
             <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mwiede</groupId>
+            <artifactId>jsch</artifactId>
+            <version>2.27.2</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.mysql/mysql-connector-j -->
         <dependency>
@@ -218,4 +225,31 @@
             </resource>
         </resources>
     </build>
+
+    <profiles>
+        <profile>
+            <!-- The self-updating install, built with jpack (settings in src/jpack/jpack.json): a jlink Java runtime shared by the
+                 launcher and the client, the install folder, the release files and, on Linux, the AppImage. It builds for the machine
+                 it runs on. Needs the fat jar (mvn package builds it first) and the launcher jar (mvn -f launcher/pom.xml package):
+                 mvn clean package -Pjpack -DskipTests
+                 -> target/jpack/image/<platform>/ (the install folder), target/jpack/release/ (what a GitHub release carries) -->
+            <id>jpack</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>io.github.b077as</groupId>
+                        <artifactId>jpack-maven-plugin</artifactId>
+                        <version>${jpack.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>package</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

@@ -103,7 +103,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <button v-else class="ib add" title="New query (Ctrl+T)" @click="newQuery()"><Icon :path="mdiPlus" /></button>
       </div>
 
-      <div class="views">
+      <!-- the only place .sql files can be dropped (Jolt reports this zone with the files); the toolbar, tabs and tree are outside it -->
+      <div class="views" data-jolt-drop="scripts">
         <EmptyMain v-if="app.tabs.length === 0" />
         <QueryTabView v-for="tab in app.tabs" v-show="tab.id === app.activeTab" :key="tab.id" :ref="(el) => { if (el) views[tab.id] = el as InstanceType<typeof QueryTabView>; }" :tab="tab" />
       </div>
@@ -129,4 +130,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .menu-item .badge { font: 700 9.5px var(--mono); padding: 1px 4px; border-radius: 3px; background: var(--accent-tint-strong); color: var(--accent); }
 .views { flex: 1; min-height: 0; position: relative; }
 .views > * { position: absolute; inset: 0; }
+/* while files are dragged over the drop area: a frame on all four edges and a faint tint, drawn inside the area's own box so
+   nothing is clipped and the editor stays readable underneath */
+.views::before, .views::after { content: ''; position: absolute; inset: 0; z-index: 5; pointer-events: none; opacity: 0; }
+.views::before { background: var(--accent); }
+.views::after { border: 2px solid var(--accent); }
+.views[data-jolt-drop-over]::before { opacity: 0.08; }
+.views[data-jolt-drop-over]::after { opacity: 1; }
 </style>

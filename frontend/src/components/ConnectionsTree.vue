@@ -2,8 +2,8 @@
 import {
   mdiChevronDown, mdiChevronRight, mdiCodeBraces, mdiCollapseAllOutline, mdiContentCopy, mdiDatabase, mdiDatabaseOutline, mdiDatabasePlusOutline,
   mdiDeleteOutline, mdiFlashOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiFormatListNumbered, mdiInformationOutline, mdiKeyVariant, mdiLanConnect,
-  mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable,
-  mdiTableColumn, mdiViewAgendaOutline, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline, mdiGraphOutline, mdiChartLine,
+  mdiLanDisconnect, mdiLinkVariant, mdiMagnify, mdiPencilOutline, mdiPin, mdiPinOutline, mdiPlay, mdiPlus, mdiRefresh, mdiSortAscending, mdiTable, mdiTableSearch, mdiFilePlusOutline,
+  mdiTableColumn, mdiSortAlphabeticalAscending, mdiViewAgendaOutline, mdiPaletteOutline, mdiTableMultiple, mdiTablePlus, mdiEyeOutline, mdiClose, mdiArrowLeft, mdiServerNetwork, mdiFolderOpenOutline, mdiGraphOutline, mdiChartLine,
 } from '@mdi/js';
 import {
   ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
@@ -12,12 +12,13 @@ import {
 import { computed, reactive, ref, watchEffect } from 'vue';
 import { api, type ConnectionInfo } from '../api';
 import {
-  duplicateConnection, moveConnection, moveToNewFolder, newFolder, removeConnection, removeFolder, renameFolder, setFolderColor, toggleFolder, togglePin,
+  compareConnections, dropConnection, dropFolder, duplicateConnection, folderNames, hasCustomOrder, moveConnection, moveToNewFolder, newFolder, removeConnection,
+  removeFolder, renameFolder, resetOrder, setFolderColor, toggleFolder, togglePin, type DropPos,
 } from '../actions';
 import { ACCENTS } from '../accents';
 import { scheme } from '../theme';
 import {
-  app, connect, currentSession, dialogs, disconnect, loadTree, newTab, openFileOnConnection, openScript, openTable, refreshContainer, selectContainer, type Session,
+  app, connect, currentSession, dialogs, disconnect, loadTree, newTab, openFileOnConnection, openQuery, openScript, openTable, refreshContainer, selectContainer, type Session,
 } from '../store';
 import { confirm, engineBadge, fail, prefs, toast } from '../ui';
 import Icon from './Icon.vue';
@@ -171,7 +172,6 @@ const nodes = computed<Node[]>(() => {
     const tree = app.sessions[c.id]?.tree;
     return !!tree?.containers.some((k) => k.name.toLowerCase().includes(q) || k.tables.some((t) => t.name.toLowerCase().includes(q) || t.columns.some((col) => col.name.toLowerCase().includes(q))));
   };
-  const byName = (a: ConnectionInfo, b: ConnectionInfo): number => Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name);
 
   const addConnection = (c: ConnectionInfo, depth: number): void => {
     const session = app.sessions[c.id];
@@ -182,10 +182,9 @@ const nodes = computed<Node[]>(() => {
   };
 
   const visible = app.connections.filter(matches);
-  [...visible].filter((c) => !c.folder).sort(byName).forEach((c) => addConnection(c, 0));
-  const names = new Set([...app.folders, ...app.connections.map((c) => c.folder).filter((f): f is string => !!f)]);
-  for (const name of [...names].sort((a, b) => a.localeCompare(b))) {
-    const items = visible.filter((c) => c.folder === name).sort(byName);
+  [...visible].filter((c) => !c.folder).sort(compareConnections).forEach((c) => addConnection(c, 0));
+  for (const name of folderNames()) {
+    const items = visible.filter((c) => c.folder === name).sort(compareConnections);
     if (items.length === 0 && q !== '') continue;
     const open = q !== '' || !app.collapsedFolders.includes(name);
     out.push({ id: 'f:' + name, kind: 'folder', label: name, depth: 0, icon: mdiFolderOutline, hasChildren: items.length > 0, meta: String(items.length), open, color: tint(app.folderColors[name]) });
@@ -292,6 +291,74 @@ function collapseAll(): void {
 }
 
 const working = computed(() => currentSession());
+
+// ---- drag and drop: arrange connections and folders ---------------------------------------------------------------
+const drag = ref<{ kind: 'connection' | 'folder'; key: string } | null>(null);
+const hint = ref<{ id: string; pos: DropPos } | null>(null);
+
+const canDrag = (n: Node): boolean => (n.kind === 'connection' || n.kind === 'folder') && filter.value.trim() === '' && !focusSession.value;
+const dragKey = (n: Node): string => (n.kind === 'folder' ? n.label : n.connectionId!);
+
+function dragStart(n: Node, e: DragEvent): void {
+  if (!canDrag(n)) return e.preventDefault();
+  drag.value = { kind: n.kind as 'connection' | 'folder', key: dragKey(n) };
+  e.dataTransfer?.setData('text/plain', n.id);
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+}
+
+/** Where a drop on this row would land, or null when it can't. */
+function dropPos(n: Node, e: DragEvent): DropPos | null {
+  const d = drag.value;
+  if (!d || !canDrag(n)) return null;
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const half: DropPos = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+  if (d.kind === 'connection') {
+    if (n.kind === 'folder') return 'into';
+    return n.connectionId === d.key ? null : half;
+  }
+  return n.kind === 'folder' && n.label !== d.key ? half : null;
+}
+
+function dragOver(n: Node, e: DragEvent): void {
+  const pos = dropPos(n, e);
+  if (!pos) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  if (hint.value?.id !== n.id || hint.value.pos !== pos) hint.value = { id: n.id, pos };
+}
+
+function drop(n: Node, e: DragEvent): void {
+  const d = drag.value;
+  const pos = dropPos(n, e);
+  dragEnd();
+  if (!d || !pos) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (d.kind === 'folder') void dropFolder(d.key, n.label, pos);
+  else void dropConnection(d.key, n.kind === 'folder' ? { folder: n.label } : { connection: n.connectionId }, pos);
+}
+
+/** Dropping a connection on empty space takes it out of its folder. */
+function overRoot(e: DragEvent): void {
+  if (drag.value?.kind !== 'connection' || (e.target as HTMLElement).closest('.node')) return;
+  e.preventDefault();
+  hint.value = { id: 'root', pos: 'into' };
+}
+
+function dropRoot(e: DragEvent): void {
+  const d = drag.value;
+  const onNode = (e.target as HTMLElement).closest('.node');
+  dragEnd();
+  if (d?.kind !== 'connection' || onNode) return;
+  e.preventDefault();
+  void dropConnection(d.key, {}, 'into');
+}
+
+function dragEnd(): void {
+  drag.value = null;
+  hint.value = null;
+}
 </script>
 
 <template>
@@ -308,6 +375,7 @@ const working = computed(() => currentSession());
           <DropdownMenuContent class="menu" align="end" :side-offset="4">
             <DropdownMenuItem class="menu-item" @select="dialogs.connection = {}"><Icon :path="mdiLanConnect" /> New connection</DropdownMenuItem>
             <DropdownMenuItem class="menu-item" @select="newFolder()"><Icon :path="mdiFolderPlusOutline" /> New folder</DropdownMenuItem>
+            <DropdownMenuItem v-if="hasCustomOrder()" class="menu-item" @select="resetOrder()"><Icon :path="mdiSortAlphabeticalAscending" /> Sort A–Z again</DropdownMenuItem>
             <template v-if="working">
               <DropdownMenuSeparator class="menu-sep" />
               <div class="menu-label">{{ working.info.name }}</div>
@@ -323,13 +391,14 @@ const working = computed(() => currentSession());
     </div>
     <label class="search"><Icon :path="mdiMagnify" /><input v-model="filter" placeholder="Filter connections and objects" /><button v-if="filter" class="ib sm" @click="filter = ''"><Icon :path="mdiClose" /></button></label>
 
-    <div class="tree" role="tree">
+    <div class="tree" :class="{ 'drop-root': hint?.id === 'root' }" role="tree" @dragover="overRoot" @drop="dropRoot" @dragleave.self="hint = null">
       <div v-if="focusSession && focusSession.loadingTree && !focusSession.tree" class="empty">Reading structure…</div>
       <div v-if="app.ready && app.connections.length === 0" class="empty">No connections yet.</div>
       <ContextMenuRoot v-for="n in nodes" :key="n.id">
         <ContextMenuTrigger as-child>
-          <div class="node" :class="{ sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
-            :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n)" @dblclick="dbl(n)" @contextmenu="click(n)">
+          <div class="node" :draggable="canDrag(n)" :class="[hint?.id === n.id ? 'drop-' + hint.pos : '', { dragging: !!drag && (n.kind === 'connection' || n.kind === 'folder') && n.kind === drag.kind && dragKey(n) === drag.key, sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }]" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
+            :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n)" @dblclick="dbl(n)" @contextmenu="click(n)"
+            @dragstart="dragStart(n, $event)" @dragover="dragOver(n, $event)" @drop="drop(n, $event)" @dragend="dragEnd">
             <button class="chev" tabindex="-1" @click.stop="toggle(n)">
               <Icon v-if="n.hasChildren" :path="isOpen(n) ? mdiChevronDown : mdiChevronRight" :size="16" />
             </button>
@@ -384,7 +453,7 @@ const working = computed(() => currentSession());
             <ContextMenuItem class="menu-item danger" @select="removeFolder(n.label)"><Icon :path="mdiDeleteOutline" /> Delete folder</ContextMenuItem>
           </ContextMenuContent>
           <ContextMenuContent v-else-if="n.kind === 'table'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiPlay" /> Open (SELECT *)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'insert')"><Icon :path="mdiCodeBraces" /> Script: INSERT</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'create')"><Icon :path="mdiCodeBraces" /> Script: CREATE</ContextMenuItem>
@@ -400,6 +469,7 @@ const working = computed(() => currentSession());
             <ContextMenuItem class="menu-item" @select="copyText(n.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
           </ContextMenuContent>
           <ContextMenuContent v-else-if="n.kind === 'container' || n.kind === 'tables'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openQuery(sessionOf(n)!, n.container!)"><Icon :path="mdiFilePlusOutline" /> New query</ContextMenuItem>
             <ContextMenuItem v-if="n.kind === 'container'" class="menu-item" @select="selectContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiPlay" /> Use</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: n.connectionId!, container: n.container! }"><Icon :path="mdiTablePlus" /> New table</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="refreshContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
@@ -414,7 +484,7 @@ const working = computed(() => currentSession());
           </ContextMenuContent>
           <!-- a partition is only worth a menu where it is a table of its own; the label nodes (groups, objects) have none -->
           <ContextMenuContent v-else-if="n.kind === 'partition' && sessionOf(n)?.info.type === 'PostgreSQL'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiPlay" /> Open (SELECT *)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenuPortal>
       </ContextMenuRoot>
@@ -432,7 +502,14 @@ const working = computed(() => currentSession());
 .tree { flex: 1; overflow: auto; padding: 0 6px 8px; }
 .node { display: flex; align-items: center; gap: 4px; height: 26px; padding-right: 6px; border-radius: 0; white-space: nowrap; }
 .node:hover { background: var(--bg-hover); }
+.node { position: relative; }
 .node.sel { background: var(--accent-tint-strong); }
+.node.dragging { opacity: 0.45; }
+.node.drop-before::after, .node.drop-after::after { content: ''; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; }
+.node.drop-before::after { top: 0; }
+.node.drop-after::after { bottom: 0; }
+.node.drop-into { background: var(--accent-tint-strong); outline: 1px solid var(--accent); outline-offset: -1px; }
+.tree.drop-root { box-shadow: inset 0 -2px 0 var(--accent); }
 .node.dim .label { color: var(--text-2); }
 /* a connection that is open: accent bar, accent icon, solid engine badge; a closed one is quiet */
 .node.live { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-tint); }

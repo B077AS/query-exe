@@ -80,10 +80,12 @@ It runs as a single process. Java owns the connections, SQL execution and storag
 - Nine accent colours, including a rose that matches the app icon
 - Keyboard-first: every common action has a shortcut (see Settings, Shortcuts)
 
-<p align="center">
-  <img src=".github/assets/editor-light.png" alt="The light theme" width="440">
-  <img src=".github/assets/settings.png" alt="Appearance settings with the accent colours" width="440">
-</p>
+<table>
+  <tr>
+    <td width="50%"><img src=".github/assets/editor-light.png" alt="The light theme" width="100%"></td>
+    <td width="50%"><img src=".github/assets/settings.png" alt="Appearance settings with the accent colours" width="100%"></td>
+  </tr>
+</table>
 
 ## Supported databases
 
@@ -102,17 +104,14 @@ Any of them can be swapped for another version or a custom build from the connec
 
 ## Download
 
-Releases on the [Releases page](https://github.com/B077AS/query-exe/releases) ship:
+Get the latest build from the [Releases page](https://github.com/B077AS/query-exe/releases/latest):
 
 | File | For |
 |---|---|
-| `QueryExe-<version>-windows-x64-setup.exe` | Windows installer (per user, no admin rights) |
-| `QueryExe-<version>-linux-amd64.deb` | Debian, Ubuntu and derivatives |
-| `QueryExe-<version>-linux-x64.tar.gz` | Any Linux: unpack and run `QueryExe/bin/QueryExe` |
-| `QueryExe-<version>-linux-x86_64.AppImage` | Any Linux, as a single file |
-| `QueryExe-<version>.jar` | Any system with Java 25: `java -jar QueryExe-<version>.jar` |
+| `QueryExe-Setup.exe` | Windows installer (per user, no admin rights) |
+| `QueryExe.AppImage` | Linux, as a single file: `chmod +x QueryExe.AppImage`, then run it |
 
-The installer, `.deb`, tarball and AppImage carry their own Java runtime. On Linux the web view (WebKitGTK) and the keyring (libsecret) come from the system. The Windows installer is not code-signed, so SmartScreen may warn on first run.
+Both carry their own Java runtime and **update themselves**: QueryExe opens a small window first, checks GitHub, downloads only what changed and then starts. On Linux the web view (WebKitGTK) and the keyring (libsecret) come from the system. The Windows installer is not code-signed, so SmartScreen may warn on first run. The other files on a release (`jpack-*.json`, `runtime-*.zip`, `stub-*.zip`, the jars) are what the installed copies update from; you do not need them.
 
 ## Building from source
 
@@ -150,7 +149,6 @@ java -jar target/query-exe-<version>.jar
 | OS | Folder |
 |---|---|
 | Windows | `%APPDATA%\QueryExe` |
-| macOS | `~/Library/Application Support/QueryExe` |
 | Linux | `~/.config/QueryExe` |
 
 It holds your saved connections (`data/connections.json`), settings (`config/settings.json`), custom JDBC drivers (`jdbc-drivers/`) and logs (`logs/`).

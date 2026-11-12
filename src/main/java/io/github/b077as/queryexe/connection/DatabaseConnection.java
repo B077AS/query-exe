@@ -23,6 +23,8 @@ public class DatabaseConnection {
     private Map<String, Connection> connections;
     // Extra connections handed to query tabs, per connection id; closed together with the shared one.
     private Map<String, List<Connection>> sessions;
+    // SSH tunnels, per connection id, shared by the connection and its sessions.
+    private Map<String, SshTunnel> tunnels = new ConcurrentHashMap<>();
 
     private DatabaseConnection() {
         this.driverLoader = DynamicDriverLoader.getInstance();
@@ -50,7 +52,13 @@ public class DatabaseConnection {
             return;
         }
 
-        Connection connection = open(connectionObject, forceCustomDriver);
+        Connection connection;
+        try {
+            connection = open(connectionObject, forceCustomDriver);
+        } catch (SQLException | RuntimeException e) {
+            closeTunnel(connectionId);
+            throw e;
+        }
 
         connectionObjects.put(connectionId, connectionObject);
         connections.put(connectionId, connection);
@@ -61,6 +69,8 @@ public class DatabaseConnection {
     public void test(ConnectionProfile connectionObject) throws SQLException {
         try (Connection connection = open(connectionObject, false)) {
             connection.isValid(5);
+        } finally {
+            closeTunnel(connectionObject.getId());
         }
     }
 
@@ -80,10 +90,33 @@ public class DatabaseConnection {
         }
 
         return DriverManager.getConnection(
-                connectionObject.getFullUrl(),
+                urlFor(connectionObject),
                 connectionObject.getUsername(),
                 connectionObject.getPassword()
         );
+    }
+
+    /** The JDBC URL to connect to: the saved one, or the local end of the SSH tunnel when the connection uses one. */
+    private String urlFor(ConnectionProfile profile) throws SQLException {
+        SshConfig ssh = profile.getSsh();
+        if (ssh == null) {
+            return profile.getFullUrl();
+        }
+        SshTunnel tunnel = tunnels.get(profile.getId());
+        if (tunnel == null || !tunnel.isConnected()) {
+            closeTunnel(profile.getId());
+            String[] target = SshTunnel.target(profile.getFullUrl(), profile.type().getDefaultPort());
+            tunnel = SshTunnel.open(ssh, target[0], Integer.parseInt(target[1]));
+            tunnels.put(profile.getId(), tunnel);
+        }
+        return tunnel.rewrite(profile.getFullUrl());
+    }
+
+    private void closeTunnel(String connectionId) {
+        SshTunnel tunnel = tunnels.remove(connectionId);
+        if (tunnel != null) {
+            tunnel.close();
+        }
     }
 
     /**
@@ -255,6 +288,7 @@ public class DatabaseConnection {
         if (connection != null) {
             closeQuietly(connection);
         }
+        closeTunnel(connectionId);
         initialize(profile, true);
     }
 
@@ -267,6 +301,7 @@ public class DatabaseConnection {
         if (connection != null) {
             closeQuietly(connection);
         }
+        closeTunnel(connectionId);
         connectionObjects.remove(connectionId);
     }
 }
