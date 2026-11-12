@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- The window that runs before QueryExe: checks GitHub through the jpack stub, downloads what changed and hands over to
+         the client. A separate Maven project (not a module of the root pom), like Komm's launcher.
+         mvn -f launcher/pom.xml clean package                          -> launcher/target/queryexe-launcher.jar
+         mvn -f launcher/pom.xml compile exec:exec -Dlauncher.demo=true -> scripted preview of every phase (no stub needed) -->
+    <groupId>io.github.b077as</groupId>
+    <artifactId>queryexe-launcher</artifactId>
+    <version>0.0.1</version>
+    <packaging>jar</packaging>
+    <name>queryexe-launcher</name>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+        <jolt.version>0.4.1</jolt.version>
+        <jpack.api.version>0.1.2</jpack.api.version>
+        <lombok.version>1.18.42</lombok.version>
+        <launcher.demo>false</launcher.demo>
+        <!-- Fixed jar entry timestamps: the same sources give the same bytes, so the launcher part of a release keeps its
+             hash (and installed copies do not download it again) until the launcher changes. The workflow does not bump
+             this project's version for the same reason. -->
+        <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jolt-core</artifactId>
+            <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jolt-win32</artifactId>
+            <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jolt-linux</artifactId>
+            <version>${jolt.version}</version>
+        </dependency>
+        <!-- The connection to the jpack stub that started the launcher: check, download with progress, hand over. -->
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jpack-api</artifactId>
+            <version>${jpack.api.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.13.2</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.5.34</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Pinned, so the jar has the same name in every build. -->
+        <finalName>queryexe-launcher</finalName>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The window icon is the client's own. -->
+            <resource>
+                <directory>${project.basedir}/../src/main/resources</directory>
+                <includes>
+                    <include>icon.ico</include>
+                </includes>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>25</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>io.github.b077as.queryexe.launcher.Boot</mainClass>
+                                    <manifestEntries>
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                        <Multi-Release>true</Multi-Release>
+                                    </manifestEntries>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <executable>${java.home}/bin/java</executable>
+                    <arguments>
+                        <argument>--enable-native-access=ALL-UNNAMED</argument>
+                        <argument>-Dlauncher.demo=${launcher.demo}</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>io.github.b077as.queryexe.launcher.Boot</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -23,7 +23,6 @@ import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.api.Api;
 import io.github.b077as.queryexe.app.Params;
 import io.github.b077as.queryexe.app.Rpc;
-import io.github.b077as.queryexe.app.SystemClipboard;
 import io.github.b077as.queryexe.app.ThemeRequest;
 import io.github.b077as.queryexe.store.AppSettings;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
@@ -78,6 +77,9 @@ public class App {
     public static void main(String[] args) {
         boolean dev = Boolean.getBoolean("queryexe.dev");
         boolean smoke = Boolean.getBoolean("queryexe.smoke");
+
+        // After a self-update the installer's version in Apps & features is stale; fix it off the start-up path.
+        Thread.ofVirtual().start(io.github.b077as.queryexe.app.AppsFeatures::syncVersion);
 
         AppOptions appOptions = AppOptions.of(APP_ID).withQuietNativeLogs(true)
                 .withDataDirectory(Launcher.getAppDataDirectory().resolve("webview"));
@@ -257,7 +259,18 @@ public class App {
             return Map.of("ok", true);
         });
         // The Paste item of the page's context menus (the web view lets the page copy but not read the clipboard; Ctrl+V is not affected).
-        rpc.on("clipboard.readText", params -> Map.of("text", SystemClipboard.readText()));
+        // Jolt's own clipboard (plain text only; an image or files on it read as an empty string).
+        rpc.on("clipboard.readText", params -> {
+            try {
+                return Map.of("text", app.clipboard().readText().get(5, java.util.concurrent.TimeUnit.SECONDS).orElse(""));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Cancelled", e);
+            } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+                log.debug("Could not read the clipboard: {}", e.toString());
+                throw new IllegalStateException("The clipboard cannot be read now. Use Ctrl+V to paste.", e);
+            }
+        });
         // A link clicked in the page. Jolt only opens http, https and mailto.
         rpc.on("app.openExternal", params -> {
             try {
