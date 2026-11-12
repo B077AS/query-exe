@@ -159,6 +159,14 @@ jobs:
           test -s "target/jpack/release/query-exe-$VERSION.jar"
           test -s target/jpack/release/queryexe-launcher.jar
           grep -q '"packed": false' target/jpack/release/jpack-windows-x64.json
+          # The packaged runtime must hold every JDK module the client needs (modules in src/jpack/jpack.json is a hand-kept list).
+          # A missing one only shows at run time as a NoClassDefFoundError, and the app starts but stays empty. java.desktop is left
+          # out on purpose: only third-party code refers to it (JNA window helpers, H2's GUI console, PostgreSQL's PGpoint).
+          need=$(jdeps --multi-release 25 --ignore-missing-deps --print-module-deps "prebuilt/query-exe-$VERSION.jar" | tr ',' '\n' | grep -v '^java.desktop$')
+          have=$(target/jpack/image/windows-x64/runtime/bin/java.exe --list-modules | sed 's/@.*//')
+          for m in $need; do
+            echo "$have" | grep -qx "$m" || { echo "the runtime is missing $m: add it to modules in src/jpack/jpack.json"; exit 1; }
+          done
 
       - name: Install Inno Setup
         shell: pwsh
@@ -242,6 +250,14 @@ jobs:
           test -s "target/jpack/release/query-exe-$VERSION.jar"
           test -s target/jpack/release/queryexe-launcher.jar
           grep -q '"packed": false' target/jpack/release/jpack-linux-x64.json
+          # The packaged runtime must hold every JDK module the client needs (modules in src/jpack/jpack.json is a hand-kept list).
+          # A missing one only shows at run time as a NoClassDefFoundError, and the app starts but stays empty. java.desktop is left
+          # out on purpose: only third-party code refers to it (JNA window helpers, H2's GUI console, PostgreSQL's PGpoint).
+          need=$(jdeps --multi-release 25 --ignore-missing-deps --print-module-deps "prebuilt/query-exe-$VERSION.jar" | tr ',' '\n' | grep -v '^java.desktop$')
+          have=$(target/jpack/image/linux-x64/runtime/bin/java --list-modules | sed 's/@.*//')
+          for m in $need; do
+            echo "$have" | grep -qx "$m" || { echo "the runtime is missing $m: add it to modules in src/jpack/jpack.json"; exit 1; }
+          done
           test -s target/jpack/release/QueryExe.AppImage
           test -s target/jpack/release/QueryExe.AppImage.blocks
 
