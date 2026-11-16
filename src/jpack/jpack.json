@@ -5,6 +5,8 @@
   "updateUrl": "https://github.com/B077AS/query-exe/releases/latest/download",
   "policy": "manual",
 
+  "log": false,
+
   "archive": false,
 
   "appImageName": "QueryExe.AppImage",
