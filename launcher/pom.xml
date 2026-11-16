@@ -18,7 +18,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
         <jolt.version>0.4.1</jolt.version>
-        <jpack.api.version>0.1.2</jpack.api.version>
+        <!-- Jpack.startNow / whenShown (stay open until the client is on screen). Keep in step with jpack.plugin.version and
+             jpack.api.version in the root pom. -->
+        <jpack.api.version>0.1.3</jpack.api.version>
         <lombok.version>1.18.42</lombok.version>
         <launcher.demo>false</launcher.demo>
         <!-- Fixed jar entry timestamps: the same sources give the same bytes, so the launcher part of a release keeps its

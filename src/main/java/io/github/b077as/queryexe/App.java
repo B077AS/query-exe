@@ -21,6 +21,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.api.Api;
+import io.github.b077as.queryexe.app.OnScreen;
 import io.github.b077as.queryexe.app.Params;
 import io.github.b077as.queryexe.app.Rpc;
 import io.github.b077as.queryexe.app.ThemeRequest;
@@ -98,7 +99,7 @@ public class App {
                         .withDevTools(dev)
                         .withVisible(false), saved);
                 WebWindow window = app.createWindow(options);
-                showAnywayLater(window);
+                showAnywayLater(app, window);
                 window.addInitScript(bootScript(saved, dev));
 
                 Rpc rpc = new Rpc(window);
@@ -203,8 +204,9 @@ public class App {
                 "os", System.getProperty("os.name"),
                 "java", System.getProperty("java.version")));
         // The page has its content on screen: now the window can appear without a blank flash.
+        // OnScreen also tells the launcher, which waits for that to close.
         rpc.on("window.ready", params -> {
-            window.show();
+            OnScreen.show(app, window);
             return Map.of("ok", true);
         });
         // Files dropped on the window (Jolt 0.4.1): the paths come from the operating system, never from the page. The page
@@ -287,14 +289,14 @@ public class App {
         });
     }
 
-    private static void showAnywayLater(WebWindow window) {
+    private static void showAnywayLater(Application app, WebWindow window) {
         Thread.ofVirtual().start(() -> {
             try {
                 Thread.sleep(SHOW_ANYWAY_AFTER);
             } catch (InterruptedException e) {
                 return;
             }
-            window.show(); // harmless if the window is already showing
+            OnScreen.show(app, window); // harmless if the window is already showing
         });
     }
 
