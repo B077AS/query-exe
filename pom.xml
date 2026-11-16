@@ -15,7 +15,11 @@
         <maven.compiler.release>25</maven.compiler.release>
         <jolt.version>0.4.1</jolt.version>
         <!-- Do not add a property called jpack.version: it is the jpack plugin's own `version` parameter and would replace the release version. -->
-        <jpack.plugin.version>0.1.2</jpack.plugin.version>
+        <!-- Keep the plugin (it bundles the stub) and jpack-api on the same release: notifyShown needs a stub from 0.1.3 on, and
+             launcher/pom.xml has its own jpack.api.version. -->
+        <jpack.plugin.version>0.1.3</jpack.plugin.version>
+        <!-- Jpack.notifyShown: the launcher closes once the client's window is on screen. -->
+        <jpack.api.version>0.1.3</jpack.api.version>
         <queryexe.dev>false</queryexe.dev>
         <queryexe.data></queryexe.data>
     </properties>
@@ -35,6 +39,11 @@
             <groupId>io.github.b077as</groupId>
             <artifactId>jolt-linux</artifactId>
             <version>${jolt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.b077as</groupId>
+            <artifactId>jpack-api</artifactId>
+            <version>${jpack.api.version}</version>
         </dependency>
         <dependency>
             <groupId>com.github.mwiede</groupId>

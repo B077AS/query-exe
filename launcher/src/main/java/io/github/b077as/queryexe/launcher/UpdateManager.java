@@ -5,6 +5,7 @@ import io.github.b077as.jpack.JpackException;
 import io.github.b077as.jpack.UpdateCheck;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -16,8 +17,10 @@ import java.util.concurrent.TimeoutException;
  *   <li>ask the stub whether the release published on GitHub differs from the installed one,</li>
  *   <li>if so, have it download and verify the changed parts and follow the progress. The jars, the Java runtime, the stub
  *       and this launcher are all parts of one release, so there is a single update path,</li>
- *   <li>tell the stub to start the client once this process has exited. The stub swaps the downloaded parts in while no Java
- *       process is running, then starts the {@value #APP_ENTRY} entry.</li>
+ *   <li>hand over to the {@value #APP_ENTRY} entry. With nothing downloaded, the stub starts the client right away, next to the
+ *       launcher, and the launcher stays on screen until the client says its window is up (so there is no moment with nothing on
+ *       screen). With an update downloaded, the client starts once this process has exited: the stub swaps the downloaded parts
+ *       in while no Java process is running, then starts it.</li>
  * </ol>
  *
  * <p>An update is mandatory: once a newer release is known, a failed download is an error and the stale install is never
@@ -34,6 +37,9 @@ public class UpdateManager {
 
     /** How long the full database stays on screen before the window closes: the water needs about a second to reach the brim. */
     private static final long HOLD_FULL_MS = 900;
+
+    /** How long the launcher waits for the client to say its window is up before closing anyway (an older client never says so). */
+    private static final long SHOWN_TIMEOUT_SECONDS = 60;
 
     public interface Listener {
         /** The version that is installed now. */
@@ -53,7 +59,7 @@ public class UpdateManager {
         /** The client was not started. */
         void onError(String message);
 
-        /** The client was handed to the stub; the launcher should close now. */
+        /** The client is on screen, or will start once the launcher has exited; the launcher should close now. */
         void onLaunched();
     }
 
@@ -124,11 +130,34 @@ public class UpdateManager {
         pause(600);
     }
 
-    /** Tells the stub to swap the downloaded files in and start the client as soon as this process exits. */
-    private void handOver(Jpack jpack, long beat) {
+    /**
+     * Starts the client. With nothing to swap in, it starts now and the launcher closes once the client's window is up. With an
+     * update downloaded, it starts after this process has exited (the files are swapped first): "Starting QueryExe" is the last
+     * thing on screen, and a short gap before the client appears cannot be avoided.
+     */
+    private void handOver(Jpack jpack, long beat) throws Exception {
         listener.onPhase(Phase.STARTING);
-        pause(beat); // the water reaches the top
-        jpack.startAfterExit(APP_ENTRY);
+        long since = System.nanoTime();
+        OptionalLong client = jpack.startNow(APP_ENTRY).get(30, TimeUnit.SECONDS);
+        if (client.isEmpty()) {
+            log.info("The client starts once the launcher has exited and the update is swapped in");
+            pause(beat); // the water reaches the top
+            listener.onLaunched();
+            return;
+        }
+        log.info("Client started next to the launcher (pid {})", client.getAsLong());
+        try {
+            jpack.whenShown(APP_ENTRY).get(SHOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            log.info("Client on screen {} ms after the hand-over", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - since));
+        } catch (ExecutionException e) {
+            log.error("The client did not start: {}", describe(e));
+            listener.onError("QueryExe closed before its window appeared. Try again.");
+            return;
+        } catch (TimeoutException e) {
+            log.warn("The client did not say it was on screen within {} s; closing the launcher anyway", SHOWN_TIMEOUT_SECONDS);
+        }
+        // Let the water reach the top if the client was quicker than the animation.
+        pause(Math.max(0, beat - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - since)));
         listener.onLaunched();
     }
 
