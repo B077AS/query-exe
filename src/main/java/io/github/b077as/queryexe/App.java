@@ -23,7 +23,7 @@ import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.api.Api;
 import io.github.b077as.queryexe.app.OnScreen;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.queryexe.app.Bridge;
 import io.github.b077as.queryexe.app.ThemeRequest;
 import io.github.b077as.queryexe.store.AppSettings;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
@@ -102,7 +102,7 @@ public class App {
                 showAnywayLater(app, window);
                 window.addInitScript(bootScript(saved, dev));
 
-                Rpc rpc = new Rpc(window);
+                Bridge rpc = new Bridge(window);
                 registerWindowRpc(app, window, rpc);
                 new Api(rpc, fileChooser(window)).register();
 
@@ -198,7 +198,7 @@ public class App {
     // ------------------------------------------------------------------------------------ window rpc
 
     /** What the page can ask of the window itself: show, restyle the title bar, remember preferences, open links. */
-    private static void registerWindowRpc(Application app, WebWindow window, Rpc rpc) {
+    private static void registerWindowRpc(Application app, WebWindow window, Bridge rpc) {
         rpc.on("app.info", params -> Map.of(
                 "version", version(),
                 "os", System.getProperty("os.name"),

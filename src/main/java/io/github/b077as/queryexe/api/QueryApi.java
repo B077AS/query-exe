@@ -14,7 +14,7 @@ import java.util.UUID;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.queryexe.app.Bridge;
 import io.github.b077as.queryexe.query.grid.GridModel;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
@@ -37,7 +37,7 @@ class QueryApi {
         this.chooser = chooser;
     }
 
-    void register(Rpc rpc) {
+    void register(Bridge rpc) {
         rpc.on("query.run", this::run);
         rpc.on("query.cancel", p -> {
             workspace.cancel(Params.string(p, "tabId"));

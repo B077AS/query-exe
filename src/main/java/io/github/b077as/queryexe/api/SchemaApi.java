@@ -11,7 +11,7 @@ import java.util.Map;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.queryexe.app.Bridge;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.schema.ColumnData;
 import io.github.b077as.queryexe.schema.ForeignKeyData;
@@ -32,7 +32,7 @@ class SchemaApi {
 
     private SchemaService catalog = SchemaService.get();
 
-    void register(Rpc rpc) {
+    void register(Bridge rpc) {
         rpc.on("schema.load", p -> catalog.load(Params.string(p, "connectionId")));
         rpc.on("schema.reload", p -> catalog.reload(Params.string(p, "connectionId"), Params.string(p, "container")));
         rpc.on("schema.current", p -> {

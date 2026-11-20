@@ -17,7 +17,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>25</maven.compiler.release>
-        <jolt.version>0.4.1</jolt.version>
+        <jolt.version>0.4.2</jolt.version>
         <!-- Jpack.startNow / whenShown (stay open until the client is on screen). Keep in step with jpack.plugin.version and
              jpack.api.version in the root pom. -->
         <jpack.api.version>0.1.3</jpack.api.version>

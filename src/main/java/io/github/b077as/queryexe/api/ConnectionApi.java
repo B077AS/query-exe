@@ -17,7 +17,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.Launcher;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.queryexe.app.Bridge;
 import io.github.b077as.queryexe.connection.ConnectionBackup;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.ConnectionProfileDeserializer;
@@ -110,7 +110,7 @@ class ConnectionApi {
         return colors;
     }
 
-    void register(Rpc rpc) {
+    void register(Bridge rpc) {
         rpc.on("connections.types", p -> types());
         rpc.on("connections.list", p -> list());
         rpc.on("connections.get", p -> {
@@ -420,7 +420,7 @@ class ConnectionApi {
         try {
             DatabaseConnection.getInstance().initialize(connection);
             if (p.has("remember") && Params.bool(p, "remember") && !given.isEmpty()) {
-                connections.getVault().store(id, connection.getUsername() == null ? "" : connection.getUsername(), given);
+                connections.getVault().store(id, given);
             }
         } finally {
             connecting.remove(id);

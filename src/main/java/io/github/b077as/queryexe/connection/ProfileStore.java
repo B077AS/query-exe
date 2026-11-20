@@ -88,10 +88,9 @@ public class ProfileStore {
 
             if (conn.has("password") && !conn.get("password").isJsonNull()) {
                 String password = conn.get("password").getAsString();
-                String username = conn.has("username") ? conn.get("username").getAsString() : "";
 
                 if (password != null && !password.isEmpty()) {
-                    vault.store(connectionId, username, password);
+                    vault.store(connectionId, password);
 
                     conn.remove("password");
                     modified = true;
@@ -177,7 +176,6 @@ public class ProfileStore {
                 JsonObject element = entry.getValue().getAsJsonObject();
                 element.addProperty("id", connectionId);
 
-                String username = element.has("username") ? element.get("username").getAsString() : "";
                 String password = vault.retrieve(connectionId);
 
                 if (password != null) {
@@ -222,7 +220,6 @@ public class ProfileStore {
             connectionData.remove("password");
         }
 
-        String username = connectionData.has("username") ? connectionData.get("username").getAsString() : "";
         String sshSecret = connectionData.has("sshPassword") && !connectionData.get("sshPassword").isJsonNull()
                 ? connectionData.get("sshPassword").getAsString() : null;
         connectionData.remove("sshPassword");
@@ -242,12 +239,12 @@ public class ProfileStore {
         });
 
         if (password != null && !password.isEmpty()) {
-            vault.store(connectionId, username, password);
+            vault.store(connectionId, password);
         }
         if (!usesSsh) {
             vault.forget(sshKey(connectionId));
         } else if (sshSecret != null && !sshSecret.isEmpty()) {
-            vault.store(sshKey(connectionId), "", sshSecret);
+            vault.store(sshKey(connectionId), sshSecret);
         }
     }
 
@@ -256,7 +253,6 @@ public class ProfileStore {
         if (connections.has(connectionId)) {
             JsonObject connection = connections.getAsJsonObject(connectionId).deepCopy();
 
-            String username = connection.has("username") ? connection.get("username").getAsString() : "";
             String password = vault.retrieve(connectionId);
 
             if (password != null) {
@@ -389,12 +385,10 @@ public class ProfileStore {
             });
 
             if (password != null && !password.isEmpty()) {
-                String username = originalConnection.has("username") ?
-                        originalConnection.get("username").getAsString() : "";
-                vault.store(newId, username, password);
+                vault.store(newId, password);
             }
             if (sshSecret != null && !sshSecret.isEmpty()) {
-                vault.store(sshKey(newId), "", sshSecret);
+                vault.store(sshKey(newId), sshSecret);
             }
         }
 
