@@ -1,15 +1,15 @@
 package io.github.b077as.queryexe.api;
 
-import io.github.b077as.queryexe.app.Bridge;
+import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.query.Workspace;
 
 /** Registers everything the page can ask of Java besides the window itself. */
 public class Api {
 
-    private Bridge rpc;
+    private Rpc rpc;
     private FileChooser chooser;
 
-    public Api(Bridge rpc, FileChooser chooser) {
+    public Api(Rpc rpc, FileChooser chooser) {
         this.rpc = rpc;
         this.chooser = chooser;
     }

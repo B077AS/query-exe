@@ -11,7 +11,7 @@ import java.util.Map;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Bridge;
+import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.schema.ColumnData;
 import io.github.b077as.queryexe.schema.ForeignKeyData;
@@ -32,55 +32,55 @@ class SchemaApi {
 
     private SchemaService catalog = SchemaService.get();
 
-    void register(Bridge rpc) {
-        rpc.on("schema.load", p -> catalog.load(Params.string(p, "connectionId")));
-        rpc.on("schema.reload", p -> catalog.reload(Params.string(p, "connectionId"), Params.string(p, "container")));
-        rpc.on("schema.current", p -> {
+    void register(Rpc rpc) {
+        rpc.on("schema.load", JsonObject.class, p -> catalog.load(Params.string(p, "connectionId")));
+        rpc.on("schema.reload", JsonObject.class, p -> catalog.reload(Params.string(p, "connectionId"), Params.string(p, "container")));
+        rpc.on("schema.current", JsonObject.class, p -> {
             Map<String, Object> out = new HashMap<>();
             out.put("container", catalog.currentContainer(Params.string(p, "connectionId")));
             return out;
         });
-        rpc.on("schema.use", p -> {
+        rpc.on("schema.use", JsonObject.class, p -> {
             catalog.read(Params.string(p, "connectionId"), c -> {
                 c.useDatabase(Params.string(p, "container"));
                 return null;
             });
             return Map.of("ok", true);
         });
-        rpc.on("schema.script", this::script);
-        rpc.on("schema.tableInfo", this::tableInfo);
-        rpc.on("schema.diagram", this::diagram);
-        rpc.on("schema.columnInfo", p -> catalog.read(Params.string(p, "connectionId"), c ->
+        rpc.on("schema.script", JsonObject.class, this::script);
+        rpc.on("schema.tableInfo", JsonObject.class, this::tableInfo);
+        rpc.on("schema.diagram", JsonObject.class, this::diagram);
+        rpc.on("schema.columnInfo", JsonObject.class, p -> catalog.read(Params.string(p, "connectionId"), c ->
                 c.getDetailedColumnInfo(Params.string(p, "container"), Params.string(p, "table"), Params.string(p, "column"))));
-        rpc.on("schema.createContainer", p -> {
+        rpc.on("schema.createContainer", JsonObject.class, p -> {
             catalog.read(Params.string(p, "connectionId"), c -> {
                 c.createDatabase(Params.string(p, "name"));
                 return null;
             });
             return Map.of("ok", true);
         });
-        rpc.on("schema.dropContainer", p -> {
+        rpc.on("schema.dropContainer", JsonObject.class, p -> {
             catalog.read(Params.string(p, "connectionId"), c -> {
                 c.deleteDatabase(Params.string(p, "name"));
                 return null;
             });
             return Map.of("ok", true);
         });
-        rpc.on("schema.dropTable", p -> {
+        rpc.on("schema.dropTable", JsonObject.class, p -> {
             catalog.read(Params.string(p, "connectionId"), c -> {
                 c.deleteTable(Params.string(p, "container"), Params.string(p, "table"));
                 return null;
             });
             return Map.of("ok", true);
         });
-        rpc.on("table.describe", this::describeTable);
-        rpc.on("table.preview", this::preview);
-        rpc.on("table.execute", this::execute);
-        rpc.on("sql.format", p -> {
+        rpc.on("table.describe", JsonObject.class, this::describeTable);
+        rpc.on("table.preview", JsonObject.class, this::preview);
+        rpc.on("table.execute", JsonObject.class, this::execute);
+        rpc.on("sql.format", JsonObject.class, p -> {
             ConnectionProfile c = DatabaseConnection.getInstance().getProfile(Params.string(p, "connectionId"));
             return Map.of("sql", SQLFormatterUtils.format(Params.string(p, "sql"), c));
         });
-        rpc.on("sql.split", p -> {
+        rpc.on("sql.split", JsonObject.class, p -> {
             ConnectionProfile c = DatabaseConnection.getInstance().getProfile(Params.string(p, "connectionId"));
             if (c == null) {
                 throw new IllegalStateException("This connection is not open.");

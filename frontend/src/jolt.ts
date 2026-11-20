@@ -1,7 +1,7 @@
 // The typed bridge to the Java side. This is the only file that knows about window.jolt.
 //
 // Request/response and pushed events are Jolt's built-in RPC: `jolt.call(method, params)` runs a handler registered in
-// Bridge.java (`Rpc.on`) and `jolt.onEvent(name, callback)` receives what Java pushes with `rpc.emit`. A handler that throws
+// `api/` (`Rpc.on`) and `jolt.onEvent(name, callback)` receives what Java pushes with `rpc.emit`. A handler that throws
 // rejects the promise with a `JoltRpcError` whose `message` is the exception's message (the page shows it as a toast).
 
 export interface CallOptions {
@@ -28,7 +28,7 @@ declare global {
   }
 }
 
-/** Calls a Java handler registered with `Bridge.on(method, ...)` and resolves with its result. */
+/** Calls a Java handler registered with `Rpc.on(method, ...)` and resolves with its result. */
 export function call<T>(method: string, params: Record<string, unknown> = {}, options?: CallOptions): Promise<T> {
   const bridge = window.jolt;
   if (!bridge) {
@@ -37,7 +37,7 @@ export function call<T>(method: string, params: Record<string, unknown> = {}, op
   return bridge.call(method, params, options) as Promise<T>;
 }
 
-/** Subscribes to an event pushed by Java with `Bridge.emit(name, data)`. Returns an unsubscribe function. */
+/** Subscribes to an event pushed by Java with `Rpc.emit(name, data)`. Returns an unsubscribe function. */
 export function onEvent<T>(name: string, callback: (data: T) => void): () => void {
   if (!window.jolt) return () => {};
   return window.jolt.onEvent(name, callback as (data: unknown) => void);

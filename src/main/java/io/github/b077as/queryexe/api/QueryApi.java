@@ -14,7 +14,7 @@ import java.util.UUID;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Bridge;
+import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.query.grid.GridModel;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
@@ -37,57 +37,57 @@ class QueryApi {
         this.chooser = chooser;
     }
 
-    void register(Bridge rpc) {
-        rpc.on("query.run", this::run);
-        rpc.on("query.cancel", p -> {
+    void register(Rpc rpc) {
+        rpc.on("query.run", JsonObject.class, this::run);
+        rpc.on("query.cancel", JsonObject.class, p -> {
             workspace.cancel(Params.string(p, "tabId"));
             return Map.of("ok", true);
         });
-        rpc.on("query.closeTab", p -> {
+        rpc.on("query.closeTab", JsonObject.class, p -> {
             workspace.closeTab(Params.string(p, "tabId"));
             return Map.of("ok", true);
         });
 
-        rpc.on("grid.edit", p -> {
+        rpc.on("grid.edit", JsonObject.class, p -> {
             String value = p.get("value") == null || p.get("value").isJsonNull() ? null : p.get("value").getAsString();
             return grid(p).edit(Params.integer(p, "row"), Params.integer(p, "column"), value);
         });
-        rpc.on("grid.cell", p -> {
+        rpc.on("grid.cell", JsonObject.class, p -> {
             Map<String, Object> out = new HashMap<>();
             out.put("text", grid(p).cellText(Params.integer(p, "row"), Params.integer(p, "column")));
             return out;
         });
-        rpc.on("grid.addRow", p -> grid(p).addRow());
-        rpc.on("grid.duplicateRow", p -> grid(p).duplicateRow(Params.integer(p, "row")));
-        rpc.on("grid.deleteRows", p -> grid(p).deleteRows(ints(p, "rows")));
-        rpc.on("grid.revert", p -> grid(p).revert());
-        rpc.on("grid.apply", p -> workspace.applyGrid(Params.string(p, "gridId")));
-        rpc.on("grid.rowScript", p -> Map.of("sql", grid(p).rowInsertScript(Params.integer(p, "row"))));
-        rpc.on("grid.export", this::export);
-        rpc.on("grid.copy", p -> {
+        rpc.on("grid.addRow", JsonObject.class, p -> grid(p).addRow());
+        rpc.on("grid.duplicateRow", JsonObject.class, p -> grid(p).duplicateRow(Params.integer(p, "row")));
+        rpc.on("grid.deleteRows", JsonObject.class, p -> grid(p).deleteRows(ints(p, "rows")));
+        rpc.on("grid.revert", JsonObject.class, p -> grid(p).revert());
+        rpc.on("grid.apply", JsonObject.class, p -> workspace.applyGrid(Params.string(p, "gridId")));
+        rpc.on("grid.rowScript", JsonObject.class, p -> Map.of("sql", grid(p).rowInsertScript(Params.integer(p, "row"))));
+        rpc.on("grid.export", JsonObject.class, this::export);
+        rpc.on("grid.copy", JsonObject.class, p -> {
             GridModel grid = grid(p);
             return Map.of("text", tsv(grid.texts(p.has("rows") ? ints(p, "rows") : null)));
         });
 
-        rpc.on("file.open", this::openFile);
-        rpc.on("file.openPath", p -> read(Path.of(Params.string(p, "path")), Params.optionalString(p, "connectionId")));
-        rpc.on("file.save", this::saveFile);
-        rpc.on("file.pickDatabase", p -> {
+        rpc.on("file.open", JsonObject.class, this::openFile);
+        rpc.on("file.openPath", JsonObject.class, p -> read(Path.of(Params.string(p, "path")), Params.optionalString(p, "connectionId")));
+        rpc.on("file.save", JsonObject.class, this::saveFile);
+        rpc.on("file.pickDatabase", JsonObject.class, p -> {
             String type = Params.string(p, "type");
             String[] extensions = type.equals("SQLite") ? new String[]{"db", "sqlite", "sqlite3", "db3"} : new String[]{"db"};
             Optional<Path> chosen = chooser.open("Select " + type + " database", type + " files", extensions);
             return chosen.isEmpty() ? Map.of("cancelled", true) : Map.of("path", chosen.get().toString());
         });
-        rpc.on("file.pickKey", p -> {
+        rpc.on("file.pickKey", JsonObject.class, p -> {
             Optional<Path> chosen = chooser.open("Select SSH private key", "Private keys", "pem", "key", "ppk");
             return chosen.isEmpty() ? Map.of("cancelled", true) : Map.of("path", chosen.get().toString());
         });
-        rpc.on("file.recent", p -> recent());
-        rpc.on("file.recentRemove", p -> {
+        rpc.on("file.recent", JsonObject.class, p -> recent());
+        rpc.on("file.recentRemove", JsonObject.class, p -> {
             RecentFilesManager.getInstance().removeRecentFile(Params.string(p, "path"));
             return Map.of("ok", true);
         });
-        rpc.on("file.recentClear", p -> {
+        rpc.on("file.recentClear", JsonObject.class, p -> {
             RecentFilesManager.getInstance().clearRecentFiles();
             return Map.of("ok", true);
         });
