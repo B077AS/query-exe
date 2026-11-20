@@ -5,6 +5,7 @@ import io.github.b077as.queryexe.connection.ConnectionProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -265,5 +266,15 @@ class SqliteReaderTest {
         sqlite.deleteTable("aux", "only_aux");
         assertEquals(List.of("parent"), sqlite.getTablesForDatabase("aux"));
         assertTrue(sqlite.getTablesForDatabase("main").contains("parent"), "main.parent must be untouched");
+    }
+
+    @Test
+    void viewsAreAFolderOfTheirOwnAndNotTables() throws SQLException {
+        execute("CREATE VIEW parent_emails AS SELECT id, email FROM parent");
+
+        assertEquals(List.of("parent_emails"), sqlite.getSchemaObjects("main").get("Views"));
+        assertFalse(sqlite.getTablesForDatabase("main").contains("parent_emails"), "a view is not listed with the tables");
+        assertEquals("Views", sqlite.getSchemaObjects("main").keySet().iterator().next(), "Views comes first");
+        assertNull(sqlite.getSchemaObjects("aux").get("Views"));
     }
 }

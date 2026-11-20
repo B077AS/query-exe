@@ -133,6 +133,20 @@ public class PostgresReader extends SchemaReader {
     }
 
     @Override
+    public Map<String, List<String>> getSchemaObjects(String schemaName) {
+        Map<String, List<String>> objects = new LinkedHashMap<>();
+        // pg_class, not information_schema: that one hides materialized views and anything the role has no privilege on
+        String sql = "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = ? AND c.relkind = ? ORDER BY c.relname";
+        try {
+            putIfAny(objects, "Views", listNames(sql, schemaName, "v"));
+            putIfAny(objects, "Materialized views", listNames(sql, schemaName, "m"));
+        } catch (SQLException e) {
+            log.warn("Could not list the views of {}: {}", schemaName, e.getMessage());
+        }
+        return objects;
+    }
+
+    @Override
     public Map<String, List<PartitionData>> getPartitions(String schemaName) {
         // declarative partitions are child tables, found through pg_inherits
         String sql = """

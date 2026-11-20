@@ -240,6 +240,8 @@ export interface RecentFile {
 export interface DiagramData {
   tables: { name: string; columns: { name: string; type: string; primaryKey: boolean; notNull: boolean }[] }[];
   relations: { name: string; from: string; fromColumns: string[]; to: string; toColumns: string[]; onDelete: string; onUpdate: string }[];
+  /** Foreign keys that point at a table outside this database/schema (so there is no card to draw them to). */
+  outside: { from: string; fromColumns: string[]; to: string }[];
 }
 
 export interface MonitorChartDef {

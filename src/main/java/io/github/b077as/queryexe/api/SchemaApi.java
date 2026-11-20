@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import com.google.gson.JsonElement;
@@ -153,32 +154,49 @@ class SchemaApi {
                 }
                 tables.add(Map.of("name", table.getKey(), "columns", columns));
             }
+            // SQLite and Windows MySQL match table names without case, so a key may name its target differently from the listing
+            Map<String, String> lowerCase = new HashMap<>();
+            for (String name : all.keySet()) {
+                lowerCase.putIfAbsent(name.toLowerCase(Locale.ROOT), name);
+            }
+            List<Map<String, Object>> outside = new ArrayList<>();
             for (String table : all.keySet()) {
                 Map<String, ForeignKeyData> keys;
                 try {
                     keys = c.extractForeignKeys(container, table);
                 } catch (SQLException | RuntimeException e) {
-                    log.debug("No foreign keys for {}: {}", table, e.getMessage());
+                    log.warn("No foreign keys for {} in the diagram: {}", table, e.getMessage());
                     continue;
                 }
                 for (ForeignKeyData fk : keys.values()) {
                     String schema = fk.getReferenceSchema();
-                    boolean sameContainer = schema == null || schema.isBlank() || schema.equals(container);
-                    if (!sameContainer || !all.containsKey(fk.getReferenceTable())) {
+                    String catalogName = fk.getReferenceCatalog();
+                    boolean sameContainer = (schema == null || schema.isBlank() || schema.equals(container))
+                            && (catalogName == null || catalogName.isBlank() || catalogName.equalsIgnoreCase(container));
+                    String target = all.containsKey(fk.getReferenceTable()) ? fk.getReferenceTable()
+                            : lowerCase.get(String.valueOf(fk.getReferenceTable()).toLowerCase(Locale.ROOT));
+                    if (!sameContainer || target == null) {
+                        // a key into another schema or database: its table is not on the card list, so say so instead of dropping it unseen
+                        Map<String, Object> o = new LinkedHashMap<>();
+                        o.put("from", table);
+                        o.put("fromColumns", fk.allLocalColumns());
+                        String where = sameContainer ? null : (schema != null && !schema.isBlank() ? schema : catalogName);
+                        o.put("to", where == null || where.isBlank() ? fk.getReferenceTable() : where + "." + fk.getReferenceTable());
+                        outside.add(o);
                         continue;
                     }
                     Map<String, Object> o = new LinkedHashMap<>();
                     o.put("name", fk.getConstraintName());
                     o.put("from", table);
                     o.put("fromColumns", fk.allLocalColumns());
-                    o.put("to", fk.getReferenceTable());
+                    o.put("to", target);
                     o.put("toColumns", fk.allReferenceColumns());
                     o.put("onDelete", fk.getOnDelete());
                     o.put("onUpdate", fk.getOnUpdate());
                     relations.add(o);
                 }
             }
-            return Map.of("tables", tables, "relations", relations);
+            return Map.of("tables", tables, "relations", relations, "outside", outside);
         });
     }
 

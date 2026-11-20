@@ -118,6 +118,10 @@ public class SqliteCatalog {
         return masterNames(schema, "index");
     }
 
+    public List<String> viewNames(String schema) throws SQLException {
+        return masterNames(schema, "view");
+    }
+
     public List<String> triggerNames(String schema) throws SQLException {
         return masterNames(schema, "trigger");
     }

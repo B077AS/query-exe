@@ -536,25 +536,18 @@ public class MySqlReader extends SchemaReader {
 
     @Override
     public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
-        Map<String, ForeignKeyData> foreignKeys = new HashMap<>();
-        DatabaseMetaData metaData = connection.getMetaData();
+        return importedKeys(dbName, null, tableName, false);
+    }
 
-        try (ResultSet fkRs = metaData.getImportedKeys(dbName, null, tableName)) {
-            while (fkRs.next()) {
-                String fkColumnName = fkRs.getString("FKCOLUMN_NAME");
-                String constraintName = fkRs.getString("FK_NAME");  // Get constraint name
-
-                foreignKeys.put(constraintName, new ForeignKeyData(
-                        constraintName,                      // Constraint name
-                        fkColumnName,                        // Local column
-                        fkRs.getString("PKTABLE_NAME"),      // Reference table
-                        fkRs.getString("PKCOLUMN_NAME"),     // Reference column
-                        fkRs.getInt("DELETE_RULE"),          // Delete rule
-                        fkRs.getInt("UPDATE_RULE")           // Update rule
-                ));
-            }
+    @Override
+    public Map<String, List<String>> getSchemaObjects(String databaseName) {
+        Map<String, List<String>> objects = new LinkedHashMap<>();
+        try {
+            putIfAny(objects, "Views", listNames("SELECT table_name FROM information_schema.views WHERE table_schema = ? ORDER BY table_name", databaseName));
+        } catch (SQLException e) {
+            log.warn("Could not list the views of {}: {}", databaseName, e.getMessage());
         }
-        return foreignKeys;
+        return objects;
     }
 
     @Override

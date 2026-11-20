@@ -50,8 +50,12 @@ public class SqliteReader extends SchemaReader {
         java.util.Map<String, java.util.List<String>> objects = new LinkedHashMap<>();
         try {
             SqliteCatalog catalog = catalog();
+            List<String> views = catalog.viewNames(databaseName);
             List<String> indexes = catalog.indexNames(databaseName);
             List<String> triggers = catalog.triggerNames(databaseName);
+            if (!views.isEmpty()) {
+                objects.put("Views", views);
+            }
             if (!indexes.isEmpty()) {
                 objects.put("Indexes", indexes);
             }

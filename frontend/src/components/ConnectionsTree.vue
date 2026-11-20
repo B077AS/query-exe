@@ -23,7 +23,7 @@ import {
 import { confirm, engineBadge, fail, prefs, toast } from '../ui';
 import Icon from './Icon.vue';
 
-type Kind = 'folder' | 'connection' | 'database' | 'container' | 'tables' | 'table' | 'column' | 'group' | 'object' | 'partition';
+type Kind = 'folder' | 'connection' | 'database' | 'container' | 'tables' | 'table' | 'view' | 'column' | 'group' | 'object' | 'partition';
 interface Node {
   id: string;
   kind: Kind;
@@ -73,7 +73,9 @@ watchEffect(() => {
   for (const id of [...seeded]) if (!app.sessions[id]) seeded.delete(id);
 });
 
-const groupIcon: Record<string, string> = { Sequences: mdiFormatListNumbered, Synonyms: mdiLinkVariant, Triggers: mdiFlashOutline, Indexes: mdiSortAscending };
+const groupIcon: Record<string, string> = { Views: mdiEyeOutline, 'Materialized views': mdiEyeOutline, Sequences: mdiFormatListNumbered, Synonyms: mdiLinkVariant, Triggers: mdiFlashOutline, Indexes: mdiSortAscending };
+/** The object groups whose items can be queried like a table. */
+const VIEW_GROUPS = new Set(['Views', 'Materialized views']);
 const label = (type: string): string => (type === 'SQLServer' ? 'SQL Server' : type);
 
 function sessionNodes(session: Session, depth: number, q: string, out: Node[]): void {
@@ -134,12 +136,18 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
       }
     }
     for (const g of c.groups) {
-      if (q !== '') continue;
+      // a view is found by name while filtering; the other object groups (indexes, triggers...) are not searched
+      const isView = VIEW_GROUPS.has(g.title);
+      if (q !== '' && !isView) continue;
+      const items = q === '' ? g.items : g.items.filter((item) => item.toLowerCase().includes(q));
+      if (q !== '' && items.length === 0) continue;
       const gid = `g:${cid}:${c.name}:${g.title}`;
-      out.push({ id: gid, kind: 'group', label: g.title, depth: d + 1, connectionId: cid, container: c.name, icon: groupIcon[g.title] ?? mdiFolderOutline, hasChildren: g.items.length > 0, meta: String(g.items.length) });
-      if (expanded.has(gid)) {
-        for (const item of g.items) {
-          out.push({ id: `${gid}:${item}`, kind: 'object', label: item, depth: d + 2, connectionId: cid, container: c.name, icon: groupIcon[g.title] ?? mdiFolderOutline, hasChildren: false });
+      // like the Tables folder, but it starts closed: views are rarely what one is looking for
+      out.push({ id: gid, kind: 'group', label: g.title, depth: d + 1, connectionId: cid, container: c.name, icon: groupIcon[g.title] ?? mdiFolderOutline, hasChildren: items.length > 0, meta: String(items.length) });
+      if (open(gid)) {
+        for (const item of items) {
+          out.push({ id: `${gid}:${item}`, kind: isView ? 'view' : 'object', label: item, depth: d + 2, connectionId: cid, container: c.name, table: isView ? item : undefined,
+            icon: groupIcon[g.title] ?? mdiFolderOutline, hasChildren: false });
         }
       }
     }
@@ -208,8 +216,14 @@ function toggle(n: Node): void {
 const sessionOf = (n: Node): Session | undefined => (n.connectionId ? app.sessions[n.connectionId] : undefined);
 const infoOf = (n: Node): ConnectionInfo | undefined => app.connections.find((c) => c.id === n.connectionId);
 
-/** One click only selects; nothing expands. A database or schema becomes the one queries run in through "Use". */
-function click(n: Node): void {
+/** One click only selects; nothing expands. A database or schema becomes the one queries run in through "Use".
+ *  `toggle`: a plain click on the connection that is already selected unselects it (a right click or double click never does). */
+function click(n: Node, toggle = false): void {
+  if (toggle && n.kind === 'connection' && selected.value === n.id) {
+    selected.value = null;
+    app.selected = null;
+    return;
+  }
   selected.value = n.id;
   if (n.connectionId) app.selected = n.connectionId;
 }
@@ -224,6 +238,11 @@ async function openConnection(c: ConnectionInfo): Promise<void> {
 
 /** Double click expands or collapses; on a connection that is not open yet it connects first. */
 async function dbl(n: Node): Promise<void> {
+  click(n); // the two clicks of a double click may have toggled the selection off
+  if (n.kind === 'view') {
+    await openTable(sessionOf(n)!, n.container!, n.table!);
+    return;
+  }
   if (n.kind === 'connection') {
     const info = infoOf(n);
     if (info && (!app.sessions[info.id] || prefs.treeMode === 'focus')) await openConnection(info);
@@ -397,7 +416,7 @@ function dragEnd(): void {
       <ContextMenuRoot v-for="n in nodes" :key="n.id">
         <ContextMenuTrigger as-child>
           <div class="node" :draggable="canDrag(n)" :class="[hint?.id === n.id ? 'drop-' + hint.pos : '', { dragging: !!drag && (n.kind === 'connection' || n.kind === 'folder') && n.kind === drag.kind && dragKey(n) === drag.key, sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }]" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
-            :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n)" @dblclick="dbl(n)" @contextmenu="click(n)"
+            :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n, true)" @dblclick="dbl(n)" @contextmenu="click(n)"
             @dragstart="dragStart(n, $event)" @dragover="dragOver(n, $event)" @drop="drop(n, $event)" @dragend="dragEnd">
             <button class="chev" tabindex="-1" @click.stop="toggle(n)">
               <Icon v-if="n.hasChildren" :path="isOpen(n) ? mdiChevronDown : mdiChevronRight" :size="16" />
@@ -464,6 +483,11 @@ function dragEnd(): void {
             <ContextMenuSeparator class="menu-sep" />
             <ContextMenuItem class="menu-item danger" @select="dropTable(n)"><Icon :path="mdiDeleteOutline" /> Drop table</ContextMenuItem>
           </ContextMenuContent>
+          <ContextMenuContent v-else-if="n.kind === 'view'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="copyText(n.table!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+          </ContextMenuContent>
           <ContextMenuContent v-else-if="n.kind === 'column'" class="menu">
             <ContextMenuItem class="menu-item" @select="dialogs.columnInfo = { connectionId: n.connectionId!, container: n.container!, table: n.table!, column: n.label }"><Icon :path="mdiInformationOutline" /> Properties</ContextMenuItem>
             <ContextMenuItem class="menu-item" @select="copyText(n.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
@@ -529,7 +553,8 @@ function dragEnd(): void {
 .swatch.none { border: 1px solid var(--text-3); }
 .node.sel .ic { color: var(--accent); }
 .ic.key { color: var(--text); }
-.label { overflow: hidden; text-overflow: ellipsis; }
-.badge { font: 700 9.5px var(--mono); padding: 1px 4px; border-radius: 3px; background: var(--accent-tint-strong); color: var(--accent); flex: none; }
+/* the right padding keeps overflow:hidden from shaving the last glyph (sub-pixel text width, bold overhang) */
+.label { overflow: hidden; text-overflow: ellipsis; min-width: 0; padding-right: 2px; }
+.badge { font: 700 9.5px var(--mono); padding: 1px 4px; margin-left: 2px; border-radius: 3px; background: var(--accent-tint-strong); color: var(--accent); flex: none; }
 .meta { margin-left: auto; padding-left: 8px; color: var(--text-3); font-size: 11px; }
 </style>
