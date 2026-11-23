@@ -538,17 +538,14 @@ function dragEnd(): void {
 .node.drop-into { background: var(--accent-tint-strong); outline: 1px solid var(--accent); outline-offset: -1px; }
 .tree.drop-root { box-shadow: inset 0 -2px 0 var(--accent); }
 .node.dim .label { color: var(--text-2); }
-/* a connection that is open: accent bar, accent icon, solid engine badge; a closed one is quiet */
-.node.live { box-shadow: inset 2px 0 0 var(--accent); background: var(--accent-tint); }
-.node.live:hover, .node.live.sel { background: var(--accent-tint-strong); }
-.node.live .ic { color: var(--accent); }
-.node.live .badge { background: var(--accent); color: var(--on-accent); }
+/* what is active is told by type, never by a fill (a fill is for the row you clicked): an open connection is bold with a full-strength icon,
+   a closed one is faded */
+.node.live .ic { color: var(--text); }
+.node.dim .ic { opacity: 0.55; }
 .node.dim .badge { background: var(--bg-hover); color: var(--text-3); }
 .focus-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node.bold .label { font-weight: 600; }
-/* the database/schema queries run in: tinted row and accent icon, without the bar an open connection has */
-.node.current { background: var(--accent-tint); }
-.node.current:hover, .node.current.sel { background: var(--accent-tint-strong); }
+/* the database/schema queries run in: bold accent label and icon, no fill */
 .node.current .ic, .node.current .label { color: var(--accent); }
 .chev { width: 16px; height: 16px; display: grid; place-items: center; color: var(--text-3); flex: none; }
 .ic { color: var(--text-2); }
