@@ -53,6 +53,8 @@ const filter = ref('');
 const expanded = reactive(new Set<string>());
 const selected = ref<string | null>(null);
 const seeded = new Set<string>();
+/** What makes a container's row ids unique: schema names repeat from one database to the next ("public" in each). */
+const scope = (c: { name: string; parent?: string | null }): string => (c.parent ? `${c.parent}/${c.name}` : c.name);
 
 // the first time a connection's structure arrives, its few top level containers are opened
 watchEffect(() => {
@@ -65,8 +67,8 @@ watchEffect(() => {
     tree.containers.forEach((c) => c.parent && expanded.add(`d:${id}:${c.parent}`));
     for (const c of tree.containers) {
       if (tree.containers.length <= 3 || c.name === tree.current) {
-        expanded.add(`c:${id}:${c.name}`);
-        expanded.add(`t:${id}:${c.name}`);
+        expanded.add(`c:${id}:${scope(c)}`);
+        expanded.add(`t:${id}:${scope(c)}`);
       }
     }
   }
@@ -88,15 +90,16 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
   const addContainer = (c: (typeof tree.containers)[number], d: number): void => {
     const tables = q === '' ? c.tables : c.tables.filter((t) => t.name.toLowerCase().includes(q) || t.columns.some((col) => col.name.toLowerCase().includes(q)));
     if (q !== '' && tables.length === 0 && !c.name.toLowerCase().includes(q)) return;
-    const cid2 = `c:${cid}:${c.name}`;
+    const sc = scope(c);
+    const cid2 = `c:${cid}:${sc}`;
     out.push({ id: cid2, kind: 'container', label: c.name, depth: d, connectionId: cid, container: c.name, icon: c.kind === 'schema' ? mdiFolderOutline : mdiDatabaseOutline,
       hasChildren: true, bold: session.current === c.name, meta: String(c.tables.length) });
     if (!open(cid2)) return;
-    const tid = `t:${cid}:${c.name}`;
+    const tid = `t:${cid}:${sc}`;
     out.push({ id: tid, kind: 'tables', label: 'Tables', depth: d + 1, connectionId: cid, container: c.name, icon: mdiTableMultiple, hasChildren: tables.length > 0, meta: String(tables.length) });
     if (open(tid)) {
       for (const t of tables) {
-        const id = `tb:${cid}:${c.name}:${t.name}`;
+        const id = `tb:${cid}:${sc}:${t.name}`;
         out.push({ id, kind: 'table', label: t.name, depth: d + 2, connectionId: cid, container: c.name, table: t.name, icon: mdiTable,
           hasChildren: t.columns.length > 0 || t.partitions.length > 0 });
         const columnMatch = q !== '' && t.columns.some((col) => col.name.toLowerCase().includes(q)) && !t.name.toLowerCase().includes(q);
@@ -141,7 +144,7 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
       if (q !== '' && !isView) continue;
       const items = q === '' ? g.items : g.items.filter((item) => item.toLowerCase().includes(q));
       if (q !== '' && items.length === 0) continue;
-      const gid = `g:${cid}:${c.name}:${g.title}`;
+      const gid = `g:${cid}:${sc}:${g.title}`;
       // like the Tables folder, but it starts closed: views are rarely what one is looking for
       out.push({ id: gid, kind: 'group', label: g.title, depth: d + 1, connectionId: cid, container: c.name, icon: groupIcon[g.title] ?? mdiFolderOutline, hasChildren: items.length > 0, meta: String(items.length) });
       if (open(gid)) {

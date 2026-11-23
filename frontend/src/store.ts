@@ -176,20 +176,28 @@ function openSession(info: ConnectionInfo): void {
   if (app.tabs.length === 0) newTab(info.id);
 }
 
+/** The latest load started per connection: an older one that finishes late must not overwrite a newer result. */
+const loadSeq: Record<string, number> = {};
+
 export async function loadTree(session: Session): Promise<void> {
+  const seq = (loadSeq[session.connectionId] = (loadSeq[session.connectionId] ?? 0) + 1);
   session.loadingTree = true;
   try {
     const tree = await api.loadSchema(session.connectionId);
+    if (seq !== loadSeq[session.connectionId] || app.sessions[session.connectionId] !== session) return;
     session.tree = tree;
     session.current = tree.current;
   } catch (e) {
-    fail('Could not read the database structure', e);
+    if (seq === loadSeq[session.connectionId]) fail('Could not read the database structure', e);
   } finally {
-    session.loadingTree = false;
+    if (seq === loadSeq[session.connectionId]) session.loadingTree = false;
   }
 }
 
 export async function refreshContainer(session: Session, name: string): Promise<void> {
+  // a container inside a database (the server-wide tree) can't be reloaded on its own: the backend only reads
+  // the database the connection is in, and schema names repeat from database to database
+  if (session.tree?.containers.some((c) => c.name === name && c.parent)) return loadTree(session);
   try {
     const fresh = await api.reloadContainer(session.connectionId, name);
     replaceContainer(session, fresh);
@@ -200,8 +208,8 @@ export async function refreshContainer(session: Session, name: string): Promise<
 
 function replaceContainer(session: Session, fresh: TreeContainer): void {
   if (!session.tree) return;
-  const index = session.tree.containers.findIndex((c) => c.name === fresh.name);
-  if (index >= 0) session.tree.containers[index] = { ...fresh, parent: session.tree.containers[index].parent };
+  const index = session.tree.containers.findIndex((c) => c.name === fresh.name && !c.parent);
+  if (index >= 0) session.tree.containers[index] = fresh;
   else session.tree.containers.push(fresh);
 }
 

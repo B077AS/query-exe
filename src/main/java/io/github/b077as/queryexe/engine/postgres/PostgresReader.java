@@ -88,16 +88,12 @@ public class PostgresReader extends SchemaReader {
                     Map<String, Map<String, ArrayList<ColumnData>>> schemaMap = new LinkedHashMap<>();
                     for (String schemaName : reader.getSchemas()) {
                         Map<String, ArrayList<ColumnData>> tables = reader.getAllTablesAndColumns(schemaName);
-                        if (tables != null && !tables.isEmpty()) {
-                            schemaMap.put(schemaName, tables);
-                        }
+                        // empty schemas are kept: a database just created holds nothing but an empty "public"
+                        schemaMap.put(schemaName, tables != null ? tables : new LinkedHashMap<>());
                     }
-                    if (!schemaMap.isEmpty()) {
-                        hierarchy.put(dbName, schemaMap);
-                    }
+                    hierarchy.put(dbName, schemaMap);
                 } catch (SQLException e) {
-                    log.error("Error accessing database '{}': {}", dbName, e.getMessage());
-                } finally {
+                    log.error("Error accessing database '{}': {}", dbName, e.getMessage());                } finally {
                     if (opened) {
                         try {
                             target.close();
