@@ -69,11 +69,81 @@ public abstract class SchemaReader {
     public abstract double getTableSize(String database, String table) throws SQLException;
 
     /**
-     * Other objects of a container that the tree lists next to its tables, by group title ("Sequences", "Indexes", ...),
-     * in display order. Empty groups are left out; engines without support return nothing.
+     * Other objects of a container that the tree lists next to its tables, by group title ("Views", "Sequences", "Indexes", ...),
+     * in display order. Empty groups are left out; engines without support return nothing. A group titled "Views" or
+     * "Materialized views" holds names that can be queried like a table (the page opens them with a SELECT); in SQL Server
+     * they are {@code schema.name}, like its tables.
      */
     public Map<String, List<String>> getSchemaObjects(String databaseName) {
         return new LinkedHashMap<>();
+    }
+
+    /** The first column of a query as a list of names, with the given text parameters bound in order (for the lists of views and the like). */
+    protected List<String> listNames(String sql, String... parameters) throws SQLException {
+        List<String> names = new ArrayList<>();
+        try (java.sql.PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int i = 0; i < parameters.length; i++) {
+                statement.setString(i + 1, parameters[i]);
+            }
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    names.add(rs.getString(1));
+                }
+            }
+        }
+        return names;
+    }
+
+    /**
+     * The foreign keys of one table from JDBC metadata, one entry per constraint with every column pair in key order
+     * (a plain map keyed by constraint name that kept the last row would turn a composite key into its last column).
+     * {@code qualifyReference} names the referenced table {@code schema.table} (SQL Server, whose tables are listed that way).
+     */
+    protected Map<String, ForeignKeyData> importedKeys(String catalog, String schema, String table, boolean qualifyReference) throws SQLException {
+        Map<String, TreeMap<Integer, String[]>> rows = new LinkedHashMap<>(); // per key: KEY_SEQ -> {local column, referenced column}
+        Map<String, ForeignKeyData> heads = new LinkedHashMap<>();
+        try (ResultSet rs = connection.getMetaData().getImportedKeys(catalog, schema, table)) {
+            while (rs.next()) {
+                String local = rs.getString("FKCOLUMN_NAME");
+                String name = rs.getString("FK_NAME");
+                if (name == null || name.isEmpty()) {
+                    name = "fk_" + table + "_" + local; // an unnamed key: its first column is as good as a name
+                }
+                rows.computeIfAbsent(name, k -> new TreeMap<>()).put(rs.getInt("KEY_SEQ"), new String[] { local, rs.getString("PKCOLUMN_NAME") });
+                if (!heads.containsKey(name)) {
+                    String referenceSchema = rs.getString("PKTABLE_SCHEM");
+                    String referenceTable = rs.getString("PKTABLE_NAME");
+                    if (qualifyReference && referenceSchema != null && !referenceSchema.isEmpty()) {
+                        referenceTable = referenceSchema + "." + referenceTable;
+                    }
+                    ForeignKeyData fk = new ForeignKeyData(name, local, referenceTable, rs.getString("PKCOLUMN_NAME"),
+                            rs.getInt("DELETE_RULE"), rs.getInt("UPDATE_RULE"));
+                    fk.setReferenceCatalog(rs.getString("PKTABLE_CAT"));
+                    heads.put(name, fk);
+                }
+            }
+        }
+        for (Map.Entry<String, ForeignKeyData> entry : heads.entrySet()) {
+            ForeignKeyData fk = entry.getValue();
+            List<String> locals = new ArrayList<>();
+            List<String> references = new ArrayList<>();
+            for (String[] pair : rows.get(entry.getKey()).values()) {
+                locals.add(pair[0]);
+                references.add(pair[1]);
+            }
+            fk.setLocalColumns(locals);
+            fk.setReferenceColumns(references);
+            fk.setLocalColumn(locals.get(0));
+            fk.setReferenceColumn(references.get(0));
+        }
+        return heads;
+    }
+
+    /** Adds a group to the tree's object list when it has anything in it. */
+    protected static void putIfAny(Map<String, List<String>> objects, String title, List<String> names) {
+        if (names != null && !names.isEmpty()) {
+            objects.put(title, names);
+        }
     }
 
     /**

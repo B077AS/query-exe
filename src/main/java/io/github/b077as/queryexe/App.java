@@ -22,8 +22,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.api.Api;
 import io.github.b077as.queryexe.app.OnScreen;
+import io.github.b077as.queryexe.app.PageRpc;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.app.ThemeRequest;
 import io.github.b077as.queryexe.store.AppSettings;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
@@ -102,7 +103,7 @@ public class App {
                 showAnywayLater(app, window);
                 window.addInitScript(bootScript(saved, dev));
 
-                Rpc rpc = new Rpc(window);
+                Rpc rpc = PageRpc.create(window);
                 registerWindowRpc(app, window, rpc);
                 new Api(rpc, fileChooser(window)).register();
 
@@ -199,13 +200,13 @@ public class App {
 
     /** What the page can ask of the window itself: show, restyle the title bar, remember preferences, open links. */
     private static void registerWindowRpc(Application app, WebWindow window, Rpc rpc) {
-        rpc.on("app.info", params -> Map.of(
+        rpc.on("app.info", JsonObject.class, params -> Map.of(
                 "version", version(),
                 "os", System.getProperty("os.name"),
                 "java", System.getProperty("java.version")));
         // The page has its content on screen: now the window can appear without a blank flash.
         // OnScreen also tells the launcher, which waits for that to close.
-        rpc.on("window.ready", params -> {
+        rpc.on("window.ready", JsonObject.class, params -> {
             OnScreen.show(app, window);
             return Map.of("ok", true);
         });
@@ -223,13 +224,13 @@ public class App {
             rpc.emit("files.dropped", Map.of("files", files));
         });
         // A moving bar on the taskbar icon while a query runs (Windows; a launcher that draws it on Linux; harmless elsewhere).
-        rpc.on("window.setBusy", params -> {
+        rpc.on("window.setBusy", JsonObject.class, params -> {
             window.setTaskbarProgress(Params.bool(params, "busy") ? TaskbarProgress.indeterminate() : TaskbarProgress.none());
             return Map.of("ok", true);
         });
         // The page cannot restyle the operating system's title bar, but it can ask Java to. The window icon is fixed: it
         // never takes the accent colour.
-        rpc.on("window.setTheme", params -> {
+        rpc.on("window.setTheme", JsonObject.class, params -> {
             ThemeRequest theme = ThemeRequest.parse(params);
             window.setTitleBarScheme(theme.getScheme());
             window.setTitleBarColors(theme.getBackground(), theme.getText());
@@ -242,7 +243,7 @@ public class App {
             AppSettings.get().setRaw(APPEARANCE, stored);
             return Map.of("ok", true);
         });
-        rpc.on("settings.setUi", params -> {
+        rpc.on("settings.setUi", JsonObject.class, params -> {
             String key = Params.string(params, "key");
             Class<?> kind = UI_KEYS.get(key);
             JsonElement value = params.get("value");
@@ -262,7 +263,7 @@ public class App {
         });
         // The Paste item of the page's context menus (the web view lets the page copy but not read the clipboard; Ctrl+V is not affected).
         // Jolt's own clipboard (plain text only; an image or files on it read as an empty string).
-        rpc.on("clipboard.readText", params -> {
+        rpc.on("clipboard.readText", JsonObject.class, params -> {
             try {
                 return Map.of("text", app.clipboard().readText().get(5, java.util.concurrent.TimeUnit.SECONDS).orElse(""));
             } catch (InterruptedException e) {
@@ -274,7 +275,7 @@ public class App {
             }
         });
         // A link clicked in the page. Jolt only opens http, https and mailto.
-        rpc.on("app.openExternal", params -> {
+        rpc.on("app.openExternal", JsonObject.class, params -> {
             try {
                 URI uri = new URI(Params.string(params, "url"));
                 if (!app.openExternal(uri).get()) {

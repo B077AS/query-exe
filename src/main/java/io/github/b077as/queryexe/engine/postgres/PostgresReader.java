@@ -88,16 +88,12 @@ public class PostgresReader extends SchemaReader {
                     Map<String, Map<String, ArrayList<ColumnData>>> schemaMap = new LinkedHashMap<>();
                     for (String schemaName : reader.getSchemas()) {
                         Map<String, ArrayList<ColumnData>> tables = reader.getAllTablesAndColumns(schemaName);
-                        if (tables != null && !tables.isEmpty()) {
-                            schemaMap.put(schemaName, tables);
-                        }
+                        // empty schemas are kept: a database just created holds nothing but an empty "public"
+                        schemaMap.put(schemaName, tables != null ? tables : new LinkedHashMap<>());
                     }
-                    if (!schemaMap.isEmpty()) {
-                        hierarchy.put(dbName, schemaMap);
-                    }
+                    hierarchy.put(dbName, schemaMap);
                 } catch (SQLException e) {
-                    log.error("Error accessing database '{}': {}", dbName, e.getMessage());
-                } finally {
+                    log.error("Error accessing database '{}': {}", dbName, e.getMessage());                } finally {
                     if (opened) {
                         try {
                             target.close();
@@ -130,6 +126,20 @@ public class PostgresReader extends SchemaReader {
             log.error("getAllTablesAndColumns failed", e);
         }
         return null;
+    }
+
+    @Override
+    public Map<String, List<String>> getSchemaObjects(String schemaName) {
+        Map<String, List<String>> objects = new LinkedHashMap<>();
+        // pg_class, not information_schema: that one hides materialized views and anything the role has no privilege on
+        String sql = "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = ? AND c.relkind = ? ORDER BY c.relname";
+        try {
+            putIfAny(objects, "Views", listNames(sql, schemaName, "v"));
+            putIfAny(objects, "Materialized views", listNames(sql, schemaName, "m"));
+        } catch (SQLException e) {
+            log.warn("Could not list the views of {}: {}", schemaName, e.getMessage());
+        }
+        return objects;
     }
 
     @Override

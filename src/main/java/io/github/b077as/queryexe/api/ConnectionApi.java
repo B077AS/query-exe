@@ -17,7 +17,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.Launcher;
 import io.github.b077as.queryexe.app.Params;
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.connection.ConnectionBackup;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.ConnectionProfileDeserializer;
@@ -111,9 +111,9 @@ class ConnectionApi {
     }
 
     void register(Rpc rpc) {
-        rpc.on("connections.types", p -> types());
-        rpc.on("connections.list", p -> list());
-        rpc.on("connections.get", p -> {
+        rpc.on("connections.types", JsonObject.class, p -> types());
+        rpc.on("connections.list", JsonObject.class, p -> list());
+        rpc.on("connections.get", JsonObject.class, p -> {
             // the edit dialog is the only place that sees the stored password; the list never carries it
             ConnectionProfile c = load(Params.string(p, "id"));
             Map<String, Object> out = describe(c);
@@ -123,65 +123,65 @@ class ConnectionApi {
             }
             return out;
         });
-        rpc.on("connections.export", this::exportConnections);
-        rpc.on("connections.import", this::importConnections);
-        rpc.on("connections.save", this::save);
-        rpc.on("connections.test", this::test);
-        rpc.on("connections.delete", p -> {
+        rpc.on("connections.export", JsonObject.class, this::exportConnections);
+        rpc.on("connections.import", JsonObject.class, this::importConnections);
+        rpc.on("connections.save", JsonObject.class, this::save);
+        rpc.on("connections.test", JsonObject.class, this::test);
+        rpc.on("connections.delete", JsonObject.class, p -> {
             String id = Params.string(p, "id");
             disconnect(id);
             connections.deleteConnection(id);
             return Map.of("ok", true);
         });
-        rpc.on("connections.clone", p -> {
+        rpc.on("connections.clone", JsonObject.class, p -> {
             String id = connections.cloneConnection(Params.string(p, "id"), Params.string(p, "name"));
             return Map.of("id", id);
         });
-        rpc.on("connections.setFolder", p -> {
+        rpc.on("connections.setFolder", JsonObject.class, p -> {
             connections.setConnectionFolder(Params.string(p, "id"), Params.optionalString(p, "folder"));
             return Map.of("ok", true);
         });
-        rpc.on("connections.setPinned", p -> {
+        rpc.on("connections.setPinned", JsonObject.class, p -> {
             connections.setConnectionPinned(Params.string(p, "id"), Params.bool(p, "pinned"));
             return Map.of("ok", true);
         });
-        rpc.on("connections.folders", p -> Map.of(
+        rpc.on("connections.folders", JsonObject.class, p -> Map.of(
                 "folders", AppSettings.get().getStringList(FOLDERS),
                 "collapsed", AppSettings.get().getStringList(COLLAPSED),
                 "colors", AppSettings.get().getFolderColors(),
                 "order", AppSettings.get().getStringList(ORDER),
                 "folderOrder", AppSettings.get().getStringList(FOLDER_ORDER)));
         // the arrangement made by dragging; both lists empty = the default alphabetical order
-        rpc.on("connections.setOrder", p -> {
+        rpc.on("connections.setOrder", JsonObject.class, p -> {
             AppSettings.get().setStringList(ORDER, Params.optionalStrings(p, "order"));
             AppSettings.get().setStringList(FOLDER_ORDER, Params.optionalStrings(p, "folderOrder"));
             return Map.of("ok", true);
         });
-        rpc.on("connections.setFolders", p -> {
+        rpc.on("connections.setFolders", JsonObject.class, p -> {
             AppSettings.get().setStringList(FOLDERS, Params.optionalStrings(p, "folders"));
             AppSettings.get().setStringList(COLLAPSED, Params.optionalStrings(p, "collapsed"));
             AppSettings.get().setFolderColors(folderColors(Params.optionalStringMap(p, "colors")));
             return Map.of("ok", true);
         });
-        rpc.on("connections.renameFolder", p -> {
+        rpc.on("connections.renameFolder", JsonObject.class, p -> {
             String to = Params.optionalString(p, "to");
             connections.renameFolder(Params.string(p, "from"), to.isBlank() ? null : to);
             return Map.of("ok", true);
         });
-        rpc.on("connections.connect", this::connect);
-        rpc.on("connections.disconnect", p -> {
+        rpc.on("connections.connect", JsonObject.class, this::connect);
+        rpc.on("connections.disconnect", JsonObject.class, p -> {
             disconnect(Params.string(p, "id"));
             return Map.of("ok", true);
         });
-        rpc.on("connections.reconnect", p -> {
+        rpc.on("connections.reconnect", JsonObject.class, p -> {
             String id = Params.string(p, "id");
             workspace.closeConnection(id);
             DatabaseConnection.getInstance().reconnect(id);
             return Map.of("ok", true);
         });
-        rpc.on("connections.open", p -> new ArrayList<>(DatabaseConnection.getInstance().getAllConnectionIds()));
+        rpc.on("connections.open", JsonObject.class, p -> new ArrayList<>(DatabaseConnection.getInstance().getAllConnectionIds()));
         // For the active connections list: is each one still answering, and how many tab sessions does it hold.
-        rpc.on("connections.status", p -> {
+        rpc.on("connections.status", JsonObject.class, p -> {
             DatabaseConnection databases = DatabaseConnection.getInstance();
             List<Map<String, Object>> out = new ArrayList<>();
             for (String id : new ArrayList<>(databases.getAllConnectionIds())) {
@@ -193,8 +193,8 @@ class ConnectionApi {
             }
             return out;
         });
-        rpc.on("drivers.list", this::drivers);
-        rpc.on("drivers.download", this::downloadDriver);
+        rpc.on("drivers.list", JsonObject.class, this::drivers);
+        rpc.on("drivers.download", JsonObject.class, this::downloadDriver);
     }
 
     // ------------------------------------------------------------------------------------ reading
@@ -420,7 +420,7 @@ class ConnectionApi {
         try {
             DatabaseConnection.getInstance().initialize(connection);
             if (p.has("remember") && Params.bool(p, "remember") && !given.isEmpty()) {
-                connections.getVault().store(id, connection.getUsername() == null ? "" : connection.getUsername(), given);
+                connections.getVault().store(id, given);
             }
         } finally {
             connecting.remove(id);

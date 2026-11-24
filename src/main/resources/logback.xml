@@ -32,7 +32,7 @@
     <logger name="io.github.b077as.queryexe" level="DEBUG" />
 
     <!-- Silence noisy third-party libs -->
-    <logger name="com.microsoft.credentialstorage" level="WARN" />
+    
     <logger name="com.microsoft.sqlserver" level="WARN" />
     <logger name="org.mariadb.jdbc" level="WARN" />
     <logger name="org.postgresql" level="WARN" />

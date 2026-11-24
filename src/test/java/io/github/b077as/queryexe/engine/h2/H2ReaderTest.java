@@ -267,4 +267,14 @@ class H2ReaderTest {
 
         assertTrue(size >= 0, "size lookup must succeed, got " + size);
     }
+
+    @Test
+    void viewsAreAFolderOfTheirOwnAndNotTables() throws SQLException {
+        execute("CREATE VIEW PUBLIC.PARENT_NAMES AS SELECT ID, NAME FROM PUBLIC.PARENT");
+
+        assertEquals(List.of("PARENT_NAMES"), h2.getSchemaObjects("PUBLIC").get("Views"));
+        assertFalse(h2.getTablesForDatabase("PUBLIC").contains("PARENT_NAMES"), "a view is not listed with the tables");
+        assertNull(h2.getSchemaObjects("OTHER").get("Views"), "no group for a schema without views");
+        assertEquals("Views", h2.getSchemaObjects("PUBLIC").keySet().iterator().next(), "Views comes first");
+    }
 }

@@ -21,6 +21,8 @@ public class ForeignKeyData {
 
 	/** Schema of the referenced table when it differs from (or isn't assumed to be) the table's own; may be null. */
 	private String referenceSchema;
+	/** Database (JDBC catalog) of the referenced table on engines where a database is the container (MySQL, MariaDB, SQL Server); null elsewhere. */
+	private String referenceCatalog;
 	/** All local columns in key order; null for single-column keys built without it. */
 	private List<String> localColumns;
 	/** All referenced columns in key order; null for single-column keys built without it. */

@@ -667,30 +667,22 @@ public class SqlServerReader extends SchemaReader {
 
     @Override
     public Map<String, ForeignKeyData> extractForeignKeys(String dbName, String tableName) throws SQLException {
-        Map<String, ForeignKeyData> foreignKeys = new HashMap<>();
-        DatabaseMetaData metaData = connection.getMetaData();
-
         // Parse schema and table from tableName
         String[] parts = SqlServerDialect.parseSchemaAndTable(tableName);
-        String schema = parts[0];
-        String table = parts[1];
+        // the referenced table comes back as schema.table, the way this engine's tables are listed
+        return importedKeys(dbName, parts[0], parts[1], true);
+    }
 
-        try (ResultSet fkRs = metaData.getImportedKeys(dbName, schema, table)) {
-            while (fkRs.next()) {
-                String fkColumnName = fkRs.getString("FKCOLUMN_NAME");
-                String constraintName = fkRs.getString("FK_NAME");  // Get constraint name
-
-                foreignKeys.put(constraintName, new ForeignKeyData(
-                        constraintName,                      // Constraint name
-                        fkColumnName,                        // Local column
-                        fkRs.getString("PKTABLE_NAME"),      // Reference table
-                        fkRs.getString("PKCOLUMN_NAME"),     // Reference column
-                        fkRs.getInt("DELETE_RULE"),          // Delete rule
-                        fkRs.getInt("UPDATE_RULE")           // Update rule
-                ));
-            }
+    @Override
+    public Map<String, List<String>> getSchemaObjects(String databaseName) {
+        Map<String, List<String>> objects = new LinkedHashMap<>();
+        try {
+            putIfAny(objects, "Views", listNames("SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM " + quoteIdentifier(databaseName)
+                    + ".INFORMATION_SCHEMA.VIEWS ORDER BY TABLE_SCHEMA, TABLE_NAME"));
+        } catch (SQLException e) {
+            log.warn("Could not list the views of {}: {}", databaseName, e.getMessage());
         }
-        return foreignKeys;
+        return objects;
     }
     
     @Override

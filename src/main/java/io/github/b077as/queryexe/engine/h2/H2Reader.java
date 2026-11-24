@@ -26,12 +26,6 @@ import io.github.b077as.queryexe.engine.*;
 @Slf4j
 public class H2Reader extends SchemaReader {
 
-    private static void putIfAny(java.util.Map<String, java.util.List<String>> objects, String group, java.util.List<String> names) {
-        if (!names.isEmpty()) {
-            objects.put(group, names);
-        }
-    }
-
     /** H2 has one catalog per database, so the schema is what matters. */
     @Override
     public String currentContainer() throws SQLException {
@@ -60,6 +54,7 @@ public class H2Reader extends SchemaReader {
         try {
             String schema = schemaOrCurrent(schemaName);
             H2Catalog catalog = catalog();
+            putIfAny(objects, "Views", listNames("SELECT table_name FROM information_schema.views WHERE table_schema = ? ORDER BY table_name", schema));
             // sequences are not listed for now (identity columns create one each, which is mostly noise)
             putIfAny(objects, "Synonyms", catalog.synonyms(schema));
         } catch (SQLException e) {

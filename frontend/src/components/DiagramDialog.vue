@@ -26,7 +26,10 @@ const view = reactive({ x: 20, y: 20, k: 1 });
 const hover = ref<string | null>(null);
 const search = ref('');
 
-const heightOf = (table: DiagramData['tables'][number]): number => HEAD_H + table.columns.length * ROW_H + PAD_Y;
+/** The keys that leave this schema, one per line, for the pill's tooltip. */
+const outsideText = computed(() => (data.value?.outside ?? []).map((o) => `${o.from}(${o.fromColumns.join(', ')}) → ${o.to}`).join('\n'));
+
+const heightOf =(table: DiagramData['tables'][number]): number => HEAD_H + table.columns.length * ROW_H + PAD_Y;
 
 /** Tables ordered so related ones are neighbours (breadth first from the most connected table), then laid out in rows. */
 function layout(d: DiagramData): void {
@@ -107,7 +110,11 @@ interface Line { key: string; table: string; other: string; d: string; childMark
 
 function rowY(table: string, column: string): number {
   const t = data.value!.tables.find((x) => x.name === table)!;
-  const index = Math.max(0, t.columns.findIndex((c) => c.name === column));
+  // exact name first; some engines match column names without case, so a key may spell one differently from the listing
+  const lower = column.toLowerCase();
+  let index = t.columns.findIndex((c) => c.name === column);
+  if (index < 0) index = t.columns.findIndex((c) => c.name.toLowerCase() === lower);
+  index = Math.max(0, index);
   return pos[table].y + HEAD_H + index * ROW_H + ROW_H / 2;
 }
 
@@ -216,6 +223,7 @@ function wheel(e: WheelEvent): void {
     <template #head>
       <span class="pill">{{ state.container }}</span>
       <span v-if="data" class="pill">{{ data.tables.length }} tables<i class="vsep" />{{ data.relations.length }} relations</span>
+      <span v-if="data?.outside?.length" class="pill" :title="outsideText">{{ data.outside.length }} to other schemas, not drawn</span>
     </template>
     <div class="bar">
       <input v-model="search" class="find" placeholder="Find a table…" spellcheck="false" />

@@ -182,7 +182,7 @@ The tests are plain JUnit 5 and need no window: they pin the SQL each dialect ge
 | Window and bridge | [Jolt](https://github.com/B077AS/jolt): a native window hosting a web page, no HTTP server |
 | UI | Vue 3, TypeScript, Vite, CodeMirror 6, Reka UI, Material Design Icons |
 | Database connectivity | JDBC drivers for MySQL, MariaDB, PostgreSQL, SQL Server, H2, SQLite |
-| Credentials | OS credential store via `credential-secure-storage` |
+| Credentials | OS keystore via Jolt's `jolt-credentials` (Credential Manager / Secret Service) |
 | Serialization | Gson |
 | Build | Maven (shade plugin for the fat JAR), Vite for the page |
 | Misc | Logback, Lombok, sql-formatter |

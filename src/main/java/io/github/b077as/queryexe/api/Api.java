@@ -1,6 +1,6 @@
 package io.github.b077as.queryexe.api;
 
-import io.github.b077as.queryexe.app.Rpc;
+import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.query.Workspace;
 
 /** Registers everything the page can ask of Java besides the window itself. */

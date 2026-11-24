@@ -62,7 +62,7 @@ final class LauncherApp implements UpdateManager.Listener {
         WindowOptions options = WindowOptions.defaults()
                 .withTitle("QueryExe")
                 .withSize(WIDTH, HEIGHT)
-                .withMinSize(WIDTH, HEIGHT)
+                .withResizable(false)
                 .withFrameless(true)
                 .withCentered(true)
                 .withVisible(false)
