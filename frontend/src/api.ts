@@ -297,6 +297,34 @@ export interface TableDraft {
   renames: Record<string, string>;
 }
 
+// ---- execution plans ------------------------------------------------------------------------------------------------
+
+export interface PlanNode {
+  op: string;
+  relation?: string;
+  detail?: string;
+  /** Cumulative: this step and everything below it. */
+  cost?: number;
+  rows?: number;
+  actualRows?: number;
+  /** Wall time including the children, in ms. */
+  actualMs?: number;
+  loops?: number;
+  attrs: Record<string, string>;
+  children: PlanNode[];
+}
+
+export interface Plan {
+  engine: string;
+  sql: string;
+  analyzed: boolean;
+  canAnalyze: boolean;
+  roots: PlanNode[];
+  raw?: string;
+  planningMs?: number;
+  executionMs?: number;
+}
+
 export const api = {
   setBusy: (busy: boolean) => call<{ ok: boolean }>('window.setBusy', { busy }),
   appInfo: () => call<{ version: string; os: string; java: string }>('app.info'),
@@ -356,6 +384,8 @@ export const api = {
 
   run: (p: { tabId: string; connectionId: string; text: string; mode: 'all' | 'selection' | 'statement'; caret?: number; offset?: number }) =>
     call<{ runId: string; count: number }>('query.run', p),
+  explain: (p: { tabId: string; connectionId: string; text: string; mode: 'all' | 'selection' | 'statement'; caret?: number; offset?: number; analyze: boolean }) =>
+    call<Plan>('query.explain', p),
   cancel: (tabId: string) => call<{ ok: boolean }>('query.cancel', { tabId }),
   closeTab: (tabId: string) => call<{ ok: boolean }>('query.closeTab', { tabId }),
 

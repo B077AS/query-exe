@@ -82,6 +82,8 @@ export const dialogs = reactive({
   script: null as null | { title: string; sql: string },
   diagram: null as null | { connectionId: string; container: string },
   monitor: null as null | { connectionId: string },
+  /** The execution plan of a statement: which tab asked, and what it asked about. */
+  explain: null as null | { tabId: string; connectionId: string; title: string; request: RunRequest },
   newContainer: null as null | { connectionId: string; kind: string },
   activeConnections: false,
   /** Script files dropped on the window while no connection was selected: asks which one they open on. */

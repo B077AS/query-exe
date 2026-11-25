@@ -18,6 +18,8 @@ import io.github.b077as.queryexe.query.grid.GridModel;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.query.SqlInspector;
 import io.github.b077as.queryexe.query.SqlSplitter;
+import io.github.b077as.queryexe.query.explain.Explainer;
+import io.github.b077as.queryexe.query.explain.Plan;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -296,6 +298,32 @@ public class Workspace {
     static String message(SQLException error) {
         String text = error.getMessage() == null ? error.toString() : error.getMessage();
         return text.strip();
+    }
+
+    /**
+     * The execution plan of one statement, asked on the tab's own connection (so it sees the tab's USE/SET state). With
+     * {@code analyze} the statement really runs, inside a transaction that is rolled back. Blocking; the tab counts as busy
+     * meanwhile, and {@link #cancel(String)} stops it.
+     */
+    public Plan explain(String tabId, String connectionId, String sql, boolean analyze) throws SQLException {
+        Tab tab = tab(tabId, connectionId);
+        if (tab.busy) {
+            throw new IllegalStateException("This tab is already running a script.");
+        }
+        tab.busy = true;
+        tab.cancelled = false;
+        try {
+            Connection connection = tab.connection();
+            return Explainer.explain(connection, tab.connectionObject.getDbType(), sql, analyze, statement -> tab.running = statement);
+        } catch (SQLException e) {
+            if (tab.cancelled) {
+                throw new SQLException("Cancelled by user.", e);
+            }
+            throw e;
+        } finally {
+            tab.running = null;
+            tab.busy = false;
+        }
     }
 
     /** Applies a grid's pending changes on the connection of the tab that owns it. Blocking. */

@@ -61,17 +61,18 @@
 .chk.on { background: var(--accent); border-color: var(--accent); }
 .check-row { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 
-/* Switch between views (Columns / Foreign keys / SQL ...): same 28px height and 4px radius as buttons and inputs. Every option keeps
-   a 1px border (transparent when off) so the selected one, a soft accent tint, is exactly the same size as the others. */
-.seg { display: inline-flex; gap: 4px; }
-.seg button { height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--radius); color: var(--text-2); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+/* Switch between views (Columns / Foreign keys / SQL ...): one outlined group, 28px high with the radius of buttons and inputs, a hairline
+   between the options. The selected one is told by weight and a neutral fill, with a thin accent line under it: colour is only a hint. */
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+.seg button { height: 26px; padding: 0 12px; border: 0; border-right: 1px solid var(--border); border-radius: 0; color: var(--text-2); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.seg button:last-child { border-right: 0; }
 .seg button:hover:not(.on) { background: var(--bg-hover); color: var(--text); }
-.seg button.on { background: var(--accent-tint-strong); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); font-weight: 600; }
+.seg button.on { background: var(--bg-hover); color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 /* The label holds an invisible bold copy of itself, so the button is as wide as its bold text whether or not it is selected. */
 .seg-lbl { display: inline-flex; flex-direction: column; align-items: center; }
 .seg-lbl::after { content: attr(data-t); font-weight: 600; height: 0; overflow: hidden; visibility: hidden; }
 .seg .badge { background: none; padding: 0; color: var(--text-3); font-weight: 400; }
-.seg button.on .badge { color: inherit; opacity: 0.8; }
+.seg button.on .badge { color: var(--text-2); }
 
 /* ---- menus (reka ContextMenu / DropdownMenu content) ---- */
 .menu {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  mdiClose, mdiCogOutline, mdiContentSaveOutline, mdiDatabaseOutline, mdiFolderOpenOutline, mdiFormatAlignLeft, mdiLoading, mdiPlay, mdiPlayOutline,
+  mdiClose, mdiCogOutline, mdiContentSaveOutline, mdiDatabaseOutline, mdiFolderOpenOutline, mdiFileTreeOutline, mdiFormatAlignLeft, mdiLoading, mdiPlay, mdiPlayOutline,
   mdiPlus, mdiStop,
 } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
@@ -73,6 +73,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <Icon :path="current?.running ? mdiLoading : mdiPlay" class="play" :class="{ spin: current?.running }" />Run <span class="kbd">Ctrl ↵</span>
         </button>
         <button class="btn" :disabled="!current || current.running" @click="view()?.runStatement()"><Icon :path="mdiPlayOutline" class="play" />Run statement <span class="kbd">Ctrl ⇧ ↵</span></button>
+        <button class="btn" :disabled="!current || current.running" title="Show how the statement would run" @click="view()?.explain()"><Icon :path="mdiFileTreeOutline" />Explain</button>
         <button class="btn" :disabled="!current || !current.running" @click="current && cancelTab(current)"><Icon :path="mdiStop" />Stop</button>
         <span class="sp" />
         <span v-if="current" class="pill" title="Connection and database in use"><Icon :path="mdiDatabaseOutline" :size="13" />{{ sessionName }}<template v-if="currentDb"><i class="vsep" />{{ currentDb }}</template></span>
