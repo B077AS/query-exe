@@ -5,6 +5,7 @@ import ActiveConnectionsDialog from './components/ActiveConnectionsDialog.vue';
 import DropFilesDialog from './components/DropFilesDialog.vue';
 import ColumnInfoDialog from './components/ColumnInfoDialog.vue';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import TransactionDialog from './components/TransactionDialog.vue';
 import ConnectionDialog from './components/ConnectionDialog.vue';
 import DiagramDialog from './components/DiagramDialog.vue';
 import MonitorDialog from './components/MonitorDialog.vue';
@@ -52,5 +53,6 @@ onMounted(async () => {
   <PromptDialog />
   <FolderDialog />
   <ConfirmDialog />
+  <TransactionDialog />
   <Toasts />
 </template>

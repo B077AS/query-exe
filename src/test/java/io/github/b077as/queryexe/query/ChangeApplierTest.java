@@ -57,6 +57,40 @@ class ChangeApplierTest {
     }
 
     @Test
+    void insideAnOpenTransactionTheEditsJoinItAndNothingIsCommitted() throws SQLException {
+        connection.setAutoCommit(false);
+        try (Statement s = connection.createStatement()) {
+            s.execute("INSERT INTO T(V) VALUES ('earlier')");
+        }
+        QueryData update = new QueryData("UPDATE T SET V = ? WHERE ID = ?", List.of("changed", 1));
+
+        ChangeApplier.apply(connection, List.of(update), identitySet());
+
+        assertFalse(connection.getAutoCommit(), "the connection stays in the user's transaction");
+        assertEquals("changed", scalar("SELECT V FROM T WHERE ID = 1"));
+        connection.rollback();
+        // nothing was committed: both the earlier statement and the edit are gone
+        assertEquals("one", scalar("SELECT V FROM T WHERE ID = 1"));
+        assertEquals("1", scalar("SELECT COUNT(*) FROM T"));
+    }
+
+    @Test
+    void aFailingEditInsideAnOpenTransactionUndoesOnlyItself() throws SQLException {
+        connection.setAutoCommit(false);
+        try (Statement s = connection.createStatement()) {
+            s.execute("INSERT INTO T(V) VALUES ('earlier')");
+        }
+        QueryData good = new QueryData("UPDATE T SET V = ? WHERE ID = ?", List.of("changed", 1));
+        QueryData bad = new QueryData("UPDATE T SET MISSING = ? WHERE ID = ?", List.of("x", 1));
+
+        assertThrows(SQLException.class, () -> ChangeApplier.apply(connection, List.of(good, bad), identitySet()));
+
+        assertEquals("one", scalar("SELECT V FROM T WHERE ID = 1"), "the edits of this apply are undone");
+        assertEquals("2", scalar("SELECT COUNT(*) FROM T"), "what the user did before is still pending");
+        connection.rollback();
+    }
+
+    @Test
     void commitsAllStatements() throws SQLException {
         QueryData update = new QueryData("UPDATE T SET V = ? WHERE ID = ?", List.of("changed", 1));
         QueryData insert = new QueryData("INSERT INTO T(V) VALUES (?)", List.of("two"));
@@ -95,14 +129,15 @@ class ChangeApplierTest {
     }
 
     @Test
-    void restoresAPreviousNonAutocommitMode() throws SQLException {
+    void leavesAPreviousNonAutocommitModeAlone() throws SQLException {
         connection.setAutoCommit(false);
         QueryData update = new QueryData("UPDATE T SET V = ? WHERE ID = ?", List.of("kept", 1));
 
         ChangeApplier.apply(connection, List.of(update), identitySet());
 
         assertFalse(connection.getAutoCommit());
-        connection.rollback(); // nothing pending: the apply already committed its own transaction
+        // the edit is part of the caller's transaction: it is theirs to commit, or to roll back
+        connection.commit();
         assertEquals("kept", scalar("SELECT V FROM T WHERE ID = 1"));
     }
 

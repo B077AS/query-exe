@@ -221,6 +221,19 @@ export interface QueryFinishedEvent {
   schema: string | null;
   databasesChanged: boolean;
   structureChanged: boolean;
+  /** The tab's commit mode and how many statements wait for a commit, after the script. */
+  manual: boolean;
+  pending: number;
+  /** The database committed by itself (a DDL statement on MySQL or MariaDB). */
+  implicitCommit: boolean;
+  /** The connection was lost and the open transaction was rolled back. */
+  lostTransaction: boolean;
+}
+
+export interface TxState {
+  tabId: string;
+  manual: boolean;
+  pending: number;
 }
 
 export interface OpenedFile {
@@ -386,6 +399,10 @@ export const api = {
     call<{ runId: string; count: number }>('query.run', p),
   explain: (p: { tabId: string; connectionId: string; text: string; mode: 'all' | 'selection' | 'statement'; caret?: number; offset?: number; analyze: boolean }) =>
     call<Plan>('query.explain', p),
+  setTransactionMode: (p: { tabId: string; connectionId: string; manual: boolean; pending?: 'commit' | 'rollback' }) =>
+    call<TxState>('query.setTransactionMode', { pending: '', ...p }),
+  commit: (tabId: string, connectionId: string) => call<TxState>('query.commit', { tabId, connectionId }),
+  rollback: (tabId: string, connectionId: string) => call<TxState>('query.rollback', { tabId, connectionId }),
   cancel: (tabId: string) => call<{ ok: boolean }>('query.cancel', { tabId }),
   closeTab: (tabId: string) => call<{ ok: boolean }>('query.closeTab', { tabId }),
 
@@ -415,6 +432,7 @@ export const api = {
 export const events = {
   onResult: (cb: (e: QueryResultEvent) => void) => onEvent<QueryResultEvent>('query.result', cb),
   onFinished: (cb: (e: QueryFinishedEvent) => void) => onEvent<QueryFinishedEvent>('query.finished', cb),
+  onTransaction: (cb: (e: TxState) => void) => onEvent<TxState>('query.transaction', cb),
   onFilesDropped: (cb: (e: { files: { path: string; name: string }[] }) => void) => onEvent('files.dropped', cb),
   onStarted: (cb: (e: { tabId: string; runId: string; count: number }) => void) => onEvent('query.started', cb),
 };

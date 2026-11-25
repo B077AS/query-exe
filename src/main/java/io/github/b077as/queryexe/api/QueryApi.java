@@ -40,6 +40,10 @@ class QueryApi {
     void register(Rpc rpc) {
         rpc.on("query.run", JsonObject.class, this::run);
         rpc.on("query.explain", JsonObject.class, this::explain);
+        rpc.on("query.setTransactionMode", JsonObject.class, p -> workspace.setTransactionMode(Params.string(p, "tabId"),
+                Params.string(p, "connectionId"), Params.bool(p, "manual"), Params.optionalString(p, "pending")));
+        rpc.on("query.commit", JsonObject.class, p -> workspace.finishTransaction(Params.string(p, "tabId"), Params.string(p, "connectionId"), true));
+        rpc.on("query.rollback", JsonObject.class, p -> workspace.finishTransaction(Params.string(p, "tabId"), Params.string(p, "connectionId"), false));
         rpc.on("query.cancel", JsonObject.class, p -> {
             workspace.cancel(Params.string(p, "tabId"));
             return Map.of("ok", true);

@@ -64,4 +64,14 @@ class SqlInspectorTest {
         assertFalse(SqlInspector.changesDatabaseList("CREATE TABLE schema_log (a INT)"));
         assertFalse(SqlInspector.changesDatabaseList("ALTER TABLE t ADD c INT"));
     }
+
+    @org.junit.jupiter.api.Test
+    void transactionEndsAreRecognised() {
+        org.junit.jupiter.api.Assertions.assertTrue(SqlInspector.endsTransaction("COMMIT"));
+        org.junit.jupiter.api.Assertions.assertTrue(SqlInspector.endsTransaction("  -- done\n rollback;"));
+        org.junit.jupiter.api.Assertions.assertTrue(SqlInspector.endsTransaction("END"));
+        org.junit.jupiter.api.Assertions.assertFalse(SqlInspector.endsTransaction("ROLLBACK TO SAVEPOINT a"));
+        org.junit.jupiter.api.Assertions.assertFalse(SqlInspector.endsTransaction("SELECT 'commit'"));
+        org.junit.jupiter.api.Assertions.assertFalse(SqlInspector.endsTransaction("UPDATE t SET commit = 1"));
+    }
 }

@@ -12,7 +12,7 @@ import {
   type SchemaTree,
   type TreeContainer,
 } from './api';
-import { fail, prefs, toast } from './ui';
+import { askTransaction, fail, prefs, toast } from './ui';
 
 // The application state: saved connections, the open connections ("sessions": their tree and current database), the query
 // tabs (each belongs to one connection) and the dialogs. There is a single view: connections are the roots of the tree.
@@ -38,6 +38,8 @@ export interface QueryTab {
   lastOk: boolean | null;
   /** Set once the script finished, to show "n results". */
   ran: boolean;
+  /** Commit mode: in manual mode changes wait in a transaction (pending = how many statements) until committed or rolled back. */
+  tx: { manual: boolean; pending: number };
 }
 
 export interface Session {
@@ -216,11 +218,15 @@ function replaceContainer(session: Session, fresh: TreeContainer): void {
 }
 
 export async function disconnect(id: string): Promise<void> {
+  const tabs = app.tabs.filter((t) => t.connectionId === id);
+  if (!(await settleTransactions(tabs, 'Disconnect?', 'disconnect'))) return;
   try {
     await api.disconnect(id);
   } catch (e) {
     fail('Could not disconnect', e);
   }
+  // the sessions are gone, and with them the open transactions and the commit mode of the tabs
+  tabs.forEach((t) => (t.tx = { manual: false, pending: 0 }));
   delete app.sessions[id];
   if (app.selected === id) app.selected = Object.keys(app.sessions)[0] ?? null;
   if (app.focused === id) app.focused = null;
@@ -254,6 +260,7 @@ export function newTab(connectionId: string, text = '', title?: string, path: st
     lastMillis: null,
     lastOk: null,
     ran: false,
+    tx: { manual: false, pending: 0 },
   };
   app.tabs.push(tab);
   app.activeTab = tab.id;
@@ -353,6 +360,9 @@ function onFinished(event: QueryFinishedEvent): void {
   tab.ran = true;
   tab.lastOk = event.ok;
   tab.lastMillis = event.millis;
+  tab.tx = { manual: event.manual, pending: event.pending };
+  if (event.implicitCommit) toast('info', 'Committed by the database', 'CREATE, ALTER and DROP end the open transaction on this engine.');
+  if (event.lostTransaction) toast('error', 'Connection was lost', 'The open transaction was rolled back by the database. Run the statements again.');
   if (!session) return;
   if (event.schema) session.current = event.schema;
   if (event.databasesChanged) {
@@ -362,6 +372,62 @@ function onFinished(event: QueryFinishedEvent): void {
     if (target) void refreshContainer(session, target);
     else void loadTree(session);
   }
+}
+
+// ---- transactions -------------------------------------------------------------------------------------------------
+
+const plural = (n: number): string => `${n} statement${n === 1 ? '' : 's'}`;
+
+function applyTx(tabId: string, state: { manual: boolean; pending: number }): void {
+  const tab = findTab(tabId);
+  if (tab) tab.tx = { manual: state.manual, pending: state.pending };
+}
+
+/** Switches a tab between auto-commit and manual commit; leaving manual mode asks what to do with what is waiting. */
+export async function setTxMode(tab: QueryTab, manual: boolean): Promise<void> {
+  if (tab.running || tab.tx.manual === manual) return;
+  let pending: 'commit' | 'rollback' | undefined;
+  if (!manual && tab.tx.pending > 0) {
+    const answer = await askTransaction('Leave manual commit?', `"${tab.title}" has ${plural(tab.tx.pending)} that are not committed.`, 'switch');
+    if (!answer) return;
+    pending = answer;
+  }
+  try {
+    applyTx(tab.id, await api.setTransactionMode({ tabId: tab.id, connectionId: tab.connectionId, manual, pending }));
+  } catch (e) {
+    fail('Could not change the commit mode', e);
+  }
+}
+
+export async function finishTx(tab: QueryTab, commit: boolean): Promise<void> {
+  if (tab.running) return;
+  try {
+    const call = commit ? api.commit : api.rollback;
+    applyTx(tab.id, await call(tab.id, tab.connectionId));
+    toast('ok', commit ? 'Committed' : 'Rolled back');
+  } catch (e) {
+    fail(commit ? 'Could not commit' : 'Could not roll back', e);
+  }
+}
+
+/** Before tabs or their connection go away: asks what to do with the changes waiting in them. False = the user backed out. */
+export async function settleTransactions(tabs: QueryTab[], title: string, verb: string): Promise<boolean> {
+  const open = tabs.filter((t) => t.tx.manual && t.tx.pending > 0);
+  if (open.length === 0) return true;
+  const what = open.length === 1
+    ? `"${open[0].title}" has ${plural(open[0].tx.pending)} that are not committed.`
+    : `${open.length} tabs have changes that are not committed:\n${open.map((t) => `  ${t.title}: ${plural(t.tx.pending)}`).join('\n')}`;
+  const answer = await askTransaction(title, what, verb);
+  if (!answer) return false;
+  for (const tab of open) {
+    try {
+      await (answer === 'commit' ? api.commit : api.rollback)(tab.id, tab.connectionId);
+    } catch (e) {
+      fail(answer === 'commit' ? 'Could not commit' : 'Could not roll back', e);
+      return false;
+    }
+  }
+  return true;
 }
 
 // ---- grids --------------------------------------------------------------------------------------------------------
@@ -463,6 +529,7 @@ export function initStore(): void {
   started = true;
   events.onResult(onResult);
   events.onFinished(onFinished);
+  events.onTransaction((state) => applyTx(state.tabId, state));
   events.onFilesDropped(onFilesDropped);
   // a moving bar on the taskbar icon while any query runs
   watch(() => app.tabs.some((t) => t.running), (busy) => void api.setBusy(busy).catch(() => {}));

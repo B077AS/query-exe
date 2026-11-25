@@ -56,6 +56,32 @@ export function answerConfirm(ok: boolean): void {
   resolve?.(ok);
 }
 
+// ---- an open transaction: commit, roll back or back out --------------------------------------------------------------
+
+export type TxAnswer = 'commit' | 'rollback';
+
+export const txAsk = reactive({
+  open: false,
+  title: '',
+  text: '',
+  verb: 'close',
+  resolve: null as null | ((answer: TxAnswer | null) => void),
+});
+
+/** Asks what to do with changes waiting in a transaction before something ends it; null = the user backed out. */
+export function askTransaction(title: string, text: string, verb: string): Promise<TxAnswer | null> {
+  return new Promise((resolve) => {
+    Object.assign(txAsk, { open: true, title, text, verb, resolve });
+  });
+}
+
+export function answerTransaction(answer: TxAnswer | null): void {
+  const resolve = txAsk.resolve;
+  txAsk.open = false;
+  txAsk.resolve = null;
+  resolve?.(answer);
+}
+
 // ---- remembered UI preferences ------------------------------------------------------------------------------------
 
 const saved = window.__QUERYEXE__?.ui ?? {};
