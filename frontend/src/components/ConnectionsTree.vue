@@ -9,7 +9,7 @@ import {
   ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger,
   ContextMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuTrigger,
 } from 'reka-ui';
-import { computed, reactive, ref, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect } from 'vue';
 import { api, type ConnectionInfo } from '../api';
 import {
   compareConnections, dropConnection, dropFolder, duplicateConnection, folderNames, hasCustomOrder, moveConnection, moveToNewFolder, newFolder, removeConnection,
@@ -49,7 +49,32 @@ const tint = (key: string | undefined): string | undefined => {
   return accent ? (scheme.value === 'dark' ? accent.dark : accent.light) : undefined;
 };
 
+/** What the box holds; `applied` follows it a moment after the typing stops, so a long list is not rebuilt on every key. */
 const filter = ref('');
+const applied = ref('');
+let filterTimer: ReturnType<typeof setTimeout> | undefined;
+watch(filter, (v) => {
+  clearTimeout(filterTimer);
+  if (v.trim() === '') applied.value = '';
+  else filterTimer = setTimeout(() => (applied.value = v), 150);
+});
+onBeforeUnmount(() => clearTimeout(filterTimer));
+
+/** Lower-cased names, worked out once per table instead of once per keystroke (a refresh brings new objects, so nothing goes stale). */
+const lowerName = new WeakMap<object, string>();
+const lowerColumns = new WeakMap<object, string>();
+const nameOf = (t: { name: string }): string => {
+  let s = lowerName.get(t);
+  if (s === undefined) lowerName.set(t, (s = t.name.toLowerCase()));
+  return s;
+};
+/** All of a table's column names in one string (the filter is trimmed, so it can't match across the line breaks). */
+const columnsOf = (t: { columns: { name: string }[] }): string => {
+  let s = lowerColumns.get(t);
+  if (s === undefined) lowerColumns.set(t, (s = t.columns.map((c) => c.name.toLowerCase()).join('\n')));
+  return s;
+};
+
 const expanded = reactive(new Set<string>());
 const selected = ref<string | null>(null);
 const seeded = new Set<string>();
@@ -88,7 +113,7 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
   const parents = [...new Set(tree.containers.map((c) => c.parent).filter((p): p is string => !!p))];
 
   const addContainer = (c: (typeof tree.containers)[number], d: number): void => {
-    const tables = q === '' ? c.tables : c.tables.filter((t) => t.name.toLowerCase().includes(q) || t.columns.some((col) => col.name.toLowerCase().includes(q)));
+    const tables = q === '' ? c.tables : c.tables.filter((t) => nameOf(t).includes(q) || columnsOf(t).includes(q));
     if (q !== '' && tables.length === 0 && !c.name.toLowerCase().includes(q)) return;
     const sc = scope(c);
     const cid2 = `c:${cid}:${sc}`;
@@ -102,7 +127,7 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
         const id = `tb:${cid}:${sc}:${t.name}`;
         out.push({ id, kind: 'table', label: t.name, depth: d + 2, connectionId: cid, container: c.name, table: t.name, icon: mdiTable,
           hasChildren: t.columns.length > 0 || t.partitions.length > 0 });
-        const columnMatch = q !== '' && t.columns.some((col) => col.name.toLowerCase().includes(q)) && !t.name.toLowerCase().includes(q);
+        const columnMatch = q !== '' && columnsOf(t).includes(q) && !nameOf(t).includes(q);
         if (!(expanded.has(id) || columnMatch)) continue;
         const columnNodes = (depth: number): void => {
           for (const col of t.columns) {
@@ -171,7 +196,7 @@ function sessionNodes(session: Session, depth: number, q: string, out: Node[]): 
 const focusSession = computed(() => (prefs.treeMode === 'focus' && app.focused ? app.sessions[app.focused] ?? null : null));
 
 const nodes = computed<Node[]>(() => {
-  const q = filter.value.trim().toLowerCase();
+  const q = applied.value.trim().toLowerCase();
   const out: Node[] = [];
   if (focusSession.value) {
     sessionNodes(focusSession.value, 0, q, out);
@@ -181,7 +206,7 @@ const nodes = computed<Node[]>(() => {
     if (q === '') return true;
     if ([c.name, c.type, c.target].some((v) => (v ?? '').toLowerCase().includes(q))) return true;
     const tree = app.sessions[c.id]?.tree;
-    return !!tree?.containers.some((k) => k.name.toLowerCase().includes(q) || k.tables.some((t) => t.name.toLowerCase().includes(q) || t.columns.some((col) => col.name.toLowerCase().includes(q))));
+    return !!tree?.containers.some((k) => k.name.toLowerCase().includes(q) || k.tables.some((t) => nameOf(t).includes(q) || columnsOf(t).includes(q)));
   };
 
   const addConnection = (c: ConnectionInfo, depth: number): void => {
@@ -204,7 +229,34 @@ const nodes = computed<Node[]>(() => {
   return out;
 });
 
-const isOpen = (n: Node): boolean => (n.kind === 'folder' || n.kind === 'connection' ? !!n.open || filter.value !== '' : expanded.has(n.id) || filter.value !== '');
+// ---- only the rows in view are drawn: every row is 26px, so the window is plain arithmetic -------------------------
+const ROW = 26;
+const OVERSCAN = 12;
+const treeEl = ref<HTMLElement | null>(null);
+const scrollTop = ref(0);
+const viewHeight = ref(600);
+let resizeObserver: ResizeObserver | undefined;
+onMounted(() => {
+  if (!treeEl.value) return;
+  viewHeight.value = treeEl.value.clientHeight;
+  resizeObserver = new ResizeObserver(() => (viewHeight.value = treeEl.value?.clientHeight ?? viewHeight.value));
+  resizeObserver.observe(treeEl.value);
+});
+onBeforeUnmount(() => resizeObserver?.disconnect());
+
+const range = computed(() => {
+  const start = Math.max(0, Math.floor(scrollTop.value / ROW) - OVERSCAN);
+  const end = Math.min(nodes.value.length, Math.ceil((scrollTop.value + viewHeight.value) / ROW) + OVERSCAN);
+  return { start, end };
+});
+const shown = computed(() => nodes.value.slice(range.value.start, range.value.end));
+const padTop = computed(() => range.value.start * ROW);
+const padBottom = computed(() => (nodes.value.length - range.value.end) * ROW);
+
+/** The row the context menu was opened on: one menu serves the whole tree. */
+const ctx = ref<Node | null>(null);
+
+const isOpen = (n: Node): boolean => (n.kind === 'folder' || n.kind === 'connection' ? !!n.open || applied.value !== '' : expanded.has(n.id) || applied.value !== '');
 
 function toggle(n: Node): void {
   if (!n.hasChildren) return;
@@ -318,7 +370,7 @@ const working = computed(() => currentSession());
 const drag = ref<{ kind: 'connection' | 'folder'; key: string } | null>(null);
 const hint = ref<{ id: string; pos: DropPos } | null>(null);
 
-const canDrag = (n: Node): boolean => (n.kind === 'connection' || n.kind === 'folder') && filter.value.trim() === '' && !focusSession.value;
+const canDrag = (n: Node): boolean => (n.kind === 'connection' || n.kind === 'folder') && applied.value.trim() === '' && !focusSession.value;
 const dragKey = (n: Node): string => (n.kind === 'folder' ? n.label : n.connectionId!);
 
 function dragStart(n: Node, e: DragEvent): void {
@@ -413,13 +465,14 @@ function dragEnd(): void {
     </div>
     <label class="search"><Icon :path="mdiMagnify" /><input v-model="filter" placeholder="Filter connections and objects" /><button v-if="filter" class="ib sm" @click="filter = ''"><Icon :path="mdiClose" /></button></label>
 
-    <div class="tree" :class="{ 'drop-root': hint?.id === 'root' }" role="tree" @dragover="overRoot" @drop="dropRoot" @dragleave.self="hint = null">
+    <ContextMenuRoot>
+      <ContextMenuTrigger as-child>
+    <div ref="treeEl" class="tree" @contextmenu.capture="ctx = null" :class="{ 'drop-root': hint?.id === 'root' }" role="tree" @scroll.passive="scrollTop = ($event.currentTarget as HTMLElement).scrollTop" @dragover="overRoot" @drop="dropRoot" @dragleave.self="hint = null">
       <div v-if="focusSession && focusSession.loadingTree && !focusSession.tree" class="empty">Reading structure…</div>
       <div v-if="app.ready && app.connections.length === 0" class="empty">No connections yet.</div>
-      <ContextMenuRoot v-for="n in nodes" :key="n.id">
-        <ContextMenuTrigger as-child>
-          <div class="node" :draggable="canDrag(n)" :class="[hint?.id === n.id ? 'drop-' + hint.pos : '', { dragging: !!drag && (n.kind === 'connection' || n.kind === 'folder') && n.kind === drag.kind && dragKey(n) === drag.key, sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }]" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
-            :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n, true)" @dblclick="dbl(n)" @contextmenu="click(n)"
+      <div :style="{ paddingTop: padTop + 'px', paddingBottom: padBottom + 'px' }">
+          <div v-for="n in shown" :key="n.id" class="node" :draggable="canDrag(n)" :class="[hint?.id === n.id ? 'drop-' + hint.pos : '', { dragging: !!drag && (n.kind === 'connection' || n.kind === 'folder') && n.kind === drag.kind && dragKey(n) === drag.key, sel: selected === n.id, dim: n.dim, bold: n.bold, live: n.kind === 'connection' && !n.dim, current: n.kind === 'container' && n.bold }]" :style="{ paddingLeft: n.depth * 14 + 6 + 'px' }" role="treeitem"
+            :data-connection="n.kind === 'connection' ? n.connectionId : undefined" @click="click(n, true)" @dblclick="dbl(n)" @contextmenu="click(n); ctx = n"
             @dragstart="dragStart(n, $event)" @dragover="dragOver(n, $event)" @drop="drop(n, $event)" @dragend="dragEnd">
             <button class="chev" tabindex="-1" @click.stop="toggle(n)">
               <Icon v-if="n.hasChildren" :path="isOpen(n) ? mdiChevronDown : mdiChevronRight" :size="16" />
@@ -430,92 +483,95 @@ function dragEnd(): void {
             <span v-if="n.kind === 'connection' && app.connecting[n.connectionId!]" class="meta">connecting…</span>
             <span v-else-if="n.meta" class="meta mono"><template v-for="(m, i) in n.meta.split(' | ')" :key="i"><i v-if="i" class="vsep" />{{ m }}</template></span>
           </div>
-        </ContextMenuTrigger>
+      </div>
+    </div>
+      </ContextMenuTrigger>
+      <template v-if="ctx">
         <ContextMenuPortal>
-          <ContextMenuContent v-if="n.kind === 'connection'" class="menu">
-            <ContextMenuItem v-if="!sessionOf(n)" class="menu-item" @select="openConnection(infoOf(n)!)"><Icon :path="mdiLanConnect" /> Connect</ContextMenuItem>
+          <ContextMenuContent v-if="ctx.kind === 'connection'" class="menu">
+            <ContextMenuItem v-if="!sessionOf(ctx)" class="menu-item" @select="openConnection(infoOf(ctx)!)"><Icon :path="mdiLanConnect" /> Connect</ContextMenuItem>
             <template v-else>
-              <ContextMenuItem class="menu-item" @select="newTab(n.connectionId!)"><Icon :path="mdiPlay" /> New query</ContextMenuItem>
-              <ContextMenuItem v-if="infoOf(n)?.type !== 'SQLite'" class="menu-item" @select="dialogs.monitor = { connectionId: n.connectionId! }"><Icon :path="mdiChartLine" /> Server monitor</ContextMenuItem>
-              <ContextMenuItem class="menu-item" @select="loadTree(sessionOf(n)!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
-              <ContextMenuItem class="menu-item" @select="disconnectNode(n)"><Icon :path="mdiLanDisconnect" /> Disconnect</ContextMenuItem>
+              <ContextMenuItem class="menu-item" @select="newTab(ctx.connectionId!)"><Icon :path="mdiPlay" /> New query</ContextMenuItem>
+              <ContextMenuItem v-if="infoOf(ctx)?.type !== 'SQLite'" class="menu-item" @select="dialogs.monitor = { connectionId: ctx.connectionId! }"><Icon :path="mdiChartLine" /> Server monitor</ContextMenuItem>
+              <ContextMenuItem class="menu-item" @select="loadTree(sessionOf(ctx)!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
+              <ContextMenuItem class="menu-item" @select="disconnectNode(ctx)"><Icon :path="mdiLanDisconnect" /> Disconnect</ContextMenuItem>
             </template>
-            <ContextMenuItem class="menu-item" @select="openFileOnConnection(n.connectionId!)"><Icon :path="mdiFolderOpenOutline" /> Open SQL file…</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openFileOnConnection(ctx.connectionId!)"><Icon :path="mdiFolderOpenOutline" /> Open SQL file…</ContextMenuItem>
             <ContextMenuSeparator class="menu-sep" />
-            <ContextMenuItem class="menu-item" @select="dialogs.connection = { id: n.connectionId }"><Icon :path="mdiPencilOutline" /> Edit connection</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="duplicateConnection(infoOf(n)!)"><Icon :path="mdiContentCopy" /> Duplicate</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="togglePin(infoOf(n)!)"><Icon :path="infoOf(n)?.pinned ? mdiPinOutline : mdiPin" /> {{ infoOf(n)?.pinned ? 'Unpin' : 'Pin to top' }}</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="dialogs.connection = { id: ctx.connectionId }"><Icon :path="mdiPencilOutline" /> Edit connection</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="duplicateConnection(infoOf(ctx)!)"><Icon :path="mdiContentCopy" /> Duplicate</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="togglePin(infoOf(ctx)!)"><Icon :path="infoOf(ctx)?.pinned ? mdiPinOutline : mdiPin" /> {{ infoOf(ctx)?.pinned ? 'Unpin' : 'Pin to top' }}</ContextMenuItem>
             <ContextMenuSub>
               <ContextMenuSubTrigger class="menu-item"><Icon :path="mdiFolderOutline" /> Move to folder <Icon :path="mdiChevronRight" style="margin-left: auto" /></ContextMenuSubTrigger>
               <ContextMenuPortal>
                 <ContextMenuSubContent class="menu">
-                  <ContextMenuItem v-if="infoOf(n)?.folder" class="menu-item" @select="moveConnection(infoOf(n)!, '')">No folder</ContextMenuItem>
-                  <ContextMenuItem v-for="f in [...new Set([...app.folders, ...app.connections.map((c) => c.folder).filter((x) => !!x)])]" :key="f as string" class="menu-item" :disabled="f === infoOf(n)?.folder" @select="moveConnection(infoOf(n)!, f as string)">{{ f }}</ContextMenuItem>
+                  <ContextMenuItem v-if="infoOf(ctx)?.folder" class="menu-item" @select="moveConnection(infoOf(ctx)!, '')">No folder</ContextMenuItem>
+                  <ContextMenuItem v-for="f in [...new Set([...app.folders, ...app.connections.map((c) => c.folder).filter((x) => !!x)])]" :key="f as string" class="menu-item" :disabled="f === infoOf(ctx)?.folder" @select="moveConnection(infoOf(ctx)!, f as string)">{{ f }}</ContextMenuItem>
                   <ContextMenuSeparator class="menu-sep" />
-                  <ContextMenuItem class="menu-item" @select="moveToNewFolder(infoOf(n)!)"><Icon :path="mdiPlus" /> New folder…</ContextMenuItem>
+                  <ContextMenuItem class="menu-item" @select="moveToNewFolder(infoOf(ctx)!)"><Icon :path="mdiPlus" /> New folder…</ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuPortal>
             </ContextMenuSub>
             <ContextMenuSeparator class="menu-sep" />
-            <ContextMenuItem class="menu-item danger" @select="removeConnection(infoOf(n)!)"><Icon :path="mdiDeleteOutline" /> Delete</ContextMenuItem>
+            <ContextMenuItem class="menu-item danger" @select="removeConnection(infoOf(ctx)!)"><Icon :path="mdiDeleteOutline" /> Delete</ContextMenuItem>
           </ContextMenuContent>
-          <ContextMenuContent v-else-if="n.kind === 'folder'" class="menu">
-            <ContextMenuItem class="menu-item" @select="dialogs.connection = { folder: n.label }"><Icon :path="mdiLanConnect" /> New connection here</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="renameFolder(n.label)"><Icon :path="mdiPencilOutline" /> Rename</ContextMenuItem>
+          <ContextMenuContent v-else-if="ctx.kind === 'folder'" class="menu">
+            <ContextMenuItem class="menu-item" @select="dialogs.connection = { folder: ctx.label }"><Icon :path="mdiLanConnect" /> New connection here</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="renameFolder(ctx.label)"><Icon :path="mdiPencilOutline" /> Rename</ContextMenuItem>
             <ContextMenuSub>
               <ContextMenuSubTrigger class="menu-item"><Icon :path="mdiPaletteOutline" /> Color <Icon :path="mdiChevronRight" style="margin-left: auto" /></ContextMenuSubTrigger>
               <ContextMenuPortal>
                 <ContextMenuSubContent class="menu">
-                  <ContextMenuItem class="menu-item" :class="{ on: !app.folderColors[n.label] }" @select="setFolderColor(n.label, null)"><span class="swatch none" />Default</ContextMenuItem>
-                  <ContextMenuItem v-for="a in ACCENTS" :key="a.key" class="menu-item" :class="{ on: app.folderColors[n.label] === a.key }" @select="setFolderColor(n.label, a.key)"><span class="swatch" :style="{ background: tint(a.key) }" />{{ a.name }}</ContextMenuItem>
+                  <ContextMenuItem class="menu-item" :class="{ on: !app.folderColors[ctx.label] }" @select="setFolderColor(ctx.label, null)"><span class="swatch none" />Default</ContextMenuItem>
+                  <ContextMenuItem v-for="a in ACCENTS" :key="a.key" class="menu-item" :class="{ on: app.folderColors[ctx.label] === a.key }" @select="setFolderColor(ctx.label, a.key)"><span class="swatch" :style="{ background: tint(a.key) }" />{{ a.name }}</ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuPortal>
             </ContextMenuSub>
             <ContextMenuSeparator class="menu-sep" />
-            <ContextMenuItem class="menu-item danger" @select="removeFolder(n.label)"><Icon :path="mdiDeleteOutline" /> Delete folder</ContextMenuItem>
+            <ContextMenuItem class="menu-item danger" @select="removeFolder(ctx.label)"><Icon :path="mdiDeleteOutline" /> Delete folder</ContextMenuItem>
           </ContextMenuContent>
-          <ContextMenuContent v-else-if="n.kind === 'table'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'insert')"><Icon :path="mdiCodeBraces" /> Script: INSERT</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'create')"><Icon :path="mdiCodeBraces" /> Script: CREATE</ContextMenuItem>
+          <ContextMenuContent v-else-if="ctx.kind === 'table'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(ctx)!, ctx.container!, ctx.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(ctx)!, ctx.container!, ctx.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(ctx)!, ctx.container!, ctx.table!, 'insert')"><Icon :path="mdiCodeBraces" /> Script: INSERT</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(ctx)!, ctx.container!, ctx.table!, 'create')"><Icon :path="mdiCodeBraces" /> Script: CREATE</ContextMenuItem>
             <ContextMenuSeparator class="menu-sep" />
-            <ContextMenuItem class="menu-item" @select="dialogs.tableInfo = { connectionId: n.connectionId!, container: n.container!, table: n.table! }"><Icon :path="mdiInformationOutline" /> Properties</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: n.connectionId!, container: n.container!, table: n.table }"><Icon :path="mdiPencilOutline" /> Edit table</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="copyText(n.table!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="dialogs.tableInfo = { connectionId: ctx.connectionId!, container: ctx.container!, table: ctx.table! }"><Icon :path="mdiInformationOutline" /> Properties</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: ctx.connectionId!, container: ctx.container!, table: ctx.table }"><Icon :path="mdiPencilOutline" /> Edit table</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="copyText(ctx.table!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
             <ContextMenuSeparator class="menu-sep" />
-            <ContextMenuItem class="menu-item danger" @select="dropTable(n)"><Icon :path="mdiDeleteOutline" /> Drop table</ContextMenuItem>
+            <ContextMenuItem class="menu-item danger" @select="dropTable(ctx)"><Icon :path="mdiDeleteOutline" /> Drop table</ContextMenuItem>
           </ContextMenuContent>
-          <ContextMenuContent v-else-if="n.kind === 'view'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(n)!, n.container!, n.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="copyText(n.table!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+          <ContextMenuContent v-else-if="ctx.kind === 'view'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(ctx)!, ctx.container!, ctx.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="openScript(sessionOf(ctx)!, ctx.container!, ctx.table!, 'select')"><Icon :path="mdiCodeBraces" /> Script: SELECT</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="copyText(ctx.table!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
           </ContextMenuContent>
-          <ContextMenuContent v-else-if="n.kind === 'column'" class="menu">
-            <ContextMenuItem class="menu-item" @select="dialogs.columnInfo = { connectionId: n.connectionId!, container: n.container!, table: n.table!, column: n.label }"><Icon :path="mdiInformationOutline" /> Properties</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="copyText(n.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+          <ContextMenuContent v-else-if="ctx.kind === 'column'" class="menu">
+            <ContextMenuItem class="menu-item" @select="dialogs.columnInfo = { connectionId: ctx.connectionId!, container: ctx.container!, table: ctx.table!, column: ctx.label }"><Icon :path="mdiInformationOutline" /> Properties</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="copyText(ctx.label)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
           </ContextMenuContent>
-          <ContextMenuContent v-else-if="n.kind === 'container' || n.kind === 'tables'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openQuery(sessionOf(n)!, n.container!)"><Icon :path="mdiFilePlusOutline" /> New query</ContextMenuItem>
-            <ContextMenuItem v-if="n.kind === 'container'" class="menu-item" @select="selectContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiPlay" /> Use</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: n.connectionId!, container: n.container! }"><Icon :path="mdiTablePlus" /> New table</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="refreshContainer(sessionOf(n)!, n.container!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
-            <ContextMenuItem class="menu-item" @select="dialogs.diagram = { connectionId: n.connectionId!, container: n.container! }"><Icon :path="mdiGraphOutline" /> ER diagram</ContextMenuItem>
-            <template v-if="n.kind === 'container'">
-              <ContextMenuItem class="menu-item" @select="copyText(n.container!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
-              <template v-if="sessionOf(n)?.info.type !== 'SQLite'">
+          <ContextMenuContent v-else-if="ctx.kind === 'container' || ctx.kind === 'tables'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openQuery(sessionOf(ctx)!, ctx.container!)"><Icon :path="mdiFilePlusOutline" /> New query</ContextMenuItem>
+            <ContextMenuItem v-if="ctx.kind === 'container'" class="menu-item" @select="selectContainer(sessionOf(ctx)!, ctx.container!)"><Icon :path="mdiPlay" /> Use</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="dialogs.tableEditor = { connectionId: ctx.connectionId!, container: ctx.container! }"><Icon :path="mdiTablePlus" /> New table</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="refreshContainer(sessionOf(ctx)!, ctx.container!)"><Icon :path="mdiRefresh" /> Refresh</ContextMenuItem>
+            <ContextMenuItem class="menu-item" @select="dialogs.diagram = { connectionId: ctx.connectionId!, container: ctx.container! }"><Icon :path="mdiGraphOutline" /> ER diagram</ContextMenuItem>
+            <template v-if="ctx.kind === 'container'">
+              <ContextMenuItem class="menu-item" @select="copyText(ctx.container!)"><Icon :path="mdiContentCopy" /> Copy name</ContextMenuItem>
+              <template v-if="sessionOf(ctx)?.info.type !== 'SQLite'">
                 <ContextMenuSeparator class="menu-sep" />
-                <ContextMenuItem class="menu-item danger" @select="dropContainer(n)"><Icon :path="mdiDeleteOutline" /> Drop {{ isSchema(sessionOf(n)) ? 'schema' : 'database' }}</ContextMenuItem>
+                <ContextMenuItem class="menu-item danger" @select="dropContainer(ctx)"><Icon :path="mdiDeleteOutline" /> Drop {{ isSchema(sessionOf(ctx)) ? 'schema' : 'database' }}</ContextMenuItem>
               </template>
             </template>
           </ContextMenuContent>
           <!-- a partition is only worth a menu where it is a table of its own; the label nodes (groups, objects) have none -->
-          <ContextMenuContent v-else-if="n.kind === 'partition' && sessionOf(n)?.info.type === 'PostgreSQL'" class="menu">
-            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(n)!, n.container!, n.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
+          <ContextMenuContent v-else-if="ctx.kind === 'partition' && sessionOf(ctx)?.info.type === 'PostgreSQL'" class="menu">
+            <ContextMenuItem class="menu-item" @select="openTable(sessionOf(ctx)!, ctx.container!, ctx.table!)"><Icon :path="mdiTableSearch" /> Quick Select (100 rows)</ContextMenuItem>
           </ContextMenuContent>
         </ContextMenuPortal>
-      </ContextMenuRoot>
-    </div>
+        </template>
+    </ContextMenuRoot>
   </div>
 </template>
 

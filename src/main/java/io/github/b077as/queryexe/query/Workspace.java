@@ -18,6 +18,8 @@ import io.github.b077as.queryexe.query.grid.GridModel;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.query.SqlInspector;
 import io.github.b077as.queryexe.query.SqlSplitter;
+import io.github.b077as.queryexe.query.explain.Explainer;
+import io.github.b077as.queryexe.query.explain.Plan;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -58,6 +60,12 @@ public class Workspace {
         volatile Statement running;
         volatile boolean cancelled;
         volatile boolean busy;
+        /** Manual commit mode: statements wait in a transaction until the user commits or rolls back. */
+        volatile boolean manual;
+        /** Statements that changed something since the last commit or rollback (manual mode only). */
+        volatile int pending;
+        /** Set when the connection was lost with changes pending: the database has rolled them back. */
+        volatile boolean lostTransaction;
         List<String> gridIds = new ArrayList<>();
 
         Tab(String id, ConnectionProfile connectionObject) {
@@ -69,8 +77,16 @@ public class Workspace {
         synchronized Connection connection() throws SQLException {
             DatabaseConnection databases = DatabaseConnection.getInstance();
             if (session == null || session.isClosed()) {
+                boolean lost = session != null && manual && pending > 0;
                 session = databases.openSession(connectionObject);
                 schemaState = null;
+                if (manual) {
+                    session.setAutoCommit(false);
+                }
+                if (lost) {
+                    pending = 0;
+                    lostTransaction = true;
+                }
             }
             // the tree selects its database/schema on the shared connection; follow it unless a USE in this tab came later
             schemaState = databases.copyDefaultSchema(databases.sharedConnection(connectionObject.getId()), session, schemaState);
@@ -79,6 +95,14 @@ public class Workspace {
 
         synchronized void close() {
             if (session != null) {
+                if (manual) {
+                    // never leave it to the driver whether closing commits or not
+                    try {
+                        session.rollback();
+                    } catch (SQLException e) {
+                        log.debug("Rollback on close failed: {}", e.getMessage());
+                    }
+                }
                 DatabaseConnection.getInstance().closeSession(connectionObject.getId(), session);
                 session = null;
             }
@@ -159,16 +183,21 @@ public class Workspace {
         return grid;
     }
 
-    /** The tab that owns a grid, for running its changes on the tab's own connection. */
-    public Connection connectionForGrid(String gridId) throws SQLException {
+    /** The tab that owns a grid. */
+    private Tab tabForGrid(String gridId) throws SQLException {
         for (Tab tab : tabs.values()) {
             synchronized (tab.gridIds) {
                 if (tab.gridIds.contains(gridId)) {
-                    return tab.connection();
+                    return tab;
                 }
             }
         }
         throw new SQLException("This result is no longer available. Run the query again.");
+    }
+
+    /** The tab that owns a grid, for running its changes on the tab's own connection. */
+    public Connection connectionForGrid(String gridId) throws SQLException {
+        return tabForGrid(gridId).connection();
     }
 
     // ------------------------------------------------------------------------------------ running
@@ -204,6 +233,7 @@ public class Workspace {
         boolean structureChanged = false;
         boolean databasesChanged = false;
         boolean ok = true;
+        boolean implicitCommit = false;
         long started = System.currentTimeMillis();
         int[] index = {0};
         Map<String, Integer> positions = new IdentityHashMap<>();
@@ -217,7 +247,7 @@ public class Workspace {
         try {
             events.accept("query.started", Map.of("tabId", tab.id, "runId", runId, "count", statements.size()));
             Connection connection = tab.connection();
-            String[] effects = new String[3];
+            String[] effects = new String[4];
 
             ok = ScriptRunner.run(connection, texts, MAX_ROWS, new ScriptRunner.Listener() {
                 @Override
@@ -240,6 +270,10 @@ public class Workspace {
 
                 @Override
                 public void onUpdateCount(String sql, long count, long millis) {
+                    // what changed something counts: not SET or USE, and not an UPDATE that matched nothing
+                    if (tab.manual && (count > 0 || SqlInspector.isDdl(sql))) {
+                        tab.pending++;
+                    }
                     events.accept("query.result", Map.of("tabId", tab.id, "runId", runId, "index", index[0], "sql", sql,
                             "kind", "count", "count", count, "millis", millis));
                 }
@@ -247,6 +281,17 @@ public class Workspace {
                 @Override
                 public void onStatementSucceeded(String sql) {
                     tab.running = null;
+                    if (tab.manual) {
+                        if (SqlInspector.endsTransaction(sql)) {
+                            tab.pending = 0;
+                        } else if (SqlInspector.isDdl(sql) && commitsOnDdl(connectionObject.getDbType())) {
+                            // MySQL and MariaDB commit by themselves when a CREATE, ALTER or DROP runs
+                            if (tab.pending > 1) {
+                                effects[3] = "implicit";
+                            }
+                            tab.pending = 0;
+                        }
+                    }
                     SqlInspector.detectSchemaSwitch(sql, connectionObject.getDbType()).ifPresent(name -> effects[0] = name);
                     if (SqlInspector.changesDatabaseList(sql)) {
                         effects[1] = "databases";
@@ -264,6 +309,7 @@ public class Workspace {
                             "kind", "error", "message", message, "from", range.getFrom(), "to", range.getTo()));
                 }
             });
+            implicitCommit = effects[3] != null;
             schemaToSelect = effects[0];
             databasesChanged = effects[1] != null;
             structureChanged = effects[2] != null;
@@ -290,7 +336,17 @@ public class Workspace {
         done.put("schema", schemaToSelect);
         done.put("databasesChanged", databasesChanged);
         done.put("structureChanged", structureChanged);
+        done.put("manual", tab.manual);
+        done.put("pending", tab.pending);
+        done.put("implicitCommit", implicitCommit);
+        done.put("lostTransaction", tab.lostTransaction);
+        tab.lostTransaction = false;
         events.accept("query.finished", done);
+    }
+
+    /** Engines where a DDL statement ends the open transaction. */
+    private static boolean commitsOnDdl(String dbType) {
+        return "MySQL".equals(dbType) || "MariaDB".equals(dbType);
     }
 
     static String message(SQLException error) {
@@ -298,9 +354,112 @@ public class Workspace {
         return text.strip();
     }
 
-    /** Applies a grid's pending changes on the connection of the tab that owns it. Blocking. */
+    /**
+     * The execution plan of one statement, asked on the tab's own connection (so it sees the tab's USE/SET state). With
+     * {@code analyze} the statement really runs, inside a transaction that is rolled back. Blocking; the tab counts as busy
+     * meanwhile, and {@link #cancel(String)} stops it.
+     */
+    public Plan explain(String tabId, String connectionId, String sql, boolean analyze) throws SQLException {
+        Tab tab = tab(tabId, connectionId);
+        if (tab.busy) {
+            throw new IllegalStateException("This tab is already running a script.");
+        }
+        tab.busy = true;
+        tab.cancelled = false;
+        try {
+            Connection connection = tab.connection();
+            return Explainer.explain(connection, tab.connectionObject.getDbType(), sql, analyze, statement -> tab.running = statement);
+        } catch (SQLException e) {
+            if (tab.cancelled) {
+                throw new SQLException("Cancelled by user.", e);
+            }
+            throw e;
+        } finally {
+            tab.running = null;
+            tab.busy = false;
+        }
+    }
+
+    /**
+     * Applies a grid's pending changes on the connection of the tab that owns it. In a tab in manual commit mode they join
+     * the open transaction instead of being committed. Blocking.
+     */
     public GridModel.Snapshot applyGrid(String gridId) throws SQLException {
         GridModel grid = grid(gridId);
-        return grid.apply(connectionForGrid(gridId));
+        Tab tab = tabForGrid(gridId);
+        GridModel.Pending before = grid.pending();
+        GridModel.Snapshot snapshot = grid.apply(tab.connection());
+        if (tab.manual) {
+            tab.pending += before.getUpdates() + before.getInserts() + before.getDeletes();
+            events.accept("query.transaction", transactionState(tab));
+        }
+        return snapshot;
+    }
+
+    // ------------------------------------------------------------------------------------ transactions
+
+    private static Map<String, Object> transactionState(Tab tab) {
+        Map<String, Object> out = new java.util.HashMap<>();
+        out.put("tabId", tab.id);
+        out.put("manual", tab.manual);
+        out.put("pending", tab.pending);
+        return out;
+    }
+
+    /**
+     * Switches a tab between auto-commit and manual commit mode. Leaving manual mode with changes pending needs to be told
+     * what to do with them: {@code pendingAction} is "commit" or "rollback".
+     */
+    public Map<String, Object> setTransactionMode(String tabId, String connectionId, boolean manual, String pendingAction) throws SQLException {
+        Tab tab = tab(tabId, connectionId);
+        claim(tab);
+        try {
+            Connection connection = tab.connection();
+            if (manual && !tab.manual) {
+                connection.setAutoCommit(false);
+            } else if (!manual && tab.manual) {
+                if (tab.pending > 0 && pendingAction.isEmpty()) {
+                    throw new IllegalStateException("Commit or roll back the open transaction first.");
+                }
+                if (pendingAction.equals("commit")) {
+                    connection.commit();
+                } else {
+                    connection.rollback();
+                }
+                tab.pending = 0;
+                connection.setAutoCommit(true);
+            }
+            tab.manual = manual;
+            return transactionState(tab);
+        } finally {
+            tab.busy = false;
+        }
+    }
+
+    /** Commits or rolls back what a manual-mode tab has pending. */
+    public Map<String, Object> finishTransaction(String tabId, String connectionId, boolean commit) throws SQLException {
+        Tab tab = tab(tabId, connectionId);
+        claim(tab);
+        try {
+            if (tab.manual) {
+                Connection connection = tab.connection();
+                if (commit) {
+                    connection.commit();
+                } else {
+                    connection.rollback();
+                }
+                tab.pending = 0;
+            }
+            return transactionState(tab);
+        } finally {
+            tab.busy = false;
+        }
+    }
+
+    private static void claim(Tab tab) {
+        if (tab.busy) {
+            throw new IllegalStateException("This tab is running a script. Wait for it to finish, or stop it.");
+        }
+        tab.busy = true;
     }
 }

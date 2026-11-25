@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { api } from '../api';
-import { addFileTab, app, infoOf, runTab, type QueryTab, type RunRequest } from '../store';
+import { addFileTab, app, dialogs, infoOf, runTab, type QueryTab, type RunRequest } from '../store';
 import { fail, prefs, savePref, toast } from '../ui';
 import {
-  mdiContentCopy, mdiContentCut, mdiContentPaste, mdiFormatAlignLeft, mdiMagnify, mdiPlay, mdiPlayOutline, mdiSelectAll, mdiCommentOutline,
+  mdiContentCopy, mdiContentCut, mdiFileTreeOutline, mdiContentPaste, mdiFormatAlignLeft, mdiMagnify, mdiPlay, mdiPlayOutline, mdiSelectAll, mdiCommentOutline,
 } from '@mdi/js';
 import { ContextMenuContent, ContextMenuItem, ContextMenuPortal, ContextMenuRoot, ContextMenuSeparator, ContextMenuTrigger } from 'reka-ui';
 import Icon from './Icon.vue';
@@ -55,6 +55,14 @@ function runAll(): void {
 
 function runStatement(): void {
   if (editor.value) run(editor.value.request('statement'));
+}
+
+/** The execution plan of the selection, or else of the statement at the caret. */
+function explain(): void {
+  if (!editor.value) return;
+  let request = editor.value.request('auto');
+  if (request.mode === 'all') request = editor.value.request('statement');
+  dialogs.explain = { tabId: props.tab.id, connectionId: props.tab.connectionId, title: props.tab.title, request };
 }
 
 async function save(saveAs = false): Promise<void> {
@@ -136,7 +144,7 @@ function gotoError(from: number, to: number): void {
   editor.value?.focus();
 }
 
-defineExpose({ save, openFile, format, runAll, runStatement });
+defineExpose({ save, openFile, format, runAll, runStatement, explain });
 </script>
 
 <template>
@@ -153,6 +161,7 @@ defineExpose({ save, openFile, format, runAll, runStatement });
         <ContextMenuContent class="menu" @close-auto-focus.prevent="editor?.focus()">
           <ContextMenuItem class="menu-item" :disabled="tab.running" @select="runAll"><Icon :path="mdiPlay" /> {{ hasSelection ? 'Run selection' : 'Run' }} <span class="shortcut">Ctrl Enter</span></ContextMenuItem>
           <ContextMenuItem class="menu-item" :disabled="tab.running" @select="runStatement"><Icon :path="mdiPlayOutline" /> Run statement <span class="shortcut">Ctrl Shift Enter</span></ContextMenuItem>
+          <ContextMenuItem class="menu-item" :disabled="tab.running" @select="explain"><Icon :path="mdiFileTreeOutline" /> Explain plan</ContextMenuItem>
           <ContextMenuSeparator class="menu-sep" />
           <ContextMenuItem class="menu-item" :disabled="!hasSelection" @select="copySelection(true)"><Icon :path="mdiContentCut" /> Cut <span class="shortcut">Ctrl X</span></ContextMenuItem>
           <ContextMenuItem class="menu-item" :disabled="!hasSelection" @select="copySelection()"><Icon :path="mdiContentCopy" /> Copy <span class="shortcut">Ctrl C</span></ContextMenuItem>

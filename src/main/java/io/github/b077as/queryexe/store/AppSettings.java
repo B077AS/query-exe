@@ -4,12 +4,15 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import lombok.extern.slf4j.Slf4j;
 
@@ -48,13 +51,13 @@ public class AppSettings {
         return instance;
     }
 
-    public void setTheme(String themeName) {
+    public synchronized void setTheme(String themeName) {
         JsonObject settings = read();
         settings.addProperty(THEME_KEY, themeName);
         write(settings);
     }
 
-    public java.util.List<String> getStringList(String key) {
+    public synchronized java.util.List<String> getStringList(String key) {
         JsonObject settings = read();
         java.util.List<String> values = new java.util.ArrayList<>();
         if (settings.has(key) && settings.get(key).isJsonArray()) {
@@ -63,7 +66,7 @@ public class AppSettings {
         return values;
     }
 
-    public void setStringList(String key, java.util.List<String> values) {
+    public synchronized void setStringList(String key, java.util.List<String> values) {
         JsonObject settings = read();
         com.google.gson.JsonArray array = new com.google.gson.JsonArray();
         values.forEach(array::add);
@@ -72,7 +75,7 @@ public class AppSettings {
     }
 
     /** The colour (an accent key such as "teal") chosen for each connection folder, by folder name. */
-    public java.util.Map<String, String> getFolderColors() {
+    public synchronized java.util.Map<String, String> getFolderColors() {
         java.util.Map<String, String> colors = new java.util.LinkedHashMap<>();
         JsonObject settings = read();
         if (settings.has(FOLDER_COLORS_KEY) && settings.get(FOLDER_COLORS_KEY).isJsonObject()) {
@@ -81,7 +84,7 @@ public class AppSettings {
         return colors;
     }
 
-    public void setFolderColors(java.util.Map<String, String> colors) {
+    public synchronized void setFolderColors(java.util.Map<String, String> colors) {
         JsonObject settings = read();
         JsonObject object = new JsonObject();
         colors.forEach(object::addProperty);
@@ -90,12 +93,12 @@ public class AppSettings {
     }
 
     /** Any value stored under this key, or null. */
-    public JsonElement getRaw(String key) {
+    public synchronized JsonElement getRaw(String key) {
         JsonObject settings = read();
         return settings.has(key) ? settings.get(key) : null;
     }
 
-    public void setRaw(String key, JsonElement value) {
+    public synchronized void setRaw(String key, JsonElement value) {
         JsonObject settings = read();
         settings.add(key, value);
         write(settings);
@@ -108,17 +111,30 @@ public class AppSettings {
         try (Reader reader = Files.newBufferedReader(settingsPath)) {
             JsonElement element = JsonParser.parseReader(reader);
             return element.isJsonObject() ? element.getAsJsonObject() : new JsonObject();
-        } catch (IOException e) {
+        } catch (IOException | JsonParseException e) {
+            // an unreadable file is kept aside rather than overwritten by the next save, which would lose every setting in it
             log.error("Error reading settings file", e);
+            try {
+                Files.copy(settingsPath, settingsPath.resolveSibling("settings.json.broken"), StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ignored) {
+                // nothing more to do
+            }
             return new JsonObject();
         }
     }
 
+    /** Written to a temporary file and moved over the real one, so a reader never meets a half-written (or empty) file. */
     private void write(JsonObject settings) {
         try {
             Files.createDirectories(settingsPath.getParent());
-            try (Writer writer = Files.newBufferedWriter(settingsPath)) {
+            Path temp = settingsPath.resolveSibling("settings.json.tmp");
+            try (Writer writer = Files.newBufferedWriter(temp)) {
                 gson.toJson(settings, writer);
+            }
+            try {
+                Files.move(temp, settingsPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, settingsPath, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException e) {
             log.error("Error saving settings file", e);

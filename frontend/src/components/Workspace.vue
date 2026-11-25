@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import {
-  mdiClose, mdiCogOutline, mdiContentSaveOutline, mdiDatabaseOutline, mdiFolderOpenOutline, mdiFormatAlignLeft, mdiLoading, mdiPlay, mdiPlayOutline,
-  mdiPlus, mdiStop,
+  mdiCheck, mdiClose, mdiCogOutline, mdiContentSaveOutline, mdiDatabaseOutline, mdiFolderOpenOutline, mdiFileTreeOutline, mdiFormatAlignLeft, mdiLoading, mdiPlay, mdiPlayOutline,
+  mdiPlus, mdiStop, mdiUndo,
 } from '@mdi/js';
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuTrigger } from 'reka-ui';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { app, activeTab, cancelTab, closeTab, dialogs, infoOf, isDirty, newQuery, newTab, type QueryTab } from '../store';
+import { app, activeTab, cancelTab, closeTab, dialogs, finishTx, infoOf, isDirty, newQuery, newTab, setTxMode, settleTransactions, type QueryTab } from '../store';
 import { confirm, engineBadge, prefs, savePref } from '../ui';
 import ConnectionsTree from './ConnectionsTree.vue';
 import EmptyMain from './EmptyMain.vue';
 import Icon from './Icon.vue';
+import Seg from './Seg.vue';
 import QueryTabView from './QueryTab.vue';
 import Splitter from './Splitter.vue';
 
@@ -24,6 +25,7 @@ const badge = (tab: QueryTab): string => engineBadge(infoOf(tab.connectionId)?.t
 
 async function close(tab: QueryTab): Promise<void> {
   if (isDirty(tab) && !(await confirm('Close without saving?', `"${tab.title}" has changes that are not saved.`, 'Close', true))) return;
+  if (!(await settleTransactions([tab], `Close "${tab.title}"?`, 'close'))) return;
   closeTab(tab.id);
 }
 
@@ -73,7 +75,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           <Icon :path="current?.running ? mdiLoading : mdiPlay" class="play" :class="{ spin: current?.running }" />Run <span class="kbd">Ctrl ↵</span>
         </button>
         <button class="btn" :disabled="!current || current.running" @click="view()?.runStatement()"><Icon :path="mdiPlayOutline" class="play" />Run statement <span class="kbd">Ctrl ⇧ ↵</span></button>
+        <button class="btn" :disabled="!current || current.running" title="Show how the statement would run" @click="view()?.explain()"><Icon :path="mdiFileTreeOutline" />Explain</button>
         <button class="btn" :disabled="!current || !current.running" @click="current && cancelTab(current)"><Icon :path="mdiStop" />Stop</button>
+        <i class="vsep" />
+        <Seg :model-value="current?.tx.manual ? 'manual' : 'auto'" :disabled="!current || current.running" :options="[{ value: 'auto', label: 'Auto-commit' }, { value: 'manual', label: 'Manual' }]"
+          @update:model-value="current && setTxMode(current, $event === 'manual')" />
+        <template v-if="current?.tx.manual">
+          <button class="ib commit" :class="{ on: current.tx.pending > 0 }" :disabled="current.running || current.tx.pending === 0"
+            :title="current.tx.pending > 0 ? `Commit ${current.tx.pending} statement${current.tx.pending === 1 ? '' : 's'}: make them permanent` : 'Commit (nothing is waiting)'" @click="finishTx(current, true)">
+            <Icon :path="mdiCheck" /><span v-if="current.tx.pending > 0" class="cnt">{{ current.tx.pending }}</span>
+          </button>
+          <button class="ib" :disabled="current.running || current.tx.pending === 0" :title="current.tx.pending > 0 ? 'Roll back: undo the changes that are not committed' : 'Roll back (nothing is waiting)'" @click="finishTx(current, false)"><Icon :path="mdiUndo" /></button>
+        </template>
         <span class="sp" />
         <span v-if="current" class="pill" title="Connection and database in use"><Icon :path="mdiDatabaseOutline" :size="13" />{{ sessionName }}<template v-if="currentDb"><i class="vsep" />{{ currentDb }}</template></span>
         <button class="ib" title="Open file (Ctrl+O)" :disabled="!current" @click="view()?.openFile()"><Icon :path="mdiFolderOpenOutline" /></button>
@@ -86,6 +99,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <div v-for="tab in app.tabs" :key="tab.id" class="tab" :class="{ on: tab.id === app.activeTab }" role="tab" :title="infoOf(tab.connectionId)?.name" @mousedown="app.activeTab = tab.id; onMiddle($event, tab)">
           <span class="badge">{{ badge(tab) }}</span>
           <span class="title">{{ tab.title }}</span>
+          <span v-if="tab.tx.pending > 0" class="txdot" title="Changes waiting for a commit" />
           <button class="x" title="Close (Ctrl+W)" @mousedown.stop @click.stop="close(tab)"><Icon :path="mdiClose" :size="14" /></button>
         </div>
         <!-- with several connections open, the + asks which one the new query is for -->
@@ -122,6 +136,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .tab { display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-right: 1px solid var(--border); color: var(--text-2); position: relative; flex: none; max-width: 260px; }
 .tab:hover { color: var(--text); }
 .tab.on { background: var(--bg); color: var(--text); }
+.ib.commit.on { width: auto; padding: 0 7px; gap: 4px; grid-auto-flow: column; background: var(--accent-tint-strong); color: var(--accent); }
+.ib.commit .cnt { font: 600 12px var(--mono); }
+.txdot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
 .tab.on::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent); }
 .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .x { width: 20px; height: 20px; display: grid; place-items: center; border-radius: var(--radius); color: var(--text-3); }

@@ -25,6 +25,8 @@ public class SqlInspector {
             "^SET\\s+(?:SESSION\\s+|LOCAL\\s+)?SEARCH_PATH\\s*(?:TO|=)\\s*(.+?)\\s*;?\\s*$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern PG_SET_SCHEMA = Pattern.compile("^SET\\s+(?:SESSION\\s+|LOCAL\\s+)?SCHEMA\\s+" + NAME + "\\s*;?\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern DDL = Pattern.compile("^(CREATE|DROP|ALTER|RENAME)\\b", Pattern.CASE_INSENSITIVE);
+    /** COMMIT / ROLLBACK / END typed by hand (but not ROLLBACK TO SAVEPOINT, which leaves the transaction open). */
+    private static final Pattern TRANSACTION_END = Pattern.compile("^(?:COMMIT|END|ROLLBACK(?!\\s+(?:WORK\\s+)?TO\\b))\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern STRUCTURAL = Pattern.compile(
             "^(?:CREATE|DROP)\\s+(?:OR\\s+REPLACE\\s+)?(?:DATABASE|SCHEMA)\\b", Pattern.CASE_INSENSITIVE);
 
@@ -78,6 +80,11 @@ public class SqlInspector {
     /** CREATE / DROP / ALTER / RENAME: the schema's table list may have changed. */
     public static boolean isDdl(String sql) {
         return DDL.matcher(stripLeadingTrivia(sql)).find();
+    }
+
+    /** The statement ends the open transaction itself. */
+    public static boolean endsTransaction(String sql) {
+        return TRANSACTION_END.matcher(stripLeadingTrivia(sql)).find();
     }
 
     /** CREATE / DROP of a whole database or schema: the tree's top level changed. */

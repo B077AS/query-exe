@@ -26,6 +26,8 @@ const viewHeight = ref(400);
 const widths = ref<number[]>([]);
 const selected = reactive(new Set<number>()); // row ids
 const anchor = ref<number | null>(null); // row index
+const selCols = reactive(new Set<number>()); // the columns picked by clicking their headers (every row's cell in them)
+let colAnchor = -1;
 const active = reactive({ row: -1, col: -1 });
 const editing = ref<{ rowId: number; col: number; value: string; original: string | null } | null>(null);
 const editInput = ref<HTMLInputElement[] | HTMLInputElement>();
@@ -78,6 +80,7 @@ watch(() => props.grid.id, () => {
   sort.value = null;
   widths.value = initialWidths();
   selected.clear();
+  selCols.clear();
   Object.assign(active, { row: -1, col: -1 });
   editing.value = null;
   if (scroller.value) scroller.value.scrollTop = 0;
@@ -143,16 +146,42 @@ function selectRow(index: number, event: MouseEvent | KeyboardEvent): void {
   }
 }
 
-function clickCell(index: number, col: number, event: MouseEvent): void {
+/** A click on a column header selects the whole column (the rows' own selection is dropped). */
+function clickHeader(col: number, event?: MouseEvent): void {
+  if (editing.value) void commitEdit();
+  selected.clear();
+  anchor.value = null;
+  if (event?.shiftKey && colAnchor >= 0) {
+    selCols.clear();
+    for (let i = Math.min(colAnchor, col); i <= Math.max(colAnchor, col); i++) selCols.add(i);
+  } else if (event && (event.ctrlKey || event.metaKey)) {
+    if (selCols.has(col)) selCols.delete(col);
+    else selCols.add(col);
+    colAnchor = col;
+  } else {
+    selCols.clear();
+    selCols.add(col);
+    colAnchor = col;
+  }
+  active.col = col;
+  if (active.row < 0 && rows.value.length > 0) active.row = 0;
+  scroller.value?.focus();
+}
+
+function clickCell(index: number, col: number): void {
   if (editing.value) return;
+  selCols.clear();
   active.row = index;
   active.col = col;
-  selectRow(index, event);
+  // a field is only focused: a row is selected through its number
+  selected.clear();
+  anchor.value = index;
   scroller.value?.focus();
 }
 
 function clickGutter(index: number, event: MouseEvent): void {
   if (editing.value) void commitEdit();
+  selCols.clear();
   active.row = index;
   if (active.col < 0) active.col = 0;
   selectRow(index, event);
@@ -179,7 +208,11 @@ function move(dRow: number, dCol: number, event: KeyboardEvent): void {
   const col = Math.min(Math.max((active.col < 0 ? 0 : active.col) + dCol, 0), columns.value.length - 1);
   active.row = row;
   active.col = col;
-  if (dRow !== 0) selectRow(row, event);
+  selCols.clear();
+  if (dRow !== 0) {
+    selected.clear();
+    anchor.value = row;
+  }
   ensureVisible(row, col);
 }
 
@@ -387,6 +420,7 @@ function onKey(event: KeyboardEvent): void {
       break;
     case 'a':
       if (event.ctrlKey || event.metaKey) {
+        selCols.clear();
         selected.clear();
         rows.value.forEach((r) => selected.add(r.id));
         break;
@@ -394,7 +428,8 @@ function onKey(event: KeyboardEvent): void {
       return;
     case 'c':
       if (event.ctrlKey || event.metaKey) {
-        if (selected.size > 1) void copyRows();
+        if (selCols.size > 0) void copyColumnValues(true);
+        else if (selected.size > 0) void copyRows();
         else void copyCell();
         break;
       }
@@ -425,6 +460,7 @@ function onContextIntent(event: MouseEvent): void {
   if (head) {
     menuKind.value = 'header';
     headerCol.value = Number(head.dataset.col);
+    if (!selCols.has(headerCol.value)) clickHeader(headerCol.value);
     return;
   }
   if (target.closest('.c')) {
@@ -450,13 +486,15 @@ async function copyColumnName(): Promise<void> {
   if (column) await writeClipboard(column.label, 'Column name');
 }
 
-async function copyColumnValues(): Promise<void> {
-  const col = headerCol.value;
-  if (col < 0 || rows.value.length === 0) return;
-  await writeClipboard(rows.value.map((r) => r.c[col] ?? 'NULL').join('\n'), `${rows.value.length.toLocaleString()} values`);
+/** The values of the selected columns (or of the header that was clicked): a line per row, tab between columns. */
+async function copyColumnValues(selection = false): Promise<void> {
+  const cols = selection && selCols.size > 0 ? [...selCols].sort((a, b) => a - b) : headerCol.value >= 0 ? [headerCol.value] : [];
+  if (cols.length === 0 || rows.value.length === 0) return;
+  await writeClipboard(rows.value.map((r) => cols.map((c) => r.c[c] ?? 'NULL').join('\t')).join('\n'), `${rows.value.length.toLocaleString()} rows × ${cols.length} column${cols.length === 1 ? '' : 's'}`);
 }
 
 function onContext(index: number, col: number): void {
+  selCols.clear();
   ctx.row = index;
   ctx.col = col;
   const row = rows.value[index];
@@ -508,7 +546,7 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
           <div class="canvas" :style="{ width: totalWidth + 'px', height: HEADER_HEIGHT + rows.length * ROW_HEIGHT + 'px' }">
             <div class="head" :style="{ height: HEADER_HEIGHT + 'px' }">
               <div class="hc gutter" :style="{ width: GUTTER + 'px' }">#</div>
-              <div v-for="(column, i) in columns" :key="i" class="hc" :data-col="i" :style="{ width: widths[i] + 'px' }" :title="`${column.label} | ${column.typeName}`">
+              <div v-for="(column, i) in columns" :key="i" class="hc" :class="{ colsel: selCols.has(i) }" :data-col="i" @mousedown.left="clickHeader(i, $event)" :style="{ width: widths[i] + 'px' }" :title="`${column.label} | ${column.typeName}`">
                 <Icon v-if="column.primaryKey" :path="mdiKeyVariant" :size="13" class="key" />
                 <span class="lbl">{{ column.label }}</span>
                 <small>{{ column.typeName.toLowerCase() }}</small>
@@ -520,9 +558,9 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
               <div v-for="(row, k) in visible" :key="row.id" class="r" :class="{ sel: selected.has(row.id), added: row.added, odd: (start + k) % 2 === 1 }" :style="{ height: ROW_HEIGHT + 'px' }">
                 <div class="c gutter" :style="{ width: GUTTER + 'px' }" @mousedown="clickGutter(start + k, $event)" @contextmenu="onContext(start + k, Math.max(active.col, 0))">{{ start + k + 1 }}</div>
                 <div v-for="(column, i) in columns" :key="i" class="c"
-                  :class="{ num: column.numeric, nul: row.c[i] === null, chg: isChanged(row, i), act: active.row === start + k && active.col === i, ro: !canEdit(i) }"
+                  :class="{ num: column.numeric, nul: row.c[i] === null, chg: isChanged(row, i), act: active.row === start + k && active.col === i, colsel: selCols.has(i), ro: !canEdit(i) }"
                   :style="{ width: widths[i] + 'px' }"
-                  @mousedown.left="clickCell(start + k, i, $event)" @dblclick="startEdit(start + k, i)" @contextmenu="onContext(start + k, i)">
+                  @mousedown.left="clickCell(start + k, i)" @dblclick="startEdit(start + k, i)" @contextmenu="onContext(start + k, i)">
                   <input v-if="editing && editing.rowId === row.id && editing.col === i" ref="editInput" v-model="editing.value" class="cell-input mono"
                     @keydown="onEditKey" @blur="commitEdit()" @mousedown.stop @dblclick.stop />
                   <template v-else>{{ row.c[i] === null ? 'NULL' : row.c[i] }}</template>
@@ -539,7 +577,7 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
           <ContextMenuItem class="menu-item" :disabled="!sortOf(headerCol)" @select="setSort(headerCol, null)"><Icon :path="mdiCloseCircleOutline" /> Clear sort</ContextMenuItem>
           <ContextMenuSeparator class="menu-sep" />
           <ContextMenuItem class="menu-item" @select="copyColumnName"><Icon :path="mdiContentCopy" /> Copy column name</ContextMenuItem>
-          <ContextMenuItem class="menu-item" :disabled="rows.length === 0" @select="copyColumnValues"><Icon :path="mdiViewColumnOutline" /> Copy column values</ContextMenuItem>
+          <ContextMenuItem class="menu-item" :disabled="rows.length === 0" @select="copyColumnValues(selCols.has(headerCol))"><Icon :path="mdiViewColumnOutline" /> Copy {{ selCols.size > 1 && selCols.has(headerCol) ? selCols.size + ' columns' : 'column values' }}</ContextMenuItem>
           <ContextMenuSeparator class="menu-sep" />
           <ContextMenuItem class="menu-item" @select="autoSize(headerCol)"><Icon :path="mdiArrowCollapseHorizontal" /> Fit column width</ContextMenuItem>
         </ContextMenuContent>
@@ -607,6 +645,8 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
 .r.sel .c:not(.gutter) { background: var(--accent-tint); }
 .r.sel .c.gutter { color: var(--accent); background: var(--accent-tint-strong); }
 .r.added .c:not(.gutter) { background: color-mix(in srgb, var(--ok) 13%, var(--bg)); }
+.r .c.colsel:not(.gutter) { background: var(--accent-tint); }
+.hc.colsel { color: var(--accent); background: var(--accent-tint-strong); }
 .c.chg { background: var(--accent-tint-strong) !important; box-shadow: inset 3px 0 0 var(--accent); }
 .c.act { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
 .cell-input { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; outline: 2px solid var(--accent); outline-offset: -2px; background: var(--bg-raised); color: var(--text); padding: 0 12px; font-size: 12px; user-select: text; }

@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.sql.Statement;
 import java.sql.Types;
 import java.util.IdentityHashMap;
@@ -27,8 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 public class ChangeApplier {
 
     /**
-     * All-or-nothing: either every statement is committed, or the transaction is rolled back. The
-     * connection is always returned to the autocommit mode it had before.
+     * All-or-nothing: either every statement is committed, or none of them is. The connection is always returned to
+     * the autocommit mode it had before.
+     * <p>
+     * A connection that is already inside a transaction (a tab in manual commit mode) is left inside it: the edits run
+     * under a savepoint, a failure undoes just them, and committing stays the user's call.
      *
      * @param inserts the subset of {@code queries} (by identity) that are INSERTs and should report generated keys
      * @return the generated-key columns reported per INSERT (identity-keyed; possibly empty)
@@ -37,7 +41,12 @@ public class ChangeApplier {
                                                             Set<QueryData> inserts) throws SQLException {
         Map<QueryData, Map<String, Object>> generatedKeys = new IdentityHashMap<>();
         boolean previousAutoCommit = connection.getAutoCommit();
-        connection.setAutoCommit(false);
+        Savepoint savepoint = null;
+        if (previousAutoCommit) {
+            connection.setAutoCommit(false);
+        } else {
+            savepoint = connection.setSavepoint();
+        }
 
         try {
             for (QueryData queryInfo : queries) {
@@ -53,19 +62,29 @@ public class ChangeApplier {
                     }
                 }
             }
-            connection.commit();
+            if (savepoint == null) {
+                connection.commit();
+            } else {
+                connection.releaseSavepoint(savepoint);
+            }
         } catch (SQLException e) {
             try {
-                connection.rollback();
+                if (savepoint == null) {
+                    connection.rollback();
+                } else {
+                    connection.rollback(savepoint);
+                }
             } catch (SQLException rollbackException) {
                 log.error("Rollback failed", rollbackException);
             }
             throw e;
         } finally {
-            try {
-                connection.setAutoCommit(previousAutoCommit);
-            } catch (SQLException e) {
-                log.error("Could not restore autocommit", e);
+            if (previousAutoCommit) {
+                try {
+                    connection.setAutoCommit(true);
+                } catch (SQLException e) {
+                    log.error("Could not restore autocommit", e);
+                }
             }
         }
 

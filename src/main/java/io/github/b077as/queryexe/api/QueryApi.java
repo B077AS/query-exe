@@ -39,6 +39,11 @@ class QueryApi {
 
     void register(Rpc rpc) {
         rpc.on("query.run", JsonObject.class, this::run);
+        rpc.on("query.explain", JsonObject.class, this::explain);
+        rpc.on("query.setTransactionMode", JsonObject.class, p -> workspace.setTransactionMode(Params.string(p, "tabId"),
+                Params.string(p, "connectionId"), Params.bool(p, "manual"), Params.optionalString(p, "pending")));
+        rpc.on("query.commit", JsonObject.class, p -> workspace.finishTransaction(Params.string(p, "tabId"), Params.string(p, "connectionId"), true));
+        rpc.on("query.rollback", JsonObject.class, p -> workspace.finishTransaction(Params.string(p, "tabId"), Params.string(p, "connectionId"), false));
         rpc.on("query.cancel", JsonObject.class, p -> {
             workspace.cancel(Params.string(p, "tabId"));
             return Map.of("ok", true);
@@ -117,10 +122,17 @@ class QueryApi {
         if (connection == null) {
             throw new IllegalStateException("This connection is not open. Connect first.");
         }
+        List<Workspace.StatementRange> statements = statements(p, connection);
+        String runId = UUID.randomUUID().toString();
+        workspace.run(Params.string(p, "tabId"), connectionId, runId, statements);
+        return Map.of("runId", runId, "count", statements.size());
+    }
+
+    /** The statements a request names: the one at the caret, or the split of the (selected) text. */
+    private static List<Workspace.StatementRange> statements(JsonObject p, ConnectionProfile connection) {
         String text = Params.string(p, "text");
         String mode = Params.optionalString(p, "mode");
         List<Workspace.StatementRange> statements = new ArrayList<>();
-
         if (mode.equals("statement")) {
             int caret = Params.integer(p, "caret");
             Optional<SqlSplitter.Statement> at = SqlSplitter.statementAt(text, caret, connection.dialect().getSqlSyntax());
@@ -134,9 +146,18 @@ class QueryApi {
         if (statements.isEmpty()) {
             throw new IllegalArgumentException("There is nothing to run.");
         }
-        String runId = UUID.randomUUID().toString();
-        workspace.run(Params.string(p, "tabId"), connectionId, runId, statements);
-        return Map.of("runId", runId, "count", statements.size());
+        return statements;
+    }
+
+    /** The plan of the first statement the request names; {@code analyze} measures it by running it (and undoing it). */
+    private Object explain(JsonObject p) throws Exception {
+        String connectionId = Params.string(p, "connectionId");
+        ConnectionProfile connection = DatabaseConnection.getInstance().getProfile(connectionId);
+        if (connection == null) {
+            throw new IllegalStateException("This connection is not open. Connect first.");
+        }
+        String sql = statements(p, connection).get(0).getText();
+        return workspace.explain(Params.string(p, "tabId"), connectionId, sql, p.has("analyze") && p.get("analyze").getAsBoolean());
     }
 
     // ------------------------------------------------------------------------------------ export and copy
