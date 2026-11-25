@@ -4,15 +4,16 @@
 #
 # Release flow (create a GitHub release with a tag such as 0.1.0; a leading "v" is tolerated and stripped):
 #   One job per platform, because jpack builds for the machine it runs on (the Java runtime is made with that machine's jlink and
-#   the stub it ships is native). Each job
+#   the stub it ships is native). The `client` job first builds the client jar and the launcher jar, which both platforms share,
+#   and attaches them to the release. Then each platform job
 #     1. sets the Maven version from the tag (the tag is the single source of truth: app.properties' version is filtered from it
 #        and jpack versions the release with it),
-#     2. takes the client jar and the launcher jar built once by the `client` job,
+#     2. takes the two jars from the `client` job,
 #     3. runs `jpack:package` over them (-Pjpack -Djpack.jar=...): a jlink runtime shared by launcher and client, the install
 #        folder and the release files,
 #     4. wraps the install folder into the download: QueryExe-Setup.exe (Inno Setup) on Windows, QueryExe.AppImage (built by jpack
 #        itself, with its block index) on Linux,
-#     5. attaches everything to the release.
+#     5. attaches its own files to the release (the two jars are already there).
 #
 #   Installed copies update from releases/latest/download/ (updateUrl in src/jpack/jpack.json): the stub fetches
 #   jpack-<platform>.json and then only the parts (jars, runtime, launcher, stub) whose hash changed. So EVERY release must carry
@@ -112,6 +113,19 @@ jobs:
           name: launcher-jar
           path: launcher/target/queryexe-launcher.jar
           if-no-files-found: error
+
+      # The two jars have the same names for both platforms, so they are uploaded here, by one job. When both platform jobs
+      # uploaded them, two uploads of one name at the same moment made the 1.0.6 release fail (HTTP 404, and the launcher jar
+      # ended up missing). The platform jobs find them on the release and skip them.
+      - name: Upload the shared jars to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          REPLACE_EXISTING: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          mkdir shared
+          cp "target/query-exe-$VERSION.jar" launcher/target/queryexe-launcher.jar shared/
+          bash .github/scripts/upload-parts.sh shared
 
   windows:
     name: Windows (QueryExe-Setup.exe + update files)
