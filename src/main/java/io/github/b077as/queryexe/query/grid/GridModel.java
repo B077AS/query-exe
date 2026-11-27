@@ -403,6 +403,14 @@ public class GridModel implements RowTarget {
         return row == null || column < 0 || column >= row.text.length ? null : row.text[column];
     }
 
+    /** The stored bytes of a binary cell, or null for any other cell (and for NULL). */
+    public synchronized byte[] cellBytes(int rowId, int column) {
+        Row row = find(rowId);
+        return row != null && column >= 0 && column < row.original.length && row.original[column] instanceof byte[] bytes
+                ? bytes.clone()
+                : null;
+    }
+
     /** The statements Apply would run, in order (the parameters are bound separately). */
     public synchronized List<String> pendingSql() {
         List<String> out = new ArrayList<>();

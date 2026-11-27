@@ -379,8 +379,12 @@ async function openValue(index: number, col: number): Promise<void> {
   const column = columns.value[col];
   if (!row || !column) return;
   try {
-    const text = (await api.gridCell(props.grid.id, row.id, col)).text;
-    dialogs.value = { grid: props.grid, rowId: row.id, column: col, title: column.label, typeName: column.typeName, text, editable: canEdit(col) };
+    const { text, binary } = await api.gridCell(props.grid.id, row.id, col);
+    // binary content is shown decoded (the cell's own text only says how many bytes there are) and cannot be edited
+    dialogs.value = {
+      grid: props.grid, rowId: row.id, column: col, title: column.label, typeName: column.typeName,
+      text: binary ? binary.text ?? null : text, editable: !binary && canEdit(col), binary,
+    };
   } catch (e) {
     fail('Could not read the value', e);
   }

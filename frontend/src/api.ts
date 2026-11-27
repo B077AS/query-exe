@@ -200,6 +200,17 @@ export interface GridSnapshot {
   millis: number;
   pending: Pending;
 }
+/** A binary cell as the value viewer shows it; absent parts are null or left out. */
+export interface BinaryValue {
+  format: string;
+  text?: string | null;
+  /** A data URL. */
+  image?: string | null;
+  hex: string;
+  size: number;
+  note?: string | null;
+}
+
 export interface GridPatch {
   rows: GridRow[];
   removed: number[];
@@ -407,7 +418,7 @@ export const api = {
   closeTab: (tabId: string) => call<{ ok: boolean }>('query.closeTab', { tabId }),
 
   gridEdit: (gridId: string, row: number, column: number, value: string | null) => call<GridPatch>('grid.edit', { gridId, row, column, value }),
-  gridCell: (gridId: string, row: number, column: number) => call<{ text: string | null }>('grid.cell', { gridId, row, column }),
+  gridCell: (gridId: string, row: number, column: number) => call<{ text: string | null; binary?: BinaryValue }>('grid.cell', { gridId, row, column }),
   gridAddRow: (gridId: string) => call<GridPatch>('grid.addRow', { gridId }),
   gridDuplicateRow: (gridId: string, row: number) => call<GridPatch>('grid.duplicateRow', { gridId, row }),
   gridDeleteRows: (gridId: string, rows: number[]) => call<GridPatch>('grid.deleteRows', { gridId, rows }),
