@@ -24,6 +24,14 @@ import io.github.b077as.queryexe.engine.*;
 @Slf4j
 public class H2Dialect extends Dialect {
 
+    /** H2 takes a string bound to a JSON column as a JSON string; the bytes are read as the JSON text itself. */
+    @Override
+    public Object parameterValue(String typeName, Object value) {
+        return typeName.equalsIgnoreCase("JSON") && value instanceof String text
+                ? text.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+                : value;
+    }
+
 
     private String[] dataTypes = new String[]{
             // Numeric Types

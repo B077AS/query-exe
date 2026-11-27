@@ -82,6 +82,8 @@ export const dialogs = reactive({
   tableInfo: null as null | { connectionId: string; container: string; table: string },
   columnInfo: null as null | { connectionId: string; container: string; table: string; column: string },
   script: null as null | { title: string; sql: string },
+  /** A grid cell opened in the value viewer, with its full text (null = SQL NULL). */
+  value: null as null | { grid: GridSnapshot; rowId: number; column: number; title: string; typeName: string; text: string | null; editable: boolean },
   diagram: null as null | { connectionId: string; container: string },
   monitor: null as null | { connectionId: string },
   /** The execution plan of a statement: which tab asked, and what it asked about. */

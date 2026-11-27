@@ -14,6 +14,7 @@ import NewContainerDialog from './components/NewContainerDialog.vue';
 import PasswordDialog from './components/PasswordDialog.vue';
 import PromptDialog from './components/PromptDialog.vue';
 import ScriptDialog from './components/ScriptDialog.vue';
+import ValueDialog from './components/ValueDialog.vue';
 import ExplainDialog from './components/ExplainDialog.vue';
 import SettingsDialog from './components/SettingsDialog.vue';
 import TableEditor from './components/TableEditor.vue';
@@ -48,6 +49,7 @@ onMounted(async () => {
   <DiagramDialog v-if="dialogs.diagram" />
   <MonitorDialog v-if="dialogs.monitor" :key="dialogs.monitor.connectionId" />
   <ScriptDialog v-if="dialogs.script" />
+  <ValueDialog v-if="dialogs.value" />
   <ExplainDialog v-if="dialogs.explain" />
   <NewContainerDialog v-if="dialogs.newContainer" />
   <PromptDialog />

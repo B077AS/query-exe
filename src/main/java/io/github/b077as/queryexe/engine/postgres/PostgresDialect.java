@@ -20,6 +20,12 @@ import io.github.b077as.queryexe.engine.*;
 @Slf4j
 public class PostgresDialect extends Dialect {
 
+    @Override
+    public Object parameterValue(String typeName, Object value) {
+        boolean document = typeName.equalsIgnoreCase("json") || typeName.equalsIgnoreCase("jsonb") || typeName.equalsIgnoreCase("xml");
+        return document && value instanceof String text ? new io.github.b077as.queryexe.query.UntypedText(text) : value;
+    }
+
 
     private String[] dataTypes = new String[]{
             "BIGINT", "BIGSERIAL", "BIT(1)", "BIT VARYING(64)", "BOOLEAN",

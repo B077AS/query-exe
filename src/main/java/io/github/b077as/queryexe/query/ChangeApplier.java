@@ -91,11 +91,13 @@ public class ChangeApplier {
         return generatedKeys;
     }
 
-    private static void bindParameters(PreparedStatement stmt, List<Object> parameters) throws SQLException {
+    public static void bindParameters(PreparedStatement stmt, List<Object> parameters) throws SQLException {
         for (int i = 0; i < parameters.size(); i++) {
             Object param = parameters.get(i);
             if (param == null) {
                 stmt.setNull(i + 1, Types.NULL);
+            } else if (param instanceof UntypedText(String value)) {
+                stmt.setObject(i + 1, value, Types.OTHER);
             } else {
                 stmt.setObject(i + 1, param);
             }

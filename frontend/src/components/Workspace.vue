@@ -37,7 +37,7 @@ function onMiddle(event: MouseEvent, tab: QueryTab): void {
 }
 
 function onKey(event: KeyboardEvent): void {
-  if (!(event.ctrlKey || event.metaKey) || dialogs.connection || dialogs.settings || dialogs.tableEditor) return;
+  if (!(event.ctrlKey || event.metaKey) || dialogs.connection || dialogs.settings || dialogs.tableEditor || dialogs.value) return;
   const key = event.key.toLowerCase();
   if (key === 't' && !event.shiftKey) {
     newQuery();

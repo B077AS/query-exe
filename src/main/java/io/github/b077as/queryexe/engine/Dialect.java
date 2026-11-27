@@ -48,4 +48,11 @@ public abstract class Dialect {
     public String generateDefaultsOnlyInsert(String qualifiedTable) {
         return "INSERT INTO " + qualifiedTable + " DEFAULT VALUES";
     }
+
+    /**
+     * What to bind for {@code value} in a column of type {@code typeName}, for engines that do not take it as it is.
+     */
+    public Object parameterValue(String typeName, Object value) {
+        return value;
+    }
 }
