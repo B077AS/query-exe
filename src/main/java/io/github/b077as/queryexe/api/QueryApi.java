@@ -16,6 +16,7 @@ import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.app.Params;
 import io.github.b077as.jolt.Rpc;
 import io.github.b077as.queryexe.query.grid.GridModel;
+import io.github.b077as.queryexe.query.binary.BinaryValue;
 import io.github.b077as.queryexe.connection.ConnectionProfile;
 import io.github.b077as.queryexe.connection.DatabaseConnection;
 import io.github.b077as.queryexe.query.Exporter;
@@ -59,7 +60,14 @@ class QueryApi {
         });
         rpc.on("grid.cell", JsonObject.class, p -> {
             Map<String, Object> out = new HashMap<>();
-            out.put("text", grid(p).cellText(Params.integer(p, "row"), Params.integer(p, "column")));
+            GridModel grid = grid(p);
+            int row = Params.integer(p, "row");
+            int column = Params.integer(p, "column");
+            out.put("text", grid.cellText(row, column));
+            byte[] bytes = grid.cellBytes(row, column);
+            if (bytes != null) {
+                out.put("binary", BinaryValue.of(bytes));
+            }
             return out;
         });
         rpc.on("grid.addRow", JsonObject.class, p -> grid(p).addRow());

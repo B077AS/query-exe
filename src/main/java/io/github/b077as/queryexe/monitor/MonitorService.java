@@ -4,6 +4,7 @@ import io.github.b077as.queryexe.connection.DatabaseConnection;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -125,6 +126,13 @@ public class MonitorService {
                 out.put("locks", locks);
             }
             return out;
+        }
+    }
+
+    /** Stops every monitor. Waits for a sample that is being taken. */
+    public void closeAll() {
+        for (String connectionId : new ArrayList<>(handles.keySet())) {
+            close(connectionId);
         }
     }
 

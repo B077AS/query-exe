@@ -4,14 +4,14 @@ import {
 } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap, indentWithTab, selectAll as cmSelectAll, toggleComment } from '@codemirror/commands';
 import { MariaSQL, MSSQL, MySQL, PostgreSQL, SQLite, StandardSQL, sql } from '@codemirror/lang-sql';
-import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from '@codemirror/language';
+import { bracketMatching, indentOnInput, syntaxHighlighting } from '@codemirror/language';
 import {
   closeSearchPanel, findNext, findPrevious, getSearchQuery, highlightSelectionMatches, openSearchPanel, replaceAll, replaceNext, search, SearchQuery, setSearchQuery,
 } from '@codemirror/search';
 import { Compartment, EditorState, StateEffect, StateField } from '@codemirror/state';
 import { Decoration, drawSelection, EditorView, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
-import { tags as t } from '@lezer/highlight';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { highlight } from '../highlight';
 import type { RunRequest } from '../store';
 
 const props = defineProps<{
@@ -102,16 +102,6 @@ const errorField = StateField.define<DecorationSet>({
   },
   provide: (f) => EditorView.decorations.from(f),
 });
-
-const highlight = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier], color: 'var(--syn-keyword)', fontWeight: '600' },
-  { tag: [t.string, t.special(t.string)], color: 'var(--syn-string)' },
-  { tag: [t.number, t.bool, t.null], color: 'var(--syn-number)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--syn-comment)', fontStyle: 'italic' },
-  { tag: [t.function(t.variableName), t.standard(t.name)], color: 'var(--syn-function)' },
-  { tag: [t.typeName, t.className], color: 'var(--syn-type)' },
-  { tag: [t.operator, t.punctuation], color: 'var(--text-2)' },
-]);
 
 const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: 'var(--bg)', color: 'var(--text)' },

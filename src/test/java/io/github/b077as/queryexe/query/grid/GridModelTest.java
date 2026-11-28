@@ -102,6 +102,22 @@ class GridModelTest {
         }
 
         @Test
+        void editedJsonIsStoredAsJsonNotAsAJsonString() throws Exception {
+            execute("CREATE TABLE PUBLIC.DOC(ID INT PRIMARY KEY, BODY JSON)",
+                    "INSERT INTO PUBLIC.DOC VALUES (1, JSON '{\"a\":1}')");
+            GridModel grid = grid("SELECT * FROM PUBLIC.DOC");
+            assertEquals("{\"a\":1}", text(grid, 0, 1));
+
+            edit(grid, 0, 1, "{\"a\":2,\"b\":\"è\"}");
+            grid.duplicateRow(rowId(grid, 0));
+            grid.edit(rowId(grid, 1), 0, "2");
+            grid.apply(connection);
+
+            assertEquals("{\"a\":2,\"b\":\"è\"}", scalar("SELECT BODY FROM PUBLIC.DOC WHERE ID = 1"));
+            assertEquals("{\"a\":2,\"b\":\"è\"}", scalar("SELECT BODY FROM PUBLIC.DOC WHERE ID = 2"));
+        }
+
+        @Test
         void editTargetsTheSchemaTheRowsCameFrom() throws Exception {
             GridModel grid = grid("SELECT * FROM OTHER.DUP ORDER BY ID");
             assertTrue(grid.snapshot().isEditable());

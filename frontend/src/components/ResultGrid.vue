@@ -227,14 +227,11 @@ async function startEdit(index: number, col: number): Promise<void> {
     if (!props.grid.editable) toast('info', 'Read-only result', props.grid.table ? 'This table has no primary key to identify rows by.' : 'Only a result from a single table with a primary key can be edited.');
     return;
   }
-  let value = row.c[col];
-  if (value !== null && value.length >= 2000) {
-    try {
-      value = (await api.gridCell(props.grid.id, row.id, col)).text;
-    } catch (e) {
-      fail('Could not read the value', e);
-      return;
-    }
+  const value = row.c[col];
+  // a one-line input would drop line breaks and cannot hold a long value: those are edited in the value viewer
+  if (value !== null && (value.length >= 2000 || /[\r\n]/.test(value))) {
+    await openValue(index, col);
+    return;
   }
   active.row = index;
   active.col = col;
@@ -377,15 +374,25 @@ async function copyInsert(): Promise<void> {
   }
 }
 
-async function viewValue(): Promise<void> {
-  const row = rows.value[ctx.row];
-  if (!row || ctx.col < 0) return;
+async function openValue(index: number, col: number): Promise<void> {
+  const row = rows.value[index];
+  const column = columns.value[col];
+  if (!row || !column) return;
   try {
-    const text = (await api.gridCell(props.grid.id, row.id, ctx.col)).text;
-    dialogs.script = { title: columns.value[ctx.col].label, sql: text ?? 'NULL' };
+    const { text, binary } = await api.gridCell(props.grid.id, row.id, col);
+    // binary content is shown decoded (the cell's own text only says how many bytes there are) and cannot be edited
+    dialogs.value = {
+      grid: props.grid, rowId: row.id, column: col, title: column.label, typeName: column.typeName,
+      text: binary ? binary.text ?? null : text, editable: !binary && canEdit(col), binary,
+    };
   } catch (e) {
     fail('Could not read the value', e);
   }
+}
+
+function doubleClickCell(index: number, col: number): void {
+  if (canEdit(col)) void startEdit(index, col);
+  else void openValue(index, col);
 }
 
 async function exportGrid(format: 'csv' | 'json' | 'xml', onlySelected: boolean): Promise<void> {
@@ -560,7 +567,7 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
                 <div v-for="(column, i) in columns" :key="i" class="c"
                   :class="{ num: column.numeric, nul: row.c[i] === null, chg: isChanged(row, i), act: active.row === start + k && active.col === i, colsel: selCols.has(i), ro: !canEdit(i) }"
                   :style="{ width: widths[i] + 'px' }"
-                  @mousedown.left="clickCell(start + k, i)" @dblclick="startEdit(start + k, i)" @contextmenu="onContext(start + k, i)">
+                  @mousedown.left="clickCell(start + k, i)" @dblclick="doubleClickCell(start + k, i)" @contextmenu="onContext(start + k, i)">
                   <input v-if="editing && editing.rowId === row.id && editing.col === i" ref="editInput" v-model="editing.value" class="cell-input mono"
                     @keydown="onEditKey" @blur="commitEdit()" @mousedown.stop @dblclick.stop />
                   <template v-else>{{ row.c[i] === null ? 'NULL' : row.c[i] }}</template>
@@ -585,7 +592,7 @@ const countLabel = computed(() => `${rows.value.length.toLocaleString()} row${ro
           <ContextMenuItem class="menu-item" @select="copyCell"><Icon :path="mdiContentCopy" /> Copy value <span class="shortcut">Ctrl C</span></ContextMenuItem>
           <ContextMenuItem class="menu-item" @select="copyRows"><Icon :path="mdiContentCopy" /> Copy {{ selected.size > 1 ? selected.size + ' rows' : 'row' }}</ContextMenuItem>
           <ContextMenuItem class="menu-item" @select="copyInsert"><Icon :path="mdiCodeBraces" /> Copy as INSERT</ContextMenuItem>
-          <ContextMenuItem class="menu-item" @select="viewValue"><Icon :path="mdiEyeOutline" /> View value</ContextMenuItem>
+          <ContextMenuItem class="menu-item" @select="openValue(ctx.row, ctx.col)"><Icon :path="mdiEyeOutline" /> View value</ContextMenuItem>
           <template v-if="grid.editable">
             <ContextMenuSeparator class="menu-sep" />
             <ContextMenuItem class="menu-item" :disabled="!canEdit(ctx.col)" @select="startEdit(ctx.row, ctx.col)"><Icon :path="mdiPencilOutline" /> Edit <span class="shortcut">Enter</span></ContextMenuItem>

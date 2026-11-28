@@ -403,6 +403,14 @@ public class GridModel implements RowTarget {
         return row == null || column < 0 || column >= row.text.length ? null : row.text[column];
     }
 
+    /** The stored bytes of a binary cell, or null for any other cell (and for NULL). */
+    public synchronized byte[] cellBytes(int rowId, int column) {
+        Row row = find(rowId);
+        return row != null && column >= 0 && column < row.original.length && row.original[column] instanceof byte[] bytes
+                ? bytes.clone()
+                : null;
+    }
+
     /** The statements Apply would run, in order (the parameters are bound separately). */
     public synchronized List<String> pendingSql() {
         List<String> out = new ArrayList<>();
@@ -670,9 +678,7 @@ public class GridModel implements RowTarget {
                 sql = "SELECT " + select + " FROM " + qualifiedTableName + " WHERE " + buildWhereClause(inserted.getKey(), parameters);
             }
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                for (int i = 0; i < parameters.size(); i++) {
-                    statement.setObject(i + 1, parameters.get(i));
-                }
+                ChangeApplier.bindParameters(statement, parameters);
                 try (ResultSet resultSet = statement.executeQuery()) {
                     if (resultSet.next()) {
                         Object[][] cells = new Object[tableColumnIndexes.size()][];
@@ -745,9 +751,14 @@ public class GridModel implements RowTarget {
         StringJoiner where = new StringJoiner(" AND ");
         for (Map.Entry<String, Object> entry : key.entrySet()) {
             where.add(connectionObject.dialect().quoteIdentifier(entry.getKey()) + " = ?");
-            parameters.add(entry.getValue());
+            parameters.add(parameter(columnIndexForName(entry.getKey()), entry.getValue()));
         }
         return where.toString();
+    }
+
+    /** A value as it has to be bound for its column. */
+    private Object parameter(int columnIndex, Object value) {
+        return connectionObject.dialect().parameterValue(columnTypeNames.get(columnIndex), value);
     }
 
     private int columnIndexForName(String name) {
@@ -769,7 +780,7 @@ public class GridModel implements RowTarget {
             if (value != null) {
                 columnsClause.add(connectionObject.dialect().quoteIdentifier(columnNames.get(i)));
                 valuesClause.add("?");
-                parameters.add(value);
+                parameters.add(parameter(i, value));
             }
         }
         String sql = parameters.isEmpty()
@@ -784,7 +795,7 @@ public class GridModel implements RowTarget {
         List<Object> parameters = new ArrayList<>();
         for (Map.Entry<Integer, Object> change : edit.changes.entrySet()) {
             set.add(connectionObject.dialect().quoteIdentifier(columnNames.get(change.getKey())) + " = ?");
-            parameters.add(change.getValue());
+            parameters.add(parameter(change.getKey(), change.getValue()));
         }
         String sql = "UPDATE " + qualifiedTableName + " SET " + set + " WHERE " + buildWhereClause(edit.primaryKeyValues, parameters);
         if (edit.query == null) {

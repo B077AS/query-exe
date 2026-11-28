@@ -2,6 +2,7 @@ import { reactive, watch } from 'vue';
 import {
   api,
   events,
+  type BinaryValue,
   type ConnectionInfo,
   type EngineType,
   type GridPatch,
@@ -12,7 +13,7 @@ import {
   type SchemaTree,
   type TreeContainer,
 } from './api';
-import { askTransaction, fail, prefs, toast } from './ui';
+import { answerConfirm, answerTransaction, askTransaction, confirm, confirmState, fail, prefs, toast, txAsk } from './ui';
 
 // The application state: saved connections, the open connections ("sessions": their tree and current database), the query
 // tabs (each belongs to one connection) and the dialogs. There is a single view: connections are the roots of the tree.
@@ -82,6 +83,8 @@ export const dialogs = reactive({
   tableInfo: null as null | { connectionId: string; container: string; table: string },
   columnInfo: null as null | { connectionId: string; container: string; table: string; column: string },
   script: null as null | { title: string; sql: string },
+  /** A grid cell opened in the value viewer, with its full text (null = SQL NULL). */
+  value: null as null | { grid: GridSnapshot; rowId: number; column: number; title: string; typeName: string; text: string | null; editable: boolean; binary?: BinaryValue },
   diagram: null as null | { connectionId: string; container: string },
   monitor: null as null | { connectionId: string },
   /** The execution plan of a statement: which tab asked, and what it asked about. */
@@ -92,6 +95,8 @@ export const dialogs = reactive({
   dropFiles: null as null | { files: { path: string; name: string }[] },
 });
 
+// Tab ids must not repeat after a reload: late events of the earlier page's tabs would land in the new ones.
+const pageId = Math.random().toString(36).slice(2, 8);
 let tabCounter = 1;
 let resultKey = 1;
 const queryCounters: Record<string, number> = {};
@@ -217,6 +222,14 @@ function replaceContainer(session: Session, fresh: TreeContainer): void {
   else session.tree.containers.push(fresh);
 }
 
+/** After a crash or a reload Java still holds the open connections: shows them again. */
+export function restoreSessions(): void {
+  const open = app.connections.filter((c) => c.connected);
+  open.forEach(openSession);
+  toast('info', 'The window was reloaded',
+    `${open.length > 0 ? 'Open connections were kept. ' : ''}Unsaved changes are gone and open transactions were rolled back.`);
+}
+
 export async function disconnect(id: string): Promise<void> {
   const tabs = app.tabs.filter((t) => t.connectionId === id);
   if (!(await settleTransactions(tabs, 'Disconnect?', 'disconnect'))) return;
@@ -247,7 +260,7 @@ export async function selectContainer(session: Session, name: string): Promise<v
 export function newTab(connectionId: string, text = '', title?: string, path: string | null = null): QueryTab {
   queryCounters[connectionId] = (queryCounters[connectionId] ?? 0) + 1;
   const tab: QueryTab = {
-    id: 't' + tabCounter++,
+    id: `t${pageId}-${tabCounter++}`,
     connectionId,
     title: title ?? `Query ${queryCounters[connectionId]}`,
     text,
@@ -377,6 +390,7 @@ function onFinished(event: QueryFinishedEvent): void {
 // ---- transactions -------------------------------------------------------------------------------------------------
 
 const plural = (n: number): string => `${n} statement${n === 1 ? '' : 's'}`;
+const uncommitted = (n: number): string => `${plural(n)} that ${n === 1 ? 'is' : 'are'} not committed`;
 
 function applyTx(tabId: string, state: { manual: boolean; pending: number }): void {
   const tab = findTab(tabId);
@@ -388,7 +402,7 @@ export async function setTxMode(tab: QueryTab, manual: boolean): Promise<void> {
   if (tab.running || tab.tx.manual === manual) return;
   let pending: 'commit' | 'rollback' | undefined;
   if (!manual && tab.tx.pending > 0) {
-    const answer = await askTransaction('Leave manual commit?', `"${tab.title}" has ${plural(tab.tx.pending)} that are not committed.`, 'switch');
+    const answer = await askTransaction('Leave manual commit?', `"${tab.title}" has ${uncommitted(tab.tx.pending)}.`, 'switch');
     if (!answer) return;
     pending = answer;
   }
@@ -415,7 +429,7 @@ export async function settleTransactions(tabs: QueryTab[], title: string, verb: 
   const open = tabs.filter((t) => t.tx.manual && t.tx.pending > 0);
   if (open.length === 0) return true;
   const what = open.length === 1
-    ? `"${open[0].title}" has ${plural(open[0].tx.pending)} that are not committed.`
+    ? `"${open[0].title}" has ${uncommitted(open[0].tx.pending)}.`
     : `${open.length} tabs have changes that are not committed:\n${open.map((t) => `  ${t.title}: ${plural(t.tx.pending)}`).join('\n')}`;
   const answer = await askTransaction(title, what, verb);
   if (!answer) return false;
@@ -428,6 +442,41 @@ export async function settleTransactions(tabs: QueryTab[], title: string, verb: 
     }
   }
   return true;
+}
+
+// ---- closing the window -------------------------------------------------------------------------------------------
+
+const unapplied = (tab: QueryTab): number =>
+  tab.items.reduce((n, i) => (i.kind === 'grid' ? n + i.grid.pending.updates + i.grid.pending.inserts + i.grid.pending.deletes : n), 0);
+
+/** Asks about everything closing the window would lose; false = the user backed out. */
+async function mayQuit(): Promise<boolean> {
+  // a question that was already open gives way to this one
+  if (confirmState.open) answerConfirm(false);
+  if (txAsk.open) answerTransaction(null);
+  const lines: string[] = [];
+  for (const tab of app.tabs) {
+    const reasons: string[] = [];
+    if (isDirty(tab)) reasons.push('not saved');
+    if (unapplied(tab) > 0) reasons.push('result changes not applied');
+    if (tab.running) reasons.push('still running, will be stopped');
+    if (reasons.length > 0) lines.push(`  ${tab.title}: ${reasons.join(', ')}`);
+  }
+  const shown = 8;
+  if (lines.length > shown) lines.splice(shown, lines.length - shown, `  and ${lines.length - shown} more`);
+  if (lines.length > 0 && !(await confirm('Quit QueryExe?', `Quitting loses this work:\n${lines.join('\n')}`, 'Quit', true))) return false;
+  return settleTransactions(app.tabs, 'Quit QueryExe?', 'quit');
+}
+
+/** Java holds the window open until it hears the answer, and must hear at once that the question arrived. */
+async function onCloseRequested({ id }: { id: number }): Promise<void> {
+  let close = false;
+  try {
+    await api.closeAsked(id);
+    close = await mayQuit();
+  } finally {
+    await api.closeAnswer(id, close).catch((e) => fail('Could not close the window', e));
+  }
 }
 
 // ---- grids --------------------------------------------------------------------------------------------------------
@@ -531,6 +580,7 @@ export function initStore(): void {
   events.onFinished(onFinished);
   events.onTransaction((state) => applyTx(state.tabId, state));
   events.onFilesDropped(onFilesDropped);
+  events.onCloseRequested((e) => void onCloseRequested(e));
   // a moving bar on the taskbar icon while any query runs
   watch(() => app.tabs.some((t) => t.running), (busy) => void api.setBusy(busy).catch(() => {}));
 }
