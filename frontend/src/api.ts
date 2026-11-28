@@ -352,7 +352,11 @@ export interface Plan {
 export const api = {
   setBusy: (busy: boolean) => call<{ ok: boolean }>('window.setBusy', { busy }),
   appInfo: () => call<{ version: string; os: string; java: string }>('app.info'),
+  /** The first call of a page; `reloaded` when it replaces an earlier one (after a crash or a reload). */
+  attach: () => call<{ reloaded: boolean }>('window.attach'),
   windowReady: () => call<{ ok: boolean }>('window.ready'),
+  closeAsked: (id: number) => call<{ ok: boolean }>('window.closeAsked', { id }),
+  closeAnswer: (id: number, close: boolean) => call<{ ok: boolean }>('window.closeAnswer', { id, close }),
   setTheme: (theme: Record<string, unknown>) => call<{ ok: boolean }>('window.setTheme', theme),
   setUi: (key: string, value: string | number | boolean) => call<{ ok: boolean }>('settings.setUi', { key, value }),
   readClipboardText: () => call<{ text: string }>('clipboard.readText').then((r) => r.text),
@@ -441,6 +445,7 @@ export const api = {
 };
 
 export const events = {
+  onCloseRequested: (cb: (e: { id: number }) => void) => onEvent<{ id: number }>('window.closeRequested', cb),
   onResult: (cb: (e: QueryResultEvent) => void) => onEvent<QueryResultEvent>('query.result', cb),
   onFinished: (cb: (e: QueryFinishedEvent) => void) => onEvent<QueryFinishedEvent>('query.finished', cb),
   onTransaction: (cb: (e: TxState) => void) => onEvent<TxState>('query.transaction', cb),

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
@@ -99,6 +100,8 @@ public class Workspace {
                     // never leave it to the driver whether closing commits or not
                     try {
                         session.rollback();
+                        // a database private to its connection hands the tab the shared one, which stays open
+                        session.setAutoCommit(true);
                     } catch (SQLException e) {
                         log.debug("Rollback on close failed: {}", e.getMessage());
                     }
@@ -136,6 +139,23 @@ public class Workspace {
         cancel(tab);
         dropGrids(tab);
         Async.run(tab::close);
+    }
+
+    /**
+     * Closes every tab, rolling back what waits in a transaction: the page that owned them is gone, or the application is
+     * ending. The tabs are forgotten at once; the returned future completes when their connections are closed.
+     */
+    public CompletableFuture<Void> closeAllTabs() {
+        List<CompletableFuture<Void>> closing = new ArrayList<>();
+        for (Tab tab : new ArrayList<>(tabs.values())) {
+            if (!tabs.remove(tab.id, tab)) {
+                continue;
+            }
+            cancel(tab);
+            dropGrids(tab);
+            closing.add(CompletableFuture.runAsync(tab::close, Async::run));
+        }
+        return CompletableFuture.allOf(closing.toArray(CompletableFuture[]::new));
     }
 
     /** Called when a connection goes away: its sessions are already closed by DatabaseConnection. */

@@ -16,12 +16,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import io.github.b077as.queryexe.api.Api;
+import io.github.b077as.queryexe.app.Async;
+import io.github.b077as.queryexe.app.ErrorPage;
 import io.github.b077as.queryexe.app.OnScreen;
+import io.github.b077as.queryexe.app.PageLifecycle;
 import io.github.b077as.queryexe.app.PageRpc;
 import io.github.b077as.queryexe.app.Params;
 import io.github.b077as.jolt.Rpc;
@@ -32,9 +37,14 @@ import io.github.b077as.queryexe.connection.DatabaseConnection;
 import io.github.b077as.jolt.AppOptions;
 import io.github.b077as.jolt.AppResources;
 import io.github.b077as.jolt.Application;
+import io.github.b077as.jolt.CloseDecision;
 import io.github.b077as.jolt.ColorScheme;
+import io.github.b077as.jolt.CrashEvent;
 import io.github.b077as.jolt.FileDialogOptions;
 import io.github.b077as.jolt.FileFilter;
+import io.github.b077as.jolt.LoadFailure;
+import io.github.b077as.jolt.SecurityPolicy;
+import io.github.b077as.jolt.SessionEndReason;
 import io.github.b077as.jolt.TaskbarProgress;
 import io.github.b077as.jolt.WebWindow;
 import io.github.b077as.jolt.WindowOptions;
@@ -47,6 +57,9 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Normally the page is the build output in {@code src/main/resources/ui}. With {@code -Dqueryexe.dev=true} it loads the
  * Vite dev server instead ({@code npm run dev} in {@code frontend/}) for hot reload. {@code -Dqueryexe.data=<folder>} uses
  * that folder instead of the real profile.
+ *
+ * <p>The window asks the page before it closes ({@link PageLifecycle}), reloads a page whose process crashed, is made again
+ * when the whole web view is lost, and closes the databases when the system ends the session.
  */
 @Slf4j
 public class App {
@@ -62,6 +75,13 @@ public class App {
     private static final int MIN_HEIGHT = WINDOW_HEIGHT;
     /** How long to wait for the page before showing the window anyway, so a broken page can never leave the app invisible. */
     private static final Duration SHOW_ANYWAY_AFTER = Duration.ofSeconds(10);
+    /** How many times the window is made again after the whole web view was lost, before giving up. */
+    private static final int MAX_NEW_WINDOWS = 3;
+    /** The system may end the process soon after announcing the end of a session. */
+    private static final Duration SESSION_END_WAIT = Duration.ofSeconds(4);
+    /** How long closing waits for the query tabs' connections before closing everything regardless. */
+    private static final Duration CLOSE_TABS_WAIT = Duration.ofSeconds(3);
+    private static final Duration SMOKE_WAIT = Duration.ofSeconds(20);
 
     private static final Gson GSON = new Gson();
     private static final String APPEARANCE = "appearance";
@@ -73,7 +93,18 @@ public class App {
     private static final Set<String> CONNECTION_VIEWS = Set.of("grid", "list");
     private static final Set<String> TREE_MODES = Set.of("all", "focus");
 
-    private App() {
+    private final Application app;
+    private final boolean dev;
+    private final boolean smoke;
+    /** The API of the window that is open now. */
+    private volatile Api api;
+    private int newWindows;
+    private CompletableFuture<Void> closingDatabases;
+
+    private App(Application app, boolean dev, boolean smoke) {
+        this.app = app;
+        this.dev = dev;
+        this.smoke = smoke;
     }
 
     public static void main(String[] args) {
@@ -86,42 +117,163 @@ public class App {
         AppOptions appOptions = AppOptions.of(APP_ID).withQuietNativeLogs(true)
                 .withDataDirectory(Launcher.getAppDataDirectory().resolve("webview"));
         Application app = Application.create(appOptions);
+        App queryExe = new App(app, dev, smoke);
         try {
             app.run(() -> {
-                Appearance saved = appearance();
-                // Hidden until the page says its content is on screen (window.ready): while the web view starts, a visible
-                // window shows an empty body for a second or two. A timer shows it anyway if the page never answers.
-                WindowOptions options = inSavedColours(WindowOptions.defaults()
-                        .withTitle("QueryExe")
-                        .withSize(WINDOW_WIDTH, WINDOW_HEIGHT)
-                        .withMinSize(MIN_WIDTH, MIN_HEIGHT)
-                        .withMaximized(true)
-                        .withIcon(readIcon())
-                        .withDevTools(dev)
-                        .withVisible(false), saved);
-                WebWindow window = app.createWindow(options);
-                showAnywayLater(app, window);
-                window.addInitScript(bootScript(saved, dev));
-
-                Rpc rpc = PageRpc.create(window);
-                registerWindowRpc(app, window, rpc);
-                new Api(rpc, fileChooser(window)).register();
-
-                if (dev) {
-                    // The dev server is another origin, so the (secure by default) policy must be told to trust it.
-                    window.setSecurity(window.security().withTrustedOrigins(DEV_SERVER));
-                    window.loadUrl(DEV_SERVER);
-                } else {
-                    window.loadResources(AppResources.classpath("ui"));
-                }
-                if (smoke) {
-                    startSmokeCheck(window);
-                }
+                app.onSessionEnd(queryExe::onSessionEnd);
+                queryExe.openWindow(false);
             });
         } finally {
-            DatabaseConnection.getInstance().shutdown();
+            queryExe.closeDatabases().join();
             app.close();
         }
+    }
+
+    // ------------------------------------------------------------------------------------ the window
+
+    /** @param replacement whether this window takes the place of one whose web view was lost. UI thread. */
+    private void openWindow(boolean replacement) {
+        Appearance saved = appearance();
+        // Hidden until the page says its content is on screen (window.ready): while the web view starts, a visible
+        // window shows an empty body for a second or two. A timer shows it anyway if the page never answers.
+        WindowOptions options = inSavedColours(WindowOptions.defaults()
+                .withTitle("QueryExe")
+                .withSize(WINDOW_WIDTH, WINDOW_HEIGHT)
+                .withMinSize(MIN_WIDTH, MIN_HEIGHT)
+                .withMaximized(true)
+                .withIcon(readIcon())
+                .withDevTools(dev)
+                .withSecurity(security(dev))
+                .withVisible(false), saved);
+        WebWindow window = app.createWindow(options);
+        showAnywayLater(app, window);
+        window.addInitScript(bootScript(saved, dev));
+
+        Rpc rpc = PageRpc.create(window);
+        PageLifecycle page = new PageLifecycle(rpc::emit, replacement);
+        Api windowApi = new Api(rpc, fileChooser(window));
+        CompletableFuture<Void> ready = new CompletableFuture<>();
+        registerWindowRpc(window, rpc, page, windowApi, ready);
+        windowApi.register();
+        api = windowApi;
+        watchWindow(window, page, ready);
+
+        if (smoke) {
+            // collected from the first moment, so the check can report anything the Content-Security-Policy refused
+            window.addInitScript("window.__cspViolations = []; document.addEventListener('securitypolicyviolation',"
+                    + " (e) => window.__cspViolations.push(e.violatedDirective + ' ' + e.blockedURI));");
+        }
+        if (dev) {
+            window.loadUrl(DEV_SERVER);
+        } else {
+            window.loadResources(AppResources.classpath("ui"));
+        }
+        if (smoke) {
+            startSmokeCheck(window, ready);
+        }
+    }
+
+    /**
+     * Jolt's secure defaults, minus the Content-Security-Policy source for binary channels (none are opened here, and on
+     * Linux it would also let the page send HTTP requests to this machine). The dev server is another origin, so the policy
+     * must be told to trust it.
+     */
+    static SecurityPolicy security(boolean dev) {
+        SecurityPolicy policy = SecurityPolicy.standard()
+                .withAppContentSecurityPolicy(SecurityPolicy.DEFAULT_APP_CSP.replace(" ws://127.0.0.1:*", ""));
+        return dev ? policy.withTrustedOrigins(DEV_SERVER) : policy;
+    }
+
+    /** What happens when the window is asked to close, or its page is in trouble. */
+    private void watchWindow(WebWindow window, PageLifecycle page, CompletableFuture<Void> ready) {
+        window.onCloseRequest(() -> CloseDecision.when(page.askToClose()));
+        window.setReloadOnCrash(true);
+        window.onCrash(event -> onCrash(window, page, event));
+        window.onLoadFailed(failure -> {
+            onLoadFailed(window, page, failure);
+            ready.completeExceptionally(new IllegalStateException("The page failed to load: " + failure));
+        });
+        window.onBlocked(event -> {
+            String url = String.valueOf(event.url());
+            log.warn("Blocked {}: {}", event.kind(), url.length() > 200 ? url.substring(0, 200) + "..." : url);
+        });
+    }
+
+    private void onCrash(WebWindow window, PageLifecycle page, CrashEvent event) {
+        if (event.reason() == CrashEvent.Reason.UNRESPONSIVE) {
+            return; // it may recover; a close request still gets through (see PageLifecycle)
+        }
+        log.error("The page crashed: {} (reloading: {})", event.reason(), event.reloading());
+        page.gone();
+        if (event.reason() == CrashEvent.Reason.WEB_VIEW_LOST) {
+            replaceWindow(window);
+        } else if (!event.reloading()) {
+            api.closePageState();
+            showError(window, "The interface keeps crashing", "Close the window and start QueryExe again.", null);
+        }
+        // otherwise the page is loading again, and window.attach drops what the old one left behind
+    }
+
+    /** The whole web view is gone, so reloading cannot help: a new window takes over, with the connections still open. */
+    private void replaceWindow(WebWindow lost) {
+        try {
+            if (++newWindows > MAX_NEW_WINDOWS) {
+                log.error("The web view was lost {} times; closing", newWindows);
+                return;
+            }
+            api.closePageState();
+            openWindow(true);
+        } finally {
+            lost.close(); // after the new window exists: closing the last window ends the application
+        }
+    }
+
+    private void onLoadFailed(WebWindow window, PageLifecycle page, LoadFailure failure) {
+        log.error("Could not load the page {}: {} ({})", failure.url(), failure.reason(), failure.detail());
+        page.gone();
+        String text = dev
+                ? "Nothing usable answers at " + DEV_SERVER + ". Run \"npm run dev\" in frontend/."
+                : "The page could not be loaded (" + failure.detail() + "). Reinstall QueryExe; the log has the details.";
+        showError(window, "QueryExe could not open its interface", text, dev ? DEV_SERVER : null);
+    }
+
+    private void showError(WebWindow window, String title, String text, String retryUrl) {
+        boolean dark = !"light".equals(appearance().getScheme());
+        window.loadHtml(ErrorPage.html(dark, title, text, retryUrl));
+        OnScreen.show(app, window);
+    }
+
+    // ------------------------------------------------------------------------------------ ending
+
+    /** Sign-out, shutdown or termination: close the databases now, because there may be no later. */
+    private void onSessionEnd(SessionEndReason reason) {
+        log.info("The session is ending ({}): closing the database connections", reason);
+        try {
+            closeDatabases().get(SESSION_END_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException e) {
+            log.warn("The databases did not close in time: {}", e.toString());
+        }
+    }
+
+    /** Rolls back what is uncommitted and closes every connection. Done once; later calls get the same future. */
+    private synchronized CompletableFuture<Void> closeDatabases() {
+        if (closingDatabases == null) {
+            CompletableFuture<Void> tabs = api == null ? CompletableFuture.completedFuture(null) : api.closePageState();
+            closingDatabases = tabs
+                    .orTimeout(CLOSE_TABS_WAIT.toMillis(), TimeUnit.MILLISECONDS)
+                    .exceptionally(e -> {
+                        log.warn("Not every query tab closed: {}", e.toString());
+                        return null;
+                    })
+                    .thenRunAsync(() -> DatabaseConnection.getInstance().shutdown(), Async::run)
+                    .exceptionally(e -> {
+                        log.warn("Could not close the connections: {}", e.toString());
+                        return null;
+                    });
+        }
+        return closingDatabases;
     }
 
     // ------------------------------------------------------------------------------------ appearance
@@ -178,6 +330,11 @@ public class App {
         return "window.__QUERYEXE__ = " + GSON.toJson(boot) + ";";
     }
 
+    /** A reloaded page must start from what is saved now, not from what was saved when the window was made. */
+    private void refreshBootScript(WebWindow window) {
+        window.addInitScript(bootScript(appearance(), dev)); // runs after the earlier ones, so it wins
+    }
+
     private static JsonObject uiSettings() {
         JsonElement raw = AppSettings.get().getRaw(UI);
         return raw != null && raw.isJsonObject() ? raw.getAsJsonObject() : new JsonObject();
@@ -198,16 +355,37 @@ public class App {
 
     // ------------------------------------------------------------------------------------ window rpc
 
-    /** What the page can ask of the window itself: show, restyle the title bar, remember preferences, open links. */
-    private static void registerWindowRpc(Application app, WebWindow window, Rpc rpc) {
+    /** What the page can ask of the window itself: show, close, restyle the title bar, remember preferences, open links. */
+    private void registerWindowRpc(WebWindow window, Rpc rpc, PageLifecycle page, Api windowApi, CompletableFuture<Void> ready) {
         rpc.on("app.info", JsonObject.class, params -> Map.of(
                 "version", version(),
                 "os", System.getProperty("os.name"),
                 "java", System.getProperty("java.version")));
+        // The first thing a page does. After a crash or a reload the earlier page's tabs are dropped, and the new one is told
+        // so it can show the connections that are still open.
+        rpc.on("window.attach", JsonObject.class, params -> {
+            boolean reloaded = page.attach();
+            if (reloaded) {
+                windowApi.closePageState();
+                window.setTaskbarProgress(TaskbarProgress.none()); // the earlier page may have left it moving
+            }
+            return Map.of("reloaded", reloaded);
+        });
         // The page has its content on screen: now the window can appear without a blank flash.
         // OnScreen also tells the launcher, which waits for that to close.
         rpc.on("window.ready", JsonObject.class, params -> {
             OnScreen.show(app, window);
+            page.ready();
+            ready.complete(null);
+            return Map.of("ok", true);
+        });
+        // The replies to window.closeRequested: heard, and then what the user decided.
+        rpc.on("window.closeAsked", JsonObject.class, params -> {
+            page.acknowledge(Params.integer(params, "id"));
+            return Map.of("ok", true);
+        });
+        rpc.on("window.closeAnswer", JsonObject.class, params -> {
+            page.answer(Params.integer(params, "id"), Params.bool(params, "close"));
             return Map.of("ok", true);
         });
         // Files dropped on the window (Jolt 0.4.1): the paths come from the operating system, never from the page. The page
@@ -240,7 +418,10 @@ public class App {
             stored.addProperty("accent", theme.getAccent());
             stored.addProperty("scheme", theme.getScheme().name().toLowerCase(java.util.Locale.ROOT));
             stored.addProperty("background", theme.getBackground());
-            AppSettings.get().setRaw(APPEARANCE, stored);
+            if (!stored.equals(AppSettings.get().getRaw(APPEARANCE))) {
+                AppSettings.get().setRaw(APPEARANCE, stored);
+                refreshBootScript(window);
+            }
             return Map.of("ok", true);
         });
         rpc.on("settings.setUi", JsonObject.class, params -> {
@@ -259,17 +440,18 @@ public class App {
             JsonObject ui = uiSettings().deepCopy();
             ui.add(key, value);
             AppSettings.get().setRaw(UI, ui);
+            refreshBootScript(window);
             return Map.of("ok", true);
         });
         // The Paste item of the page's context menus (the web view lets the page copy but not read the clipboard; Ctrl+V is not affected).
         // Jolt's own clipboard (plain text only; an image or files on it read as an empty string).
         rpc.on("clipboard.readText", JsonObject.class, params -> {
             try {
-                return Map.of("text", app.clipboard().readText().get(5, java.util.concurrent.TimeUnit.SECONDS).orElse(""));
+                return Map.of("text", app.clipboard().readText().get(5, TimeUnit.SECONDS).orElse(""));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IllegalStateException("Cancelled", e);
-            } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+            } catch (ExecutionException | TimeoutException e) {
                 log.debug("Could not read the clipboard: {}", e.toString());
                 throw new IllegalStateException("The clipboard cannot be read now. Use Ctrl+V to paste.", e);
             }
@@ -340,14 +522,16 @@ public class App {
         }
     }
 
-    /** Waits for the page to load, then reports what it rendered and closes the window. */
-    private static void startSmokeCheck(WebWindow window) {
+    /** Waits for the page to show its content, then reports what it rendered and closes the window. */
+    private static void startSmokeCheck(WebWindow window, CompletableFuture<Void> ready) {
         Thread.ofVirtual().start(() -> {
             try {
-                Thread.sleep(4_000);
+                ready.get(SMOKE_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+                Thread.sleep(1_000);
                 String script = "JSON.stringify({theme: document.documentElement.dataset.theme,"
                         + " accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),"
-                        + " title: document.title, cards: document.querySelectorAll('[data-connection]').length})";
+                        + " title: document.title, cards: document.querySelectorAll('[data-connection]').length,"
+                        + " csp: window.__cspViolations})";
                 System.out.println("SMOKE " + window.eval(script).get());
             } catch (Exception e) {
                 System.out.println("SMOKE failed: " + e);

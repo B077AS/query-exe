@@ -21,11 +21,14 @@ import TableEditor from './components/TableEditor.vue';
 import TableInfoDialog from './components/TableInfoDialog.vue';
 import Toasts from './components/Toasts.vue';
 import Workspace from './components/Workspace.vue';
-import { app, dialogs, initStore, loadConnections } from './store';
+import { app, dialogs, initStore, loadConnections, restoreSessions } from './store';
 
 onMounted(async () => {
   initStore();
+  // before anything else: Java drops what an earlier page (before a crash or a reload) left behind
+  const reloaded = await api.attach().then((r) => r.reloaded).catch(() => false);
   await loadConnections();
+  if (reloaded) restoreSessions();
   app.ready = true;
   // The content is rendered: now the window may appear. A short timeout rather than requestAnimationFrame, because the window
   // starts hidden and a hidden web view runs no animation frames (the signal never came, so the window only appeared when
